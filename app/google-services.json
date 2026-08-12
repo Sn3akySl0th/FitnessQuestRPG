@@ -1,0 +1,71 @@
+{
+  "project_info": {
+    "project_number": "652275814212",
+    "project_id": "fitquest-1f082",
+    "storage_bucket": "fitquest-1f082.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:652275814212:android:084801cab116da3e935111",
+        "android_client_info": {
+          "package_name": "com.fitnessquest.rpg"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "652275814212-4ajint1qug6ssumrk8uq927jguv3e9or.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.fitnessquest.rpg",
+            "certificate_hash": "8e005d28b763eb8793d8fc7dd9dadbceb2f4a2dc"
+          }
+        },
+        {
+          "client_id": "652275814212-5f2etncv6hb8th9g6dd43hpftii7c29s.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.fitnessquest.rpg",
+            "certificate_hash": "4bb2c734d2639b0bc420b418e2f8bd4b13613b13"
+          }
+        },
+        {
+          "client_id": "652275814212-bsamb28sepn7cj8rkamn1pv485piv25n.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.fitnessquest.rpg",
+            "certificate_hash": "c3be288de81e24e561a45a3cec48b8ce155f13bd"
+          }
+        },
+        {
+          "client_id": "652275814212-dvqj9nelatpvkiue7ikol1ke63shv78t.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.fitnessquest.rpg",
+            "certificate_hash": "ce4d2e4d66cb87870b17cb3632454d6369663891"
+          }
+        },
+        {
+          "client_id": "652275814212-d2rtrkopn90mb8msh31rlopn5hbu41jb.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCf3q6Pnx3MiWMgWrFEQxaFGM4EQLAiq2M"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "652275814212-d2rtrkopn90mb8msh31rlopn5hbu41jb.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

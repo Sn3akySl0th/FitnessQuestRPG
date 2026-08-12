@@ -1,0 +1,108 @@
+package com.fitnessquest.rpg.data.steps
+
+import android.Manifest
+import android.app.Application
+import android.content.Context
+import android.content.pm.PackageManager
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
+import android.os.Build
+import androidx.core.content.edit
+import com.fitnessquest.rpg.data.GameRepository
+import com.fitnessquest.rpg.domain.GameMath
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
+import java.time.LocalDate
+
+/**
+ * Daily step counting via the hardware step counter sensor.
+ *
+ * The sensor reports cumulative steps since boot, so we persist a per-day
+ * baseline and count from there. Steps passively push biome travel forward
+ * (STEPS_PER_KM steps = 1 km) whenever a journey is in progress.
+ */
+class StepTracker(
+    private val app: Application,
+    private val repository: GameRepository,
+) : SensorEventListener {
+
+    private val sensorManager = app.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+    private val prefs = app.getSharedPreferences("fitquest_steps", Context.MODE_PRIVATE)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    private val _stepsToday = MutableStateFlow(cachedToday())
+    val stepsToday: StateFlow<Int> = _stepsToday
+
+    private val _tracking = MutableStateFlow(value = false)
+    val tracking: StateFlow<Boolean> = _tracking
+
+    val hasSensor: Boolean
+        get() = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER) != null
+
+    fun hasPermission(): Boolean =
+        (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) ||
+            (app.checkSelfPermission(Manifest.permission.ACTIVITY_RECOGNITION) ==
+            PackageManager.PERMISSION_GRANTED)
+
+    /** Idempotent; call at app start and again right after the permission is granted. */
+    fun start() {
+        if (_tracking.value || !hasPermission()) return
+        val sensor = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER) ?: return
+        sensorManager.registerListener(this, sensor, SensorManager.SENSOR_DELAY_UI)
+        _tracking.value = true
+    }
+
+    override fun onSensorChanged(event: SensorEvent) {
+        val cumulative = event.values.firstOrNull()?.toInt() ?: return
+        val today = LocalDate.now().toEpochDay()
+        var day = prefs.getLong(KEY_DAY, -1L)
+        var base = prefs.getInt(KEY_BASE, -1)
+
+        // New day, first run, or reboot (cumulative counter restarted below baseline).
+        if ((day != today) || (base < 0) || (cumulative < base)) {
+            day = today
+            base = cumulative
+            prefs.edit {
+                putLong(KEY_DAY, day)
+                putInt(KEY_BASE, base)
+                putInt(KEY_CREDITED, 0)
+            }
+        }
+
+        val steps = cumulative - base
+        _stepsToday.value = steps
+        prefs.edit { putInt(KEY_CACHE, steps) }
+
+        // Feed travel in ~0.1 km chunks to avoid hammering the database.
+        val credited = prefs.getInt(KEY_CREDITED, 0)
+        val creditable = steps - credited
+        if (creditable >= (GameMath.STEPS_PER_KM / 10)) {
+            prefs.edit { putInt(KEY_CREDITED, steps) }
+            scope.launch {
+                repository.processIdleSteps(creditable)
+            }
+        }
+    }
+
+    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
+
+    private fun cachedToday(): Int =
+        if (prefs.getLong(KEY_DAY, -1L) == LocalDate.now().toEpochDay()) {
+            prefs.getInt(KEY_CACHE, 0)
+        } else {
+            0
+        }
+
+    private companion object {
+        const val KEY_DAY = "day"
+        const val KEY_BASE = "base"
+        const val KEY_CACHE = "cache"
+        const val KEY_CREDITED = "credited"
+    }
+}

@@ -1,0 +1,143 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function leaderboardWriteOk(uid) {
+      return isOwner(uid)
+        && request.resource.data.name is string
+        && request.resource.data.name.size() <= 40
+        && request.resource.data.level is int
+        && request.resource.data.weeklyXp is int
+        && request.resource.data.weeklyXp >= 0;
+    }
+
+    function partyCreateOk() {
+      return isSignedIn()
+        && request.resource.data.name is string
+        && request.resource.data.name.size() <= 40
+        && request.resource.data.inviteCode is string
+        && request.resource.data.inviteCode.size() == 6;
+    }
+
+    function catalogSubmissionOk() {
+      return isSignedIn()
+        && request.resource.data.createdByUid == request.auth.uid
+        && request.resource.data.status == "pending"
+        && request.resource.data.type in ["machine", "exercise"]
+        && request.resource.data.schema is int
+        && request.resource.data.payload is map;
+    }
+
+    /** Active username hold: a public pointer doc must exist for the claim. */
+    function usernamePointerExists(username) {
+      return exists(/databases/$(database)/documents/usernamePointers/$(username));
+    }
+
+    function usernamePayloadOk() {
+      return request.resource.data.uid == request.auth.uid
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() >= 3
+        && request.resource.data.displayName.size() <= 20;
+    }
+
+    match /users/{uid} {
+      allow read, write: if isOwner(uid);
+      match /{document=**} {
+        allow read, write: if isOwner(uid);
+      }
+    }
+
+    match /leaderboard/{uid} {
+      allow read: if isSignedIn();
+      allow create, update: if leaderboardWriteOk(uid);
+      allow delete: if isOwner(uid);
+    }
+
+    match /parties/{partyId} {
+      allow read: if isSignedIn();
+      allow create: if partyCreateOk();
+      allow update: if isSignedIn();
+
+      match /members/{uid} {
+        allow read: if isSignedIn();
+        allow write: if isOwner(uid);
+      }
+
+      match /workouts/{workoutId} {
+        allow read, create: if isSignedIn();
+        allow delete: if isSignedIn()
+          && resource.data.authorUid == request.auth.uid;
+      }
+    }
+
+    match /guilds/{guildId} {
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn();
+
+      match /members/{uid} {
+        allow read: if isSignedIn();
+        allow write: if isOwner(uid);
+      }
+    }
+
+    // Public reverse index so clients can tell "still held" vs abandoned claims.
+    match /usernamePointers/{username} {
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn() && usernamePayloadOk();
+      allow delete: if isSignedIn()
+        && resource.data.uid == request.auth.uid;
+    }
+
+    // Unique usernames.
+    // Abandoned claims (no public pointer) may be overwritten by a new owner —
+    // important because delete+set in one transaction is still ruled as "update".
+    match /usernames/{username} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && usernamePayloadOk();
+      allow update: if isSignedIn() && usernamePayloadOk() && (
+        resource.data.uid == request.auth.uid ||
+        !usernamePointerExists(username)
+      );
+      allow delete: if isSignedIn() && (
+        resource.data.uid == request.auth.uid ||
+        !usernamePointerExists(username)
+      );
+    }
+
+    // Admin grants Premium from the Firebase console (clients read-only).
+    // Easiest console path: create doc premiumGrants/{uid} with premium: true
+    match /premiumGrants/{uid} {
+      allow read: if isOwner(uid);
+      allow write: if false;
+    }
+
+    match /catalogMachines/{machineId} {
+      allow read: if isSignedIn() && resource.data.status == "approved";
+      allow write: if false;
+    }
+
+    match /catalogExercises/{exerciseId} {
+      allow read: if isSignedIn() && resource.data.status == "approved";
+      allow write: if false;
+    }
+
+    match /userSubmissions/{submissionId} {
+      allow create: if catalogSubmissionOk();
+      allow read: if isSignedIn() && resource.data.createdByUid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

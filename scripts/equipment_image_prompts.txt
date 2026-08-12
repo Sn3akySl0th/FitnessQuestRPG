@@ -1,0 +1,149 @@
+FitnessRPG — Equipment icon prompts (fantasy branding)
+=======================================================
+Save each image as:  app/src/main/assets/equipment/{id}.png
+Size: 1024×1024 PNG, square.
+Generate ONE image per id. Same style pack for all.
+
+Brand colors to echo (not literal UI chrome):
+- Deep night blue / indigo void (#12131F–#1C1E30)
+- Warm quest gold accents (#F0A830)
+- Soft mystic purple / arcane blue glows (#9C7BE3, #7BB4E3)
+- Parchment highlights on edges or runes (#EDE6D4)
+
+------------------------------------------------------------------------------
+MASTER STYLE (paste this BEFORE every subject line)
+------------------------------------------------------------------------------
+
+Fantasy RPG item icon for a mobile game called FitnessRPG. A single piece of
+hero training equipment reimagined as enchanted forge-gear from a legendary
+adventurer's hall. Dark indigo night background with subtle mist, soft golden
+rim light, faint purple arcane glow in the shadows. Three-quarter centered
+view, equipment fills most of the frame. Ornate but readable: still clearly
+recognizable as real gym equipment (barbell, machine, cable, etc.), upgraded
+with wrought iron, aged steel, leather straps, and small glowing rune inlays.
+Painterly digital illustration with crisp silhouette — NOT photoreal gym catalog,
+NOT sci-fi chrome, NOT cute chibi. No people, no hands, no text, no logos,
+no UI frames, no watermark. Square composition, consistent lighting across the set.
+
+Negative prompt:
+photoreal commercial gym, white seamless studio backdrop, people, athletes,
+hands, text, letters, logo, watermark, brand name, anime chibi, cartoon sticker,
+neon cyberpunk, cluttered dungeon full of props, multiple machines, low detail
+
+------------------------------------------------------------------------------
+PER-ASSET SUBJECTS (master style + this line)
+------------------------------------------------------------------------------
+
+barbell
+Enchanted Olympic barbell on an iron rack, gold-etched plates, quest-gold glow on the knurling.
+
+dumbbell
+Pair of rune-forged hexagonal dumbbells standing side by side, mystic purple edge light.
+
+ez_bar
+Ornate EZ curl bar of dark steel with gold filigree, resting on a stone pedestal.
+
+kettlebell
+Heavy iron kettlebell shaped like a dragon-egg weight, gold band and faint arcane glow.
+
+cable_machine
+Fantasy dual cable tower like twin obelisks with glowing pulley runes and hanging leather handles.
+
+smith_machine
+Guided smith machine as a gothic iron guillotine-rack for heroes, empty bar on vertical rails, gold safety hooks.
+
+leg_press_plate
+Plate-loaded leg press reimagined as a siege-sled throne of iron and leather, empty sled, angled three-quarter view.
+
+hack_squat
+Hack squat machine as armored squat cradle with rune-lined rails and empty shoulder pads.
+
+chest_press_machine
+Seated chest press forged like a war-golem harness, empty handles, gold accents on the frame.
+
+shoulder_press_machine
+Overhead press machine like a throne of strength with vertical arcane rails and empty grips.
+
+lat_pulldown
+Lat pulldown station as a high iron gate with a wide hanging bar and glowing cable runes.
+
+seated_row_machine
+Seated row machine like a ship’s oar bench of dark wood and iron, low handle, chest pad.
+
+leg_curl_machine
+Leg curl machine with leather padding and iron frame, subtle mystic glow under the pad.
+
+leg_extension_machine
+Leg extension machine as a knight’s greave trainer, empty ankle pad, gold rivets.
+
+calf_raise_machine
+Standing calf raise like armored shoulder yokes on an iron frame, empty, three-quarter view.
+
+calf_press_machine
+Seated calf press machine with weight stack, foot rollers, and ornate dark-fantasy frame, empty, three-quarter view.
+
+pec_deck
+Pec deck / fly machine with wing-like pads, dark steel and parchment-stitched leather.
+
+ab_crunch_machine
+Ab crunch machine like a monk’s iron prayer bench with padded handles and soft gold light.
+
+vertical_crunch_machine
+Vertical / seated ab crunch machine with overhead grips, ankle pads, and ornate dark-fantasy frame, empty, three-quarter view.
+
+treadmill
+Enchanted treadmill as a moving stone road belt with an arcane console, empty, night background.
+
+stationary_bike
+Stationary bike forged like a steampunk war-cycle with leather saddle and gold spokes glow.
+
+rower
+Rowing machine as a sleek river longboat erg of dark wood and iron, empty seat and handle.
+
+elliptical
+Elliptical trainer like twin moon-pedals on an arcane frame, soft purple underglow.
+
+stair_climber
+Stair climber as an endless tower staircase machine of stone and iron, empty steps.
+
+pull_up_bar
+Freestanding pull-up bar like a hero’s training gate of wrought iron with gold tips.
+
+dip_station
+Parallel dip bars as twin spear-posts with leather grips, centered on dark ground.
+
+bodyweight
+Rolled adventure bedroll / training mat with a small gold clasp — symbol of bodyweight training, no people.
+
+flat_bench
+Flat weight bench of dark wood and worn leather, iron legs, quest-gold corner studs.
+
+resistance_band
+Coiled enchanted resistance bands with rune charms, gold and purple tones, neat arrangement.
+
+foam_roller
+Foam roller carved like a rune-stone cylinder, soft arcane veins of light.
+
+medicine_ball
+Medicine ball like a weighted orb of leather and iron straps, gold stitching.
+
+exercise_ball
+Large stability ball with subtle constellation pattern, parchment and indigo tones.
+
+------------------------------------------------------------------------------
+QUICK ONE-SHOT (for tools that take a single mega-prompt)
+------------------------------------------------------------------------------
+
+Create a matching set of 30 square fantasy RPG item icons for FitnessRPG.
+Style: dark indigo night background, gold rim light, faint mystic purple glow,
+ornate wrought-iron/leather equipment that still reads as real gym gear,
+painterly digital illustration, no people, no text. Subjects and filenames:
+[paste the id list above]
+
+------------------------------------------------------------------------------
+AFTER GENERATING
+------------------------------------------------------------------------------
+
+1. Rename files exactly: smith_machine.png, barbell.png, …
+2. Put them in app/src/main/assets/equipment/
+3. Rebuild. (You can replace the old photoreal smith_machine.png with the fantasy version.)

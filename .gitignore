@@ -1,0 +1,60 @@
+*.iml
+.gradle/
+/local.properties
+.idea/
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+build/
+
+# Embedded Wear APK copied by :app embedWearApk (do not commit)
+app/src/main/assets/wear/*.apk
+
+# Play Store signing (never commit)
+keystore.properties
+keystore/
+*.jks
+*.keystore
+
+.verify/
+
+# Local IDE/agent state
+.agents/
+.capture/
+.kotlin/
+.tmp-fitscape/
+.vs/
+.vscode/
+
+# Local signing and service credentials
+keystore.properties
+keystore/
+*.jks
+*.keystore
+*service-account*.json
+firebase-adminsdk*.json
+
+# Generated release and device-debug artifacts
+releases/
+scratch/
+frames/
+/*.apk
+/*.aab
+/*.log
+/*.xml
+/*.png
+/*.jpg
+/*.jpeg
+/*.mp4
+/*.py
+
+# Generated Wear binaries copied into product flavors
+app/src/*/assets/wear/*.apk
+
+# Play Asset Delivery model weights are maintained outside Git.
+local_ai_model/src/main/assets/*.bin
+local_ai_model/src/main/assets/*.gguf
+local_ai_model/src/main/assets/*.task
+local_ai_model/src/main/assets/*.tflite

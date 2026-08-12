@@ -1,0 +1,8 @@
+- Smart Workout Recommendation Engine: Split sequence intelligence (Upper -> Lower -> Push -> Pull -> Legs), 48-hour muscle recovery decay math, and "Today's Recommended Quest" hero card on Training Grounds.
+- Interactive Hero Muscle Anatomy Heatmap: Front & Back body views with real-time green/yellow/red recovery overlays, status tooltips, and direct tap-to-flag muscle soreness.
+- Rest Day Active Recovery Quests & "Well Rested" Buff: Optional light 10-minute mobility/walking/bodyweight side quests on rest days that award Gold + a temporary +15% XP & Gold boost on your next workout!
+- AI Random Micro Bodyweight Quests & Local Notifications: Receive local phone notifications for quick bodyweight side quests (e.g. 10 pushups, 20 jumping jacks) to earn rewards on the go.
+- Avatar Wallpaper & Watch Face Exporter: High-resolution bitmap canvas exporter for phone wallpapers and Wear OS watch faces with automatic Wear OS Data Layer watch sync.
+- On-Device Local AI & Resumable Downloader: 100% offline generation with HTTP Range download resuming and screen wake locks.
+- Responsive Landscape Mode: adaptive Left Navigation Rail and 2-column Hero split layout for phones & tablets.
+- Hevy API & CSV Import: easily import routines with duplicate protection & "Archives Restored" bounty rewards.

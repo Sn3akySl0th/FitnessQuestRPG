@@ -1,0 +1,332 @@
+package com.fitnessquest.rpg.data.ai
+
+import android.content.Context
+import android.os.PowerManager
+import android.util.Log
+import com.fitnessquest.rpg.BuildConfig
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import java.io.File
+import java.io.FileOutputStream
+import java.security.MessageDigest
+import java.util.Locale
+
+data class LocalModelSpec(
+    val id: String,
+    val displayName: String,
+    val version: String,
+    val approxSizeMb: Int,
+    val downloadUrl: String,
+    val description: String = "",
+    val expectedBytes: Long? = null,
+    val sha256: String = "",
+    val format: String = "MediaPipe GenAI .bin",
+    val source: LocalModelSource = LocalModelSource.CURATED,
+    val requiresAuthToken: Boolean = false,
+    val recommended: Boolean = false,
+    val enabled: Boolean = true
+)
+
+enum class LocalModelSource {
+    FITQUEST_HOSTED,
+    CURATED,
+    CUSTOM
+}
+
+object ModelCatalog {
+    val HOSTED_MODEL = LocalModelSpec(
+        id = "fitquest_recommended",
+        displayName = "FitQuest Recommended Offline AI",
+        version = BuildConfig.FITQUEST_LLM_MODEL_VERSION,
+        approxSizeMb = BuildConfig.FITQUEST_LLM_MODEL_SIZE_MB,
+        downloadUrl = BuildConfig.FITQUEST_LLM_MODEL_URL,
+        description = "One-tap FitQuest-hosted model for quota-free workout names, coaching, battle narration, and import cleanup.",
+        expectedBytes = BuildConfig.FITQUEST_LLM_MODEL_BYTES.takeIf { it > 0L },
+        sha256 = BuildConfig.FITQUEST_LLM_MODEL_SHA256,
+        source = LocalModelSource.FITQUEST_HOSTED,
+        recommended = true,
+        enabled = BuildConfig.FITQUEST_LLM_MODEL_URL.isNotBlank() && BuildConfig.FITQUEST_LLM_MODEL_SIZE_MB > 0
+    )
+
+    val CURATED_MODELS = listOf(
+        LocalModelSpec(
+            id = "gemma_2b_it",
+            displayName = "Gemma 1.1 2B (Optimized)",
+            version = "v1.1",
+            approxSizeMb = 1350,
+            downloadUrl = "https://huggingface.co/bartowski/gemma-1.1-2b-it-GenAI/resolve/main/gemma-1.1-2b-it-cpu-int4.bin",
+            description = "Public mirror — no token required. Optimized for mobile.",
+            requiresAuthToken = false
+        ),
+        LocalModelSpec(
+            id = "llama_3_2_1b",
+            displayName = "Llama 3.2 1B (Fast)",
+            version = "v3.2",
+            approxSizeMb = 850,
+            downloadUrl = "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GenAI/resolve/main/Llama-3.2-1B-Instruct-cpu-int4.bin",
+            description = "Public mirror — no token required. Meta's latest small model.",
+            requiresAuthToken = false
+        )
+    )
+
+
+
+
+    val BUILTIN_MODELS = buildList {
+        if (HOSTED_MODEL.enabled) add(HOSTED_MODEL)
+        addAll(CURATED_MODELS)
+    }
+
+    val hasHostedModel: Boolean get() = HOSTED_MODEL.enabled
+}
+
+
+
+enum class LocalModelType(val displayName: String, val approxSizeMb: Int, val downloadUrl: String) {
+    LITE("Lite Model (Qwen 0.5B)", 350, "https://huggingface.co/Qwen/Qwen1.5-0.5B-Chat-GGUF/resolve/main/qwen1_5-0_5b-chat-q4_k_m.gguf"),
+    STANDARD("Standard Model (Qwen 1.5B)", 980, "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf")
+}
+
+sealed class DownloadState {
+    object Idle : DownloadState()
+    data class Downloading(val bytesDownloaded: Long, val totalBytes: Long, val progressPercent: Int) : DownloadState()
+    object Ready : DownloadState()
+    data class Error(val message: String) : DownloadState()
+}
+
+class LocalModelDownloader(private val context: Context) {
+
+    private val httpClient = OkHttpClient.Builder()
+        .followRedirects(false) // Handle manually to strip auth on cross-domain redirect
+        .build()
+    private val _downloadState = MutableStateFlow<DownloadState>(DownloadState.Idle)
+    val downloadState: StateFlow<DownloadState> = _downloadState
+
+    private var activeCall: okhttp3.Call? = null
+
+    fun getModelFile(modelId: String): File {
+        val modelsDir = File(context.getExternalFilesDir(null), "models")
+        if (!modelsDir.exists()) modelsDir.mkdirs()
+        val cleanId = modelId.lowercase().replace(Regex("[^a-z0-9_]"), "_")
+        return File(modelsDir, "local_llm_${cleanId}.bin")
+    }
+
+    fun getModelFile(modelType: LocalModelType): File = getModelFile(modelType.name)
+
+    fun getDownloadedSizeMb(spec: LocalModelSpec): Int {
+        val file = getModelFile(spec.id)
+        return if (file.exists()) (file.length() / (1024 * 1024L)).toInt() else 0
+    }
+
+    fun isModelReady(spec: LocalModelSpec): Boolean {
+        val file = getModelFile(spec.id)
+        if (!file.exists()) return false
+        spec.expectedBytes?.let { expected ->
+            if (file.length() != expected) return false
+        }
+        if (spec.sha256.isNotBlank() && !file.sha256Matches(spec.sha256)) return false
+        // Require 99% of expected size to consider it valid weights.
+        val minSizeBytes = (spec.approxSizeMb * 0.99f * 1024 * 1024L).toLong()
+        return file.length() >= minSizeBytes
+    }
+
+    fun isModelReady(modelType: LocalModelType): Boolean {
+        val file = getModelFile(modelType)
+        val minSizeBytes = (modelType.approxSizeMb * 0.99f * 1024 * 1024L).toLong()
+        return file.exists() && file.length() >= minSizeBytes
+    }
+
+
+    suspend fun startDownload(spec: LocalModelSpec, hfToken: String = "") {
+        startDownloadUrl(spec.id, spec.downloadUrl, spec.approxSizeMb, hfToken, spec)
+    }
+
+    suspend fun startDownload(modelType: LocalModelType, hfToken: String = "") { startDownloadUrl(modelType.name, modelType.downloadUrl, modelType.approxSizeMb, hfToken) }
+
+    suspend fun startDownloadUrl(
+        modelId: String,
+        downloadUrl: String,
+        approxSizeMb: Int,
+        hfToken: String = "",
+        spec: LocalModelSpec? = null
+    ): Unit = withContext(Dispatchers.IO) {
+
+        if (_downloadState.value is DownloadState.Downloading) return@withContext
+        if (downloadUrl.isBlank()) {
+            _downloadState.value = DownloadState.Error("No model download URL is configured for this build.")
+            return@withContext
+        }
+
+        val targetFile = getModelFile(modelId)
+        val tempFile = File(targetFile.parentFile, "${targetFile.name}.tmp")
+        val existingBytes = if (tempFile.exists()) tempFile.length() else 0L
+
+        val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
+        val wakeLock = powerManager?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "FitQuest:ModelDownload")
+
+        try {
+            wakeLock?.acquire(30 * 60 * 1000L) // 30 min safety lock
+
+            val requestBuilder = Request.Builder()
+                .url(downloadUrl)
+                .header("User-Agent", "FitQuest-Android-Downloader")
+
+            if (existingBytes > 0) {
+                requestBuilder.header("Range", "bytes=$existingBytes-")
+            }
+
+            if (hfToken.isNotBlank()) {
+                requestBuilder.header("Authorization", "Bearer ${hfToken.trim()}")
+            }
+
+            val call = httpClient.newCall(requestBuilder.build())
+            activeCall = call
+            Log.d("FitQuest", "Starting download from $downloadUrl")
+            var response = call.execute()
+
+            // Handle redirect manually to strip Authorization header when moving to CDN
+            if (response.isRedirect) {
+                val newUrl = response.header("Location") ?: ""
+                response.close()
+                if (newUrl.isNotBlank()) {
+                    val redirectRequest = Request.Builder()
+                        .url(newUrl)
+                        .header("User-Agent", "FitQuest-Android-Downloader")
+                        .apply {
+                            if (existingBytes > 0) header("Range", "bytes=$existingBytes-")
+                            // Strip Auth token if redirecting to a different host (likely CDN)
+                            val originalHost = Request.Builder().url(downloadUrl).build().url.host
+                            val newHost = Request.Builder().url(newUrl).build().url.host
+                            if (originalHost == newHost && hfToken.isNotBlank()) {
+                                header("Authorization", "Bearer ${hfToken.trim()}")
+                            }
+                        }
+                        .build()
+                    val newCall = httpClient.newCall(redirectRequest)
+                    activeCall = newCall
+                    response = newCall.execute()
+                }
+            }
+
+            if (!response.isSuccessful && response.code != 416) {
+
+                val errorMsg = when (response.code) {
+                    401 -> "HTTP 401: Gated model — enter your free Hugging Face token (hf_...) below to download."
+                    403 -> "HTTP 403: Access forbidden — check Hugging Face model terms."
+                    404 -> "HTTP 404: Model file not found at URL."
+                    else -> "HTTP ${response.code}: Could not download model weights."
+                }
+                Log.e("FitQuest", "Download failed: $errorMsg")
+                _downloadState.value = DownloadState.Error(errorMsg)
+                return@withContext
+            }
+
+
+            val body = response.body
+            if (body == null) {
+                _downloadState.value = DownloadState.Error("Empty download response from server.")
+                return@withContext
+            }
+
+            val isPartial = response.code == 206
+            val appendMode = isPartial && existingBytes > 0
+            val totalContentLength = body.contentLength()
+            val totalBytes = if (isPartial) (existingBytes + totalContentLength) else if (totalContentLength > 0) totalContentLength else approxSizeMb * 1024 * 1024L
+
+            var downloadedBytes = if (appendMode) existingBytes else 0L
+            _downloadState.value = DownloadState.Downloading(downloadedBytes, totalBytes, ((downloadedBytes * 100) / totalBytes).toInt().coerceIn(0, 99))
+
+            body.byteStream().use { input ->
+                FileOutputStream(tempFile, appendMode).use { output ->
+                    val buffer = ByteArray(64 * 1024)
+                    var read: Int
+                    while (input.read(buffer).also { read = it } != -1) {
+                        output.write(buffer, 0, read)
+                        downloadedBytes += read
+                        val percent = ((downloadedBytes * 100) / totalBytes).toInt().coerceIn(0, 99)
+                        _downloadState.value = DownloadState.Downloading(downloadedBytes, totalBytes, percent)
+                    }
+                }
+            }
+
+            if (!tempFile.renameTo(targetFile)) {
+                tempFile.copyTo(targetFile, overwrite = true)
+                tempFile.delete()
+            }
+            val validationIssue = spec?.validateDownloadedFile(targetFile)
+            if (validationIssue != null) {
+                targetFile.delete()
+                _downloadState.value = DownloadState.Error(validationIssue)
+                return@withContext
+            }
+            _downloadState.value = DownloadState.Ready
+        } catch (e: Exception) {
+            if (activeCall?.isCanceled() == true) {
+                _downloadState.value = DownloadState.Idle
+            } else {
+                _downloadState.value = DownloadState.Error("Download interrupted: ${e.localizedMessage ?: "Network timeout"}. Resume anytime!")
+            }
+        } finally {
+            activeCall = null
+            if (wakeLock?.isHeld == true) {
+                try { wakeLock.release() } catch (_: Exception) {}
+            }
+        }
+    }
+
+    fun cancelDownload() {
+        activeCall?.cancel()
+        _downloadState.value = DownloadState.Idle
+    }
+
+    fun deleteModel(modelId: String): Boolean {
+        cancelDownload()
+        val file = getModelFile(modelId)
+        val temp = File(file.parentFile, "${file.name}.tmp")
+        if (temp.exists()) temp.delete()
+        val deleted = if (file.exists()) file.delete() else true
+        _downloadState.value = DownloadState.Idle
+        return deleted
+    }
+
+    fun deleteModel(modelType: LocalModelType): Boolean = deleteModel(modelType.name)
+
+    private fun LocalModelSpec.validateDownloadedFile(file: File): String? {
+        if (!file.exists()) return "Downloaded model file was not created."
+        expectedBytes?.let { expected ->
+            if (file.length() != expected) {
+                return "Downloaded model size did not match the expected version. Try again or update the model URL."
+            }
+        }
+        if (sha256.isNotBlank() && !file.sha256Matches(sha256)) {
+            return "Downloaded model failed integrity verification. The file was removed for safety."
+        }
+        val minSizeBytes = (approxSizeMb * 0.99f * 1024 * 1024L).toLong()
+        if (file.length() < minSizeBytes) {
+            return "Downloaded model was smaller than expected. Try again to resume the download."
+        }
+        return null
+    }
+
+    private fun File.sha256Matches(expected: String): Boolean {
+        val normalizedExpected = expected.trim().lowercase(Locale.US)
+        if (normalizedExpected.isBlank()) return true
+        return sha256().equals(normalizedExpected, ignoreCase = true)
+    }
+
+    private fun File.sha256(): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        inputStream().use { input ->
+            val buffer = ByteArray(1024 * 1024)
+            var read: Int
+            while (input.read(buffer).also { read = it } != -1) {
+                digest.update(buffer, 0, read)
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
+    }
+}

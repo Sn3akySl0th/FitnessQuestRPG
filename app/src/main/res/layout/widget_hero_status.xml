@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widgetRoot"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_hero_status_bg"
+    android:padding="8dp">
+
+    <!-- Full Body Avatar - Using larger height to ensure no clipping -->
+    <ImageView
+        android:id="@+id/widgetAvatar"
+        android:layout_width="80dp"
+        android:layout_height="96dp"
+        android:layout_alignParentStart="true"
+        android:layout_centerVertical="true"
+        android:scaleType="fitCenter"
+        android:contentDescription="Hero Avatar" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_centerVertical="true"
+        android:layout_toEndOf="@id/widgetAvatar"
+        android:layout_marginStart="4dp"
+        android:orientation="vertical">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:baselineAligned="false">
+
+            <TextView
+                android:id="@+id/widgetTitle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text="Hero Name"
+                android:textColor="#F7EEC9"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/widgetGold"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="💰 0"
+                android:textColor="#FFD700"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/widgetLevel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Level 1 Adventurer"
+            android:textColor="#D6E1EE"
+            android:textSize="11sp" />
+
+        <!-- Progress Stack -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="vertical">
+
+            <!-- XP Progress -->
+            <ProgressBar
+                android:id="@+id/widgetXpBar"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="match_parent"
+                android:layout_height="6dp"
+                android:max="100"
+                android:progress="40"
+                android:progressTint="#9C7BE3"
+                android:progressBackgroundTint="#0D1117" />
+
+            <!-- Energy Bar -->
+            <ProgressBar
+                android:id="@+id/widgetEnergyBar"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="match_parent"
+                android:layout_height="6dp"
+                android:layout_marginTop="6dp"
+                android:max="100"
+                android:progress="80"
+                android:progressTint="#4ADE80"
+                android:progressBackgroundTint="#0D1117" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/widgetStreak"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="🔥 1d Streak"
+            android:textColor="#F6AD55"
+            android:textSize="11sp"
+            android:textStyle="bold" />
+
+    </LinearLayout>
+
+</RelativeLayout>

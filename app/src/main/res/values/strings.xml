@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">FitnessRPG</string>
+    <string name="widget_hero_status_title">FitQuest Hero</string>
+    <string name="widget_hero_status_description">Track your hero level, energy, streak, and readiness.</string>
+    <string name="widget_hero_status_loading">Opening the quest log...</string>
+    <string name="widget_hero_status_energy">Energy --</string>
+    <string name="widget_hero_status_streak">Streak --</string>
+    <string name="widget_hero_status_readiness">Readiness: Open FitQuest</string>
+</resources>

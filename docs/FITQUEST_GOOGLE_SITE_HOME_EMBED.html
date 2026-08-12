@@ -1,0 +1,522 @@
+<!--
+FitQuest Google Sites homepage embed.
+
+How to use:
+1. Upload the three images from docs/site-assets to Google Sites or another public host.
+2. Replace these placeholders:
+   HERO_IMAGE_URL
+   PHONE_WATCH_IMAGE_URL
+   REWARD_CHEST_IMAGE_URL
+3. Insert this as an Embed > Embed Code block in Google Sites.
+-->
+
+<section class="fq-site">
+  <style>
+    .fq-site {
+      --fq-bg: #090b14;
+      --fq-panel: #141827;
+      --fq-panel-2: #1c2133;
+      --fq-text: #fff7e8;
+      --fq-muted: #c9c0d0;
+      --fq-gold: #ffb432;
+      --fq-teal: #4fd6d0;
+      --fq-green: #78d481;
+      --fq-purple: #9e6cff;
+      --fq-border: rgba(255, 255, 255, .13);
+      --fq-shadow: 0 24px 80px rgba(0, 0, 0, .42);
+      color: var(--fq-text);
+      background:
+        radial-gradient(circle at 18% 10%, rgba(79, 214, 208, .16), transparent 30%),
+        radial-gradient(circle at 82% 20%, rgba(158, 108, 255, .16), transparent 32%),
+        linear-gradient(180deg, #080a12 0%, #101321 48%, #09101a 100%);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.5;
+      overflow: hidden;
+    }
+
+    .fq-site * {
+      box-sizing: border-box;
+    }
+
+    .fq-wrap {
+      width: min(1160px, calc(100% - 32px));
+      margin: 0 auto;
+    }
+
+    .fq-hero {
+      position: relative;
+      min-height: 660px;
+      display: grid;
+      align-items: center;
+      isolation: isolate;
+      border-bottom: 1px solid rgba(255, 255, 255, .08);
+    }
+
+    .fq-hero::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: -2;
+      background:
+        linear-gradient(90deg, rgba(8, 10, 18, .96) 0%, rgba(8, 10, 18, .78) 34%, rgba(8, 10, 18, .34) 68%, rgba(8, 10, 18, .8) 100%),
+        url("HERO_IMAGE_URL") center / cover no-repeat,
+        linear-gradient(135deg, #111827, #17283a);
+    }
+
+    .fq-hero::after {
+      content: "";
+      position: absolute;
+      inset: auto 0 0;
+      height: 170px;
+      z-index: -1;
+      background: linear-gradient(180deg, transparent, var(--fq-bg));
+    }
+
+    .fq-kicker {
+      color: var(--fq-gold);
+      font-size: 14px;
+      font-weight: 900;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      margin: 0 0 14px;
+    }
+
+    .fq-title {
+      max-width: 760px;
+      font-size: clamp(44px, 7vw, 84px);
+      line-height: .96;
+      letter-spacing: 0;
+      margin: 0;
+    }
+
+    .fq-subtitle {
+      max-width: 680px;
+      color: var(--fq-muted);
+      font-size: clamp(18px, 2.2vw, 23px);
+      margin: 22px 0 0;
+    }
+
+    .fq-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 32px;
+    }
+
+    .fq-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 48px;
+      padding: 0 18px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 180, 50, .5);
+      background: linear-gradient(135deg, #ffbd3d, #f08d20);
+      color: #1a1002;
+      font-weight: 900;
+      text-decoration: none;
+      box-shadow: 0 14px 36px rgba(255, 180, 50, .18);
+    }
+
+    .fq-button.secondary {
+      background: rgba(255, 255, 255, .08);
+      color: var(--fq-text);
+      border-color: rgba(255, 255, 255, .22);
+      box-shadow: none;
+    }
+
+    .fq-stat-row {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 42px;
+      max-width: 850px;
+    }
+
+    .fq-stat {
+      border: 1px solid var(--fq-border);
+      background: rgba(16, 19, 33, .72);
+      backdrop-filter: blur(12px);
+      border-radius: 10px;
+      padding: 16px;
+    }
+
+    .fq-stat strong {
+      display: block;
+      color: var(--fq-text);
+      font-size: 24px;
+      line-height: 1.1;
+    }
+
+    .fq-stat span {
+      color: var(--fq-muted);
+      display: block;
+      font-size: 14px;
+      margin-top: 6px;
+    }
+
+    .fq-section {
+      padding: 72px 0;
+    }
+
+    .fq-section.tight {
+      padding-top: 32px;
+    }
+
+    .fq-heading {
+      max-width: 760px;
+      margin-bottom: 28px;
+    }
+
+    .fq-heading h2 {
+      font-size: clamp(32px, 4.5vw, 54px);
+      line-height: 1.05;
+      margin: 0;
+    }
+
+    .fq-heading p {
+      color: var(--fq-muted);
+      font-size: 18px;
+      margin: 14px 0 0;
+    }
+
+    .fq-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .fq-card {
+      min-height: 220px;
+      padding: 22px;
+      border-radius: 12px;
+      border: 1px solid var(--fq-border);
+      background: linear-gradient(180deg, rgba(28, 33, 51, .96), rgba(16, 19, 33, .96));
+      box-shadow: 0 18px 50px rgba(0, 0, 0, .22);
+    }
+
+    .fq-card h3 {
+      margin: 12px 0 8px;
+      font-size: 21px;
+    }
+
+    .fq-card p {
+      color: var(--fq-muted);
+      margin: 0;
+    }
+
+    .fq-icon {
+      width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+      border-radius: 10px;
+      color: #101321;
+      background: var(--fq-gold);
+      font-size: 22px;
+      font-weight: 900;
+    }
+
+    .fq-split {
+      display: grid;
+      grid-template-columns: minmax(0, 1.05fr) minmax(320px, .95fr);
+      gap: 28px;
+      align-items: center;
+    }
+
+    .fq-media {
+      min-height: 470px;
+      border-radius: 18px;
+      border: 1px solid rgba(255, 255, 255, .16);
+      background:
+        linear-gradient(180deg, rgba(8, 10, 18, .05), rgba(8, 10, 18, .2)),
+        url("PHONE_WATCH_IMAGE_URL") center / cover no-repeat,
+        linear-gradient(135deg, #161b2b, #0e2631);
+      box-shadow: var(--fq-shadow);
+    }
+
+    .fq-list {
+      display: grid;
+      gap: 14px;
+      margin-top: 24px;
+    }
+
+    .fq-list-item {
+      display: grid;
+      grid-template-columns: 32px 1fr;
+      gap: 12px;
+      align-items: start;
+      color: var(--fq-muted);
+    }
+
+    .fq-check {
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      background: rgba(79, 214, 208, .14);
+      color: var(--fq-teal);
+      border: 1px solid rgba(79, 214, 208, .28);
+      font-weight: 900;
+    }
+
+    .fq-roadmap {
+      display: grid;
+      grid-template-columns: minmax(300px, .85fr) minmax(0, 1.15fr);
+      gap: 18px;
+      align-items: stretch;
+    }
+
+    .fq-reward-image {
+      min-height: 500px;
+      border-radius: 18px;
+      border: 1px solid rgba(255, 255, 255, .16);
+      background:
+        linear-gradient(180deg, rgba(8, 10, 18, .02), rgba(8, 10, 18, .16)),
+        url("REWARD_CHEST_IMAGE_URL") center / cover no-repeat,
+        linear-gradient(135deg, #21162b, #291b12);
+      box-shadow: var(--fq-shadow);
+    }
+
+    .fq-roadmap-stack {
+      display: grid;
+      gap: 12px;
+    }
+
+    .fq-roadmap-card {
+      border: 1px solid var(--fq-border);
+      background: rgba(28, 33, 51, .92);
+      border-radius: 12px;
+      padding: 18px;
+    }
+
+    .fq-status {
+      display: inline-flex;
+      align-items: center;
+      min-height: 26px;
+      padding: 0 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      margin-bottom: 10px;
+    }
+
+    .fq-status.done {
+      color: #0f2415;
+      background: var(--fq-green);
+    }
+
+    .fq-status.foundation {
+      color: #061b27;
+      background: #75b8ff;
+    }
+
+    .fq-status.next {
+      color: #241503;
+      background: var(--fq-gold);
+    }
+
+    .fq-status.planned {
+      color: #1a1029;
+      background: #d6c4ff;
+    }
+
+    .fq-roadmap-card h3 {
+      margin: 0 0 6px;
+      font-size: 20px;
+    }
+
+    .fq-roadmap-card p {
+      color: var(--fq-muted);
+      margin: 0;
+    }
+
+    .fq-cta {
+      border-radius: 18px;
+      padding: 34px;
+      border: 1px solid rgba(255, 180, 50, .35);
+      background:
+        linear-gradient(135deg, rgba(255, 180, 50, .16), rgba(158, 108, 255, .14)),
+        rgba(20, 24, 39, .96);
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 24px;
+      align-items: center;
+    }
+
+    .fq-cta h2 {
+      margin: 0 0 8px;
+      font-size: clamp(30px, 4vw, 46px);
+    }
+
+    .fq-cta p {
+      color: var(--fq-muted);
+      margin: 0;
+      max-width: 720px;
+    }
+
+    .fq-footnote {
+      color: #9189a0;
+      font-size: 13px;
+      margin-top: 18px;
+    }
+
+    @media (max-width: 900px) {
+      .fq-hero {
+        min-height: 640px;
+      }
+
+      .fq-stat-row,
+      .fq-grid,
+      .fq-split,
+      .fq-roadmap,
+      .fq-cta {
+        grid-template-columns: 1fr;
+      }
+
+      .fq-media,
+      .fq-reward-image {
+        min-height: 380px;
+      }
+    }
+
+    @media (max-width: 560px) {
+      .fq-wrap {
+        width: min(100% - 22px, 1160px);
+      }
+
+      .fq-hero {
+        min-height: 590px;
+      }
+
+      .fq-section {
+        padding: 52px 0;
+      }
+
+      .fq-title {
+        font-size: 43px;
+      }
+
+      .fq-actions {
+        flex-direction: column;
+      }
+
+      .fq-button {
+        width: 100%;
+      }
+    }
+  </style>
+
+  <div class="fq-hero">
+    <div class="fq-wrap">
+      <p class="fq-kicker">Fitness Quest RPG</p>
+      <h1 class="fq-title">Train for real. Level up your hero.</h1>
+      <p class="fq-subtitle">FitQuest turns workouts into quests, loot, battles, classes, gear, heart-rate moments, and long-term RPG progression.</p>
+      <div class="fq-actions">
+        <a class="fq-button" href="https://play.google.com/apps/internaltest/4701161394189462165" target="_blank" rel="noopener">Join the Test</a>
+        <a class="fq-button secondary" href="/view/fitnessquest-rpg/roadmap">View Roadmap</a>
+      </div>
+      <div class="fq-stat-row" aria-label="FitQuest highlights">
+        <div class="fq-stat"><strong>RPG</strong><span>classes, gear, loot, monsters</span></div>
+        <div class="fq-stat"><strong>Fitness</strong><span>workouts drive progress</span></div>
+        <div class="fq-stat"><strong>Wear OS</strong><span>heart-rate companion planned</span></div>
+        <div class="fq-stat"><strong>Roadmap</strong><span>built with tester feedback</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="fq-section tight">
+    <div class="fq-wrap">
+      <div class="fq-heading">
+        <h2>One app loop: workout, earn, battle, build.</h2>
+        <p>The goal is simple: make real training feel like real character progression.</p>
+      </div>
+      <div class="fq-grid">
+        <article class="fq-card">
+          <div class="fq-icon">1</div>
+          <h3>Log Real Training</h3>
+          <p>Track workouts, build streaks, earn XP, and turn movement into hero growth.</p>
+        </article>
+        <article class="fq-card">
+          <div class="fq-icon">2</div>
+          <h3>Grow Your Hero</h3>
+          <p>Pick a class, equip gear, improve stats, and make your build matter over time.</p>
+        </article>
+        <article class="fq-card">
+          <div class="fq-icon">3</div>
+          <h3>Adventure Forward</h3>
+          <p>Fight monsters, explore biomes, collect loot, and unlock future progression systems.</p>
+        </article>
+      </div>
+    </div>
+  </div>
+
+  <div class="fq-section">
+    <div class="fq-wrap fq-split">
+      <div>
+        <p class="fq-kicker">Phone + Watch</p>
+        <div class="fq-heading">
+          <h2>Built for workouts that feel alive.</h2>
+          <p>The phone app carries the RPG layer while the Wear OS companion can support live heart-rate and workout moments.</p>
+        </div>
+        <div class="fq-list">
+          <div class="fq-list-item"><span class="fq-check">✓</span><span>Hero avatar, gear, inventory, quests, and battle progression.</span></div>
+          <div class="fq-list-item"><span class="fq-check">✓</span><span>Workout logging that feeds XP, loot, materials, and future movement mastery.</span></div>
+          <div class="fq-list-item"><span class="fq-check">✓</span><span>Planned heart-rate zones, watch connection improvements, and live workout feedback.</span></div>
+        </div>
+      </div>
+      <div class="fq-media" role="img" aria-label="FitQuest phone and watch fantasy app mockup"></div>
+    </div>
+  </div>
+
+  <div class="fq-section">
+    <div class="fq-wrap fq-roadmap">
+      <div class="fq-reward-image" role="img" aria-label="Fantasy reward chest with workout and RPG rewards"></div>
+      <div>
+        <p class="fq-kicker">Roadmap Snapshot</p>
+        <div class="fq-heading">
+          <h2>What we are building next.</h2>
+          <p>The roadmap is focused on making the game deeper, clearer, and more rewarding before adding more layers.</p>
+        </div>
+        <div class="fq-roadmap-stack">
+          <article class="fq-roadmap-card">
+            <span class="fq-status done">Finished</span>
+            <h3>Shop, Inventory, And Armory Refresh</h3>
+            <p>Grid browsing, filters, sorting, equipped slots, item sheets, and forge entry actions.</p>
+          </article>
+          <article class="fq-roadmap-card">
+            <span class="fq-status foundation">Foundation Built</span>
+            <h3>Gear Pacing, Biome Progress, And Forge</h3>
+            <p>Higher gear tiers now need meaningful progress, and gear can be upgraded or salvaged.</p>
+          </article>
+          <article class="fq-roadmap-card">
+            <span class="fq-status next">Working Next</span>
+            <h3>Reward Reveals And Chest Opening</h3>
+            <p>Better loot reveals so players know exactly what they earned from workouts, chests, and idle rewards.</p>
+          </article>
+          <article class="fq-roadmap-card">
+            <span class="fq-status planned">Planned</span>
+            <h3>Mastery, Skill Trees, Cosmetics, And Submissions</h3>
+            <p>Movement mastery, class builds, better avatar visuals, user submissions, and a What's New system.</p>
+          </article>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="fq-section">
+    <div class="fq-wrap">
+      <div class="fq-cta">
+        <div>
+          <h2>Help shape FitQuest before launch.</h2>
+          <p>Join the Android test, try a workout, check the hero/battle/shop loops, and send feedback on bugs, features, missing exercises, equipment, and workout ideas.</p>
+        </div>
+        <a class="fq-button" href="https://play.google.com/apps/internaltest/4701161394189462165" target="_blank" rel="noopener">Join Internal Test</a>
+      </div>
+      <p class="fq-footnote">Tip: update the image URLs at the top of this embed after uploading the generated assets to Google Sites.</p>
+    </div>
+  </div>
+</section>

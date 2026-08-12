@@ -1,0 +1,121 @@
+package com.fitnessquest.rpg.domain
+
+import com.fitnessquest.rpg.data.db.BiomeProgressEntity
+import com.fitnessquest.rpg.data.db.CharacterEntity
+import com.fitnessquest.rpg.data.db.ItemEntity
+import com.fitnessquest.rpg.data.db.ItemSlot
+import com.fitnessquest.rpg.data.db.isEquippable
+
+enum class LootSource {
+    WORKOUT,
+    BATTLE,
+    AMBUSH,
+    MOMENT,
+    CHEST,
+    BOSS,
+    CAMPAIGN,
+    GUILD_RAID,
+}
+
+object ProgressionRules {
+    const val MAX_GEAR_TIER = 5
+    const val BOSS_UNLOCK_POINTS = 100
+
+    fun bossUnlockPointsFor(biome: Biome): Int =
+        BOSS_UNLOCK_POINTS + (biome.ordinal * 25)
+
+    fun shouldUnlockBoss(biomeName: String, progressPoints: Int): Boolean {
+        val biome = Biome.fromName(biomeName)
+        return progressPoints >= bossUnlockPointsFor(biome)
+    }
+
+    fun maxUnlockedGearTier(
+        character: CharacterEntity,
+        biomeProgress: List<BiomeProgressEntity>
+    ): Int {
+        val defeated = biomeProgress.count { it.bossDefeated }
+        val deepestLayer = biomeProgress.maxOfOrNull { it.layer } ?: 1
+        val currentBiome = Biome.fromName(character.currentBiome)
+
+        var tier = 1
+        if (character.level >= 3 || currentBiome.ordinal >= Biome.DARKWOOD.ordinal) {
+            tier = 2
+        }
+        if (defeated >= 1 || character.battlesWon >= 20) {
+            tier = 3
+        }
+        if (defeated >= 3) {
+            tier = 4
+        }
+        if (defeated >= Biome.entries.size && deepestLayer >= 2) {
+            tier = 5
+        }
+        return tier.coerceIn(1, MAX_GEAR_TIER)
+    }
+
+    fun tierCapForLoot(
+        source: LootSource,
+        character: CharacterEntity,
+        biomeProgress: List<BiomeProgressEntity>,
+        contentTier: Int = 1
+    ): Int {
+        val unlocked = maxUnlockedGearTier(character, biomeProgress)
+        val content = contentTier.coerceIn(1, MAX_GEAR_TIER)
+        val cap = when (source) {
+            LootSource.WORKOUT -> minOf(unlocked, 2)
+            LootSource.BATTLE -> minOf(unlocked, content)
+            LootSource.AMBUSH -> minOf(unlocked, maxOf(2, content))
+            LootSource.MOMENT -> minOf(unlocked, 3)
+            LootSource.CHEST -> minOf(unlocked, content)
+            LootSource.BOSS -> minOf(unlocked, maxOf(3, content))
+            LootSource.CAMPAIGN -> minOf(unlocked, maxOf(2, content))
+            LootSource.GUILD_RAID -> minOf(unlocked, maxOf(3, content))
+        }
+        return cap.coerceIn(1, MAX_GEAR_TIER)
+    }
+
+    fun filterGearPool(
+        pool: List<ItemEntity>,
+        maxTier: Int,
+        character: CharacterEntity
+    ): List<ItemEntity> =
+        pool.filter {
+            it.slot.isEquippable() &&
+                it.tier <= maxTier &&
+                ((it.classAffinity == null) || (it.classAffinity == character.characterClass))
+        }
+
+    fun progressForVictory(monster: Monster): Int =
+        (10 + monster.tier * 4 + monster.level / 2).coerceAtLeast(10)
+
+    fun salvageMaterialQuantity(tier: Int, rarity: String): Int {
+        val rarityBonus = when (rarity.uppercase()) {
+            "UNCOMMON" -> 1
+            "RARE" -> 2
+            "EPIC" -> 3
+            "LEGENDARY" -> 5
+            else -> 0
+        }
+        return (tier.coerceAtLeast(1) + rarityBonus).coerceAtLeast(1)
+    }
+
+    fun upgradeGoldCost(tier: Int, upgradeLevel: Int): Int =
+        35 + tier.coerceAtLeast(1) * 30 + upgradeLevel.coerceAtLeast(0) * 25
+
+    fun upgradeMaterialCost(tier: Int, upgradeLevel: Int): Int =
+        1 + (tier.coerceAtLeast(1) / 2) + (upgradeLevel.coerceAtLeast(0) / 2)
+
+    fun maxUpgradeLevel(tier: Int): Int =
+        2 + tier.coerceAtLeast(1)
+
+    fun primaryMaterialFor(item: ItemEntity): Long = when (item.slot) {
+        ItemSlot.WEAPON -> Materials.SCRAP_IRON
+        ItemSlot.HEAD, ItemSlot.CHEST, ItemSlot.HANDS, ItemSlot.LEGS, ItemSlot.FEET -> when (item.style) {
+            ItemStyle.ROBE -> Materials.ARCANE_DUST
+            ItemStyle.LIGHT -> Materials.BEAST_HIDE
+            else -> Materials.SCRAP_IRON
+        }
+        ItemSlot.TRINKET -> Materials.ARCANE_DUST
+        else -> Materials.SCRAP_IRON
+    }
+}

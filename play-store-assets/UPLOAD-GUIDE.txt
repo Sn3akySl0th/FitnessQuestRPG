@@ -1,0 +1,35 @@
+﻿Fitness Quest RPG — Play Store graphics
+=======================================
+
+Folder: C:\Users\clefe\FitQuest\play-store-assets
+
+Upload in Play Console → Grow users → Store presence → Main store listing → Graphics.
+
+REQUIRED
+--------
+1) App icon — 512 x 512 PNG
+   icon\hi-res-icon-512.png
+
+2) Feature graphic — 1024 x 500
+   feature-graphic\feature-graphic-1024x500.jpg   ← use this
+   feature-graphic\feature-graphic-1024x500.png   (alt)
+
+3) Phone screenshots — min 2 (upload in this order)
+   screenshots\01-hero.png               Hero sheet + daily bounties
+   screenshots\02-train.png              Training grounds / AI Forge
+   screenshots\03-battle.png             World map + monsters
+   screenshots\05-shop.png               Market / loot
+   screenshots\04-allies.png             Party / Guild / Rivals
+   screenshots\06-freestyle-session.png  Live workout logging
+
+COPY (already drafted)
+----------------------
+App name: Fitness Quest RPG
+Short description (68 chars):
+Train for real. Level up your hero. Workouts, loot, and RPG battles.
+
+NOTES
+-----
+- Screenshots are 1216x2688 (portrait) from your device — Play accepts them.
+- Icon/feature graphic are brand-matched generated assets sized to Play specs.
+- Optional later: tablet shots, Wear shots, YouTube promo video.
