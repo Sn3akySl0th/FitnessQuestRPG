@@ -854,12 +854,12 @@ private fun DrawScope.drawLowerBodyLayer(f: AvatarFrame, pose: AvatarPose) {
     }) {
         drawRoundRect(f.appearance.underwearColor, topLeft = f.p(36f, 71f), size = f.s(28f, 13f), cornerRadius = CornerRadius(4f * f.u))
         
-        // Glute highlight overlay (draw over underwear if sore)
-        if (f.hasHighlight("glutes", "legs")) {
+        // Glute highlight overlay (draw over underwear if sore, back view only)
+        if (f.facingBack && f.hasHighlight("glutes", "legs")) {
             drawRoundRect(
-                Color(0xFFE57373).copy(alpha = 0.7f),
-                topLeft = f.p(36f, 73f),
-                size = f.s(28f, 11f),
+                Color(0xFFE57373).copy(alpha = 0.8f), // Increased alpha to 0.8f
+                topLeft = f.p(36f, 71f),
+                size = f.s(28f, 13f),
                 cornerRadius = CornerRadius(4f * f.u)
             )
         }
@@ -951,14 +951,14 @@ private fun DrawScope.drawBareTorsoSegments(f: AvatarFrame) {
         drawRoundRect(
             f.skinColor("lower back", "back"),
             topLeft = f.p(34f, 64f),
-            size = f.s(32f, 12f),
+            size = f.s(32f, 7f), // Reduced height from 12f to 7f to end at y=71
             cornerRadius = CornerRadius(4f * f.u)
         )
         // Lats / middle back (side wedges + center)
         val latColor = f.skinColor("lats", "middle back", "back")
-        drawRect(latColor, topLeft = f.p(34f, 50f), size = f.s(10f, 16f))
-        drawRect(latColor, topLeft = f.p(56f, 50f), size = f.s(10f, 16f))
-        drawRect(latColor, topLeft = f.p(44f, 52f), size = f.s(12f, 14f))
+        drawRect(latColor, topLeft = f.p(34f, 50f), size = f.s(10f, 14f)) // Height reduced to 14f
+        drawRect(latColor, topLeft = f.p(56f, 50f), size = f.s(10f, 14f)) // Height reduced to 14f
+        drawRect(latColor, topLeft = f.p(44f, 52f), size = f.s(12f, 12f)) // Height reduced to 12f
         // Traps (upper center)
         drawRoundRect(
             f.skinColor("traps", "back"),
@@ -974,7 +974,7 @@ private fun DrawScope.drawBareTorsoSegments(f: AvatarFrame) {
         drawRoundRect(
             f.appearance.skinColor,
             topLeft = f.p(34f, 44f),
-            size = f.s(32f, 32f),
+            size = f.s(32f, 27f), // Height reduced from 32f to 27f to end at y=71
             cornerRadius = CornerRadius(6f * f.u)
         )
         // Abs (lower band)

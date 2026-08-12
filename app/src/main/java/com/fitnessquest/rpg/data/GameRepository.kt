@@ -31,6 +31,7 @@ import com.fitnessquest.rpg.domain.ExerciseCategories
 import com.fitnessquest.rpg.domain.GameMath
 import com.fitnessquest.rpg.domain.GearSockets
 import com.fitnessquest.rpg.domain.ItemCatalog
+import com.fitnessquest.rpg.domain.LootChests
 import com.fitnessquest.rpg.domain.LootGrant
 import com.fitnessquest.rpg.domain.LootResult
 import com.fitnessquest.rpg.domain.LootSource
@@ -251,8 +252,6 @@ class GameRepository(
     }
 
     // ---- Workouts ----
-
-    suspend fun getAllWorkouts(): List<WorkoutEntity> = db.workoutDao().getAllWorkouts()
 
     suspend fun saveWorkout(name: String, exercises: List<WorkoutExerciseEntity>, aiGenerated: Boolean = false): Long =
         db.workoutDao().saveWorkout(
@@ -934,7 +933,7 @@ class GameRepository(
         val xpGain = 250 * countFactor
         val goldGain = 150 * countFactor
 
-        val chestCatalog = ItemCatalog.all.firstOrNull { it.id == com.fitnessquest.rpg.domain.LootChests.WOODEN }
+        val chestCatalog = ItemCatalog.all.find { it.id == LootChests.WOODEN }
         if (chestCatalog != null) {
             val existing = db.itemDao().get(chestCatalog.id)
             if (existing != null) {
@@ -953,7 +952,7 @@ class GameRepository(
         val updatedChar = GameMath.applyLevelUps(nextChar)
         db.characterDao().upsert(updatedChar)
 
-        val rewardList = mutableListOf<Reward>(
+        val rewardList = mutableListOf(
             Reward.Xp(xpGain),
             Reward.Gold(goldGain)
         )

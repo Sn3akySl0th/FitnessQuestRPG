@@ -28,8 +28,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -51,9 +49,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.ui.text.font.FontWeight
+import com.fitnessquest.rpg.data.ai.DownloadState
 import com.fitnessquest.rpg.data.ai.LocalModelDownloader
 import com.fitnessquest.rpg.data.ai.ModelCatalog
-import com.fitnessquest.rpg.data.ai.DownloadState
 import com.fitnessquest.rpg.data.ai.PlayAssetModelProvider
 
 import kotlinx.coroutines.launch
@@ -84,7 +82,6 @@ import com.fitnessquest.rpg.ui.effects.HapticEffects
 import com.fitnessquest.rpg.ui.theme.Gold
 import com.google.android.play.core.assetpacks.model.AssetPackStatus
 import kotlinx.coroutines.flow.MutableStateFlow
-
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -1155,7 +1152,7 @@ fun LocalAiModelSection(
 
     val context = LocalContext.current
     DisposableEffect(state, playAssetState.downloading) {
-        val activity = context as? android.app.Activity
+        val activity = context as? Activity
         if (state is DownloadState.Downloading || playAssetState.downloading) {
             activity?.window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }

@@ -51,9 +51,10 @@ val FrontMuscles = listOf(
 )
 
 val BackMuscles = listOf(
-    MuscleRegion("BACK", "Lats / Back", AnatomyView.BACK, "🏹"),
+    MuscleRegion("LATS", "Lats / Back", AnatomyView.BACK, "🏹"),
     MuscleRegion("TRAPS", "Traps", AnatomyView.BACK, "🧛"),
     MuscleRegion("TRICEPS", "Triceps", AnatomyView.BACK, "🗡️"),
+
     MuscleRegion("GLUTES", "Glutes", AnatomyView.BACK, "🔥"),
     MuscleRegion("HAMSTRINGS", "Hamstrings", AnatomyView.BACK, "🦵"),
     MuscleRegion("CALVES", "Calves", AnatomyView.BACK, "⚡"),
