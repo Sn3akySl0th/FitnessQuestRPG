@@ -55,5 +55,6 @@ enum class RewardSource {
     GUILD_RAID,
     CAMPAIGN_GOAL,
     ACHIEVEMENT,
-    DATA_IMPORT
+    DATA_IMPORT,
+    BOSS,
 }

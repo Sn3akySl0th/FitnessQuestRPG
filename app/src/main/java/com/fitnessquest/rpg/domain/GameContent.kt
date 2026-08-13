@@ -454,8 +454,11 @@ data class Monster(
     val xpReward: Int,
     val biome: Biome,
     val description: String,
-    val trait: MonsterTrait? = null
-)
+    val trait: MonsterTrait? = null,
+    val bossOf: Biome? = null,
+) {
+    val isBoss: Boolean get() = bossOf != null
+}
 
 object MonsterCatalog {
     val all: List<Monster> = listOf(
@@ -463,34 +466,34 @@ object MonsterCatalog {
         Monster(1, "Couch Slime", "\uD83E\uDD22", 1, 1, 100, 14, 4, 4, 18, 30, Biome.MEADOWLANDS, "A gelatinous blob that hasn't moved in weeks. Relatable, but it must be stopped."),
         Monster(2, "Gym Rat", "\uD83D\uDC00", 2, 1, 130, 18, 5, 8, 28, 48, Biome.MEADOWLANDS, "It hoards all the dumbbells and never re-racks them."),
         Monster(19, "Snooze Gremlin", "\u23F0", 2, 1, 120, 17, 4, 14, 28, 46, Biome.MEADOWLANDS, "It hits your snooze button from inside the walls. Quick little menace.", MonsterTrait.SWIFT),
-        Monster(9, "Lazy Boar", "\uD83D\uDC17", 3, 1, 165, 22, 7, 6, 40, 62, Biome.MEADOWLANDS, "It naps in the sun and judges joggers. Today, it judges you."),
+        Monster(9, "Lazy Boar", "\uD83D\uDC17", 3, 1, 165, 22, 7, 6, 40, 62, Biome.MEADOWLANDS, "It naps in the sun and judges joggers. Today, it judges you.", bossOf = Biome.MEADOWLANDS),
         Monster(20, "Junk Food Mimic", "\uD83C\uDF54", 3, 1, 150, 21, 6, 5, 38, 60, Biome.MEADOWLANDS, "Looks delicious. Bites back. Poisons your macros.", MonsterTrait.VENOMOUS),
 
         // Darkwood (lv 4-6)
         Monster(3, "Procrastination Imp", "\uD83D\uDC7F", 4, 2, 200, 26, 9, 11, 55, 85, Biome.DARKWOOD, "Whispers 'you can work out tomorrow' into your ear."),
         Monster(21, "Excuse Goblin", "\uD83D\uDC7A", 5, 2, 220, 28, 8, 17, 62, 95, Biome.DARKWOOD, "Darts between trees flinging excuses. Hard to pin down.", MonsterTrait.SWIFT),
         Monster(10, "Doomscroll Spider", "\uD83D\uDD77\uFE0F", 5, 2, 240, 30, 10, 13, 68, 100, Biome.DARKWOOD, "Its web is infinite. Its venom keeps you scrolling.", MonsterTrait.VENOMOUS),
-        Monster(4, "Skeleton Spotter", "\uD83D\uDC80", 6, 2, 280, 34, 12, 10, 82, 120, Biome.DARKWOOD, "It has literally no muscles. It is so jealous of yours."),
+        Monster(4, "Skeleton Spotter", "\uD83D\uDC80", 6, 2, 280, 34, 12, 10, 82, 120, Biome.DARKWOOD, "It has literally no muscles. It is so jealous of yours.", bossOf = Biome.DARKWOOD),
         Monster(22, "Couch Potato Golem", "\uD83E\uDD54", 6, 2, 320, 30, 18, 4, 88, 125, Biome.DARKWOOD, "Centuries of sitting have compressed it into solid starch armor.", MonsterTrait.ARMORED),
 
         // Crystal Caves (lv 7-9)
         Monster(11, "Crystal Crab", "\uD83E\uDD80", 7, 2, 330, 36, 17, 6, 100, 140, Biome.CRYSTAL_CAVES, "Its shell is pure gem. Attacks glance right off it.", MonsterTrait.ARMORED),
         Monster(12, "Echo Bat", "\uD83E\uDD87", 8, 3, 320, 40, 11, 18, 112, 155, Biome.CRYSTAL_CAVES, "It repeats every excuse you've ever made, in your own voice.", MonsterTrait.SWIFT),
         Monster(23, "Gem Serpent", "\uD83D\uDC0D", 8, 3, 340, 39, 14, 13, 115, 158, Biome.CRYSTAL_CAVES, "Its fangs drip crystallized venom worth a fortune. Don't get bitten.", MonsterTrait.VENOMOUS),
-        Monster(5, "Ogre of Excuses", "\uD83D\uDC79", 9, 3, 420, 46, 15, 7, 130, 180, Biome.CRYSTAL_CAVES, "Its club is carved from a thousand broken New Year's resolutions."),
+        Monster(5, "Ogre of Excuses", "\uD83D\uDC79", 9, 3, 420, 46, 15, 7, 130, 180, Biome.CRYSTAL_CAVES, "Its club is carved from a thousand broken New Year's resolutions.", bossOf = Biome.CRYSTAL_CAVES),
         Monster(24, "Prism Wisp", "\uD83D\uDCA0", 9, 3, 350, 48, 10, 22, 132, 185, Biome.CRYSTAL_CAVES, "A shard of living light that refuses to hold still.", MonsterTrait.SWIFT),
 
         // Ember Peaks (lv 11-13)
         Monster(13, "Magma Hound", "\uD83D\uDD25", 11, 3, 500, 55, 16, 14, 168, 230, Biome.EMBER_PEAKS, "It fetches boulders. The angrier it gets, the hotter it burns.", MonsterTrait.ENRAGED),
         Monster(25, "Ash Ghoul", "\uD83E\uDDDF", 12, 3, 540, 54, 15, 11, 185, 245, Biome.EMBER_PEAKS, "Rises from every burned-out training plan. Keeps getting back up.", MonsterTrait.REGENERATING),
-        Monster(6, "Cardio Wraith", "\uD83D\uDC7B", 12, 3, 560, 58, 17, 20, 188, 250, Biome.EMBER_PEAKS, "It runs eternally, fueled by the souls of abandoned treadmills.", MonsterTrait.SWIFT),
+        Monster(6, "Cardio Wraith", "\uD83D\uDC7B", 12, 3, 560, 58, 17, 20, 188, 250, Biome.EMBER_PEAKS, "It runs eternally, fueled by the souls of abandoned treadmills.", MonsterTrait.SWIFT, bossOf = Biome.EMBER_PEAKS),
         Monster(14, "Cinder Imp", "\uD83E\uDDE8", 13, 3, 590, 62, 18, 16, 210, 275, Biome.EMBER_PEAKS, "It lights the sauna way too hot on purpose."),
         Monster(26, "Lava Turtle", "\uD83D\uDC22", 13, 3, 680, 56, 28, 4, 215, 280, Biome.EMBER_PEAKS, "Its obsidian shell shrugs off almost anything. Slow and smug about it.", MonsterTrait.ARMORED),
 
         // Frozen Wastes (lv 15-17)
         Monster(15, "Frost Yeti", "\u26C4", 15, 4, 720, 70, 22, 10, 260, 335, Biome.FROZEN_WASTES, "Takes ice baths recreationally. The cold knits its wounds shut.", MonsterTrait.REGENERATING),
         Monster(27, "Frostbite Wolf", "\uD83D\uDC3A", 16, 4, 740, 74, 20, 24, 280, 360, Biome.FROZEN_WASTES, "It circles twice before you can blink. Pack tactics, solo executed.", MonsterTrait.SWIFT),
-        Monster(7, "Iron Golem", "\uD83E\uDD16", 16, 4, 800, 72, 28, 8, 275, 355, Biome.FROZEN_WASTES, "Assembled from every barbell plate ever left on the floor.", MonsterTrait.ARMORED),
+        Monster(7, "Iron Golem", "\uD83E\uDD16", 16, 4, 800, 72, 28, 8, 275, 355, Biome.FROZEN_WASTES, "Assembled from every barbell plate ever left on the floor.", MonsterTrait.ARMORED, bossOf = Biome.FROZEN_WASTES),
         Monster(16, "Blizzard Elemental", "\uD83C\uDF28\uFE0F", 17, 4, 840, 80, 26, 19, 320, 400, Biome.FROZEN_WASTES, "A snowstorm with a grudge and surprisingly good footwork."),
         Monster(28, "Permafrost Lich", "\uD83E\uDDD9", 17, 4, 820, 82, 25, 13, 325, 410, Biome.FROZEN_WASTES, "An ancient coach who never let anyone skip warm-ups. Death didn't stop him.", MonsterTrait.REGENERATING),
 
@@ -499,13 +502,13 @@ object MonsterCatalog {
         Monster(29, "Doom Toad", "\uD83D\uDC38", 19, 4, 960, 88, 27, 11, 395, 475, Biome.SHADOWFEN, "Each croak is a prophecy of failure. Its tongue drips despair.", MonsterTrait.VENOMOUS),
         Monster(18, "Despair Shade", "\uD83E\uDEE5", 19, 4, 980, 90, 29, 17, 410, 485, Biome.SHADOWFEN, "The embodiment of 'what's the point?'. Show it the point."),
         Monster(30, "Sleep Paralysis Fiend", "\uD83D\uDE08", 20, 4, 1000, 95, 28, 25, 435, 510, Biome.SHADOWFEN, "It sits on your chest at 3 AM and dares you to make the morning workout.", MonsterTrait.SWIFT),
-        Monster(8, "Burnout Dragon", "\uD83D\uDC32", 20, 4, 1100, 100, 32, 15, 480, 550, Biome.SHADOWFEN, "The final boss of every fitness journey. Its fury grows as it weakens.", MonsterTrait.ENRAGED),
+        Monster(8, "Burnout Dragon", "\uD83D\uDC32", 20, 4, 1100, 100, 32, 15, 480, 550, Biome.SHADOWFEN, "The final boss of every fitness journey. Its fury grows as it weakens.", MonsterTrait.ENRAGED, bossOf = Biome.SHADOWFEN),
 
         // Ambush elites (harder than biome peers; wagered rest encounters)
         Monster(101, "Restless Specter", "\uD83D\uDC7B", 5, 2, 280, 38, 12, 16, 90, 140, Biome.MEADOWLANDS, "It attacks between sets. Your rest is its feast.", MonsterTrait.SWIFT),
         Monster(102, "Plate Pirate", "\uD83E\uDDDF", 8, 3, 420, 52, 20, 10, 130, 200, Biome.DARKWOOD, "Steals your progress plates mid-rest.", MonsterTrait.ARMORED),
         Monster(103, "Interval Demon", "\uD83D\uDD25", 12, 3, 600, 68, 18, 22, 180, 280, Biome.EMBER_PEAKS, "Wants you to skip the rest and burn out.", MonsterTrait.ENRAGED),
-        Monster(104, "Cooldown Debt", "\u2744\uFE0F", 16, 4, 820, 82, 26, 14, 260, 380, Biome.FROZEN_WASTES, "Compound interest on every missed rep.", MonsterTrait.REGENERATING)
+        Monster(104, "Cooldown Debt", "\u2744\uFE0F", 16, 4, 820, 82, 26, 14, 260, 380, Biome.FROZEN_WASTES, "Compound interest on every missed rep.", MonsterTrait.REGENERATING),
     )
 
     fun ambushForLevel(level: Int): Monster {
@@ -517,4 +520,12 @@ object MonsterCatalog {
 
     fun byBiome(biome: Biome): List<Monster> =
         all.filter { it.biome == biome && it.id < 100 }
+
+    fun bossForBiome(biome: Biome): Monster =
+        all.first { it.bossOf == biome }
+
+    fun isBoss(monster: Monster): Boolean = monster.isBoss
+
+    fun regularMonstersByBiome(biome: Biome): List<Monster> =
+        all.filter { it.biome == biome && it.id < 100 && !it.isBoss }
 }

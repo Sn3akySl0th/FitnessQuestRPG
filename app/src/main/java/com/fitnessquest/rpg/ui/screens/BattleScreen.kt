@@ -47,6 +47,7 @@ import kotlinx.coroutines.flow.combine
 import com.fitnessquest.rpg.domain.Units
 import com.fitnessquest.rpg.ui.appContainer
 import com.fitnessquest.rpg.ui.rememberDockContentPadding
+import com.fitnessquest.rpg.ui.components.BossProgressCard
 import com.fitnessquest.rpg.ui.components.InteractiveWorldMap
 import com.fitnessquest.rpg.ui.components.ResourceChip
 import com.fitnessquest.rpg.ui.components.SceneBanner
@@ -91,6 +92,13 @@ class BattleSelectViewModel(private val container: AppContainer) : ViewModel() {
             container.repository.getBiomeRequirement(biome)
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ProgressionRules.BiomeRequirement.MaxBiome)
+
+    val currentBiomeProgress: StateFlow<BiomeProgressEntity?> = combine(
+        container.repository.allBiomeProgress,
+        container.repository.character,
+    ) { progressList, character ->
+        progressList.find { it.biomeName == character.currentBiome }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     fun startStepTracking() = container.steps.start()
 
@@ -147,10 +155,12 @@ fun BattleScreen(
     val encounterClaimed by viewModel.encounterClaimed.collectAsState()
     val biomeRequirement by viewModel.biomeRequirement.collectAsState()
     val allProgress by viewModel.allBiomeProgress.collectAsState()
+    val currentProgress by viewModel.currentBiomeProgress.collectAsState()
     val c = battleState.character ?: return
     val combat = battleState.combat
     val canFight = c.energy >= GameMath.BATTLE_ENERGY_COST
     val biome = Biome.fromName(c.currentBiome)
+    val boss = MonsterCatalog.bossForBiome(biome)
     val travelTarget = c.travelTarget?.let { Biome.fromName(it) }
 
     // Periodically refresh to recoup energy while selecting battle
@@ -187,60 +197,69 @@ fun BattleScreen(
                 )
             }
 
+            if (viewModel.stepSensorAvailable) {
+                item {
+                    val stepsToday by viewModel.stepsToday.collectAsState()
+                    val tracking by viewModel.stepTracking.collectAsState()
+                    StepsCard(
+                        steps = stepsToday,
+                        tracking = tracking,
+                        traveling = travelTarget != null,
+                        imperial = imperial,
+                        onEnabled = viewModel::startStepTracking
+                    )
+                }
+            }
 
-        if (viewModel.stepSensorAvailable) {
+            // Prominent Biome Boss Progress Card
             item {
-                val stepsToday by viewModel.stepsToday.collectAsState()
-                val tracking by viewModel.stepTracking.collectAsState()
-                StepsCard(
-                    steps = stepsToday,
-                    tracking = tracking,
-                    traveling = travelTarget != null,
-                    imperial = imperial,
-                    onEnabled = viewModel::startStepTracking
+                BossProgressCard(
+                    biome = biome,
+                    boss = boss,
+                    biomeProgress = currentProgress,
+                    combat = combat,
+                    playerLevel = c.level,
+                    enabled = canFight,
+                    onChallenge = onFight,
                 )
             }
-        }
 
-
-        item {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Local Monsters", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ResourceChip("\u26A1", "${c.energy} energy")
-                    ResourceChip("\u2694\uFE0F", "costs ${GameMath.BATTLE_ENERGY_COST} per battle")
-                }
-                if (c.energy < GameMath.MAX_ENERGY) {
-                    Text(
-                        "✨ Resting... +1⚡ every 12m",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Gold,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-                if (!canFight) {
-                    Text(
-                        "Not enough energy! Complete a workout to recharge \u2014 " +
-                            "real training fuels your battles.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.error
-                    )
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Roaming Monsters", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ResourceChip("\u26A1", "${c.energy} energy")
+                        ResourceChip("\u2694\uFE0F", "costs ${GameMath.BATTLE_ENERGY_COST} per battle")
+                    }
+                    if (c.energy < GameMath.MAX_ENERGY) {
+                        Text(
+                            "✨ Resting... +1⚡ every 12m",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Gold,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    if (!canFight) {
+                        Text(
+                            "Not enough energy! Complete a workout to recharge \u2014 " +
+                                "real training fuels your battles.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
                 }
             }
-        }
 
-        items(MonsterCatalog.byBiome(biome), key = { it.id }) { monster ->
-            MonsterCard(
-                monster = monster,
-                playerLevel = c.level,
-                combat = combat,
-                enabled = canFight
-            ) { onFight(monster.id) }
-        }
+            items(MonsterCatalog.regularMonstersByBiome(biome), key = { it.id }) { monster ->
+                MonsterCard(
+                    monster = monster,
+                    playerLevel = c.level,
+                    combat = combat,
+                    enabled = canFight
+                ) { onFight(monster.id) }
+            }
         }
     }
-
-
 }
 
 /**

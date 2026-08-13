@@ -190,6 +190,7 @@ fun RewardRevealDialog(
 private fun rewardTitle(source: RewardSource): String = when (source) {
     RewardSource.WORKOUT -> "Quest Completed!"
     RewardSource.BATTLE -> "Victory Spoils!"
+    RewardSource.BOSS -> "Boss Conquered!"
     RewardSource.CHEST_OPENING -> "Loot Found!"
     RewardSource.OFFLINE_IDLE -> "Patrol Rewards"
     RewardSource.FORGE -> "Forge Results!"

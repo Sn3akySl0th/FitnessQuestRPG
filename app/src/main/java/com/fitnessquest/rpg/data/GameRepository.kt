@@ -1700,7 +1700,7 @@ class GameRepository(
 
     // ---- Battles ----
 
-    suspend fun applyVictory(monster: Monster, ambush: Boolean = false): RewardBatch {
+    suspend fun applyVictory(monster: Monster, ambush: Boolean = false): RewardBatch = db.withTransaction {
         val character = getCharacter()
         val afterBattle = if (ambush) {
             val withXp = GameMath.applyBattleRewards(character, monster)
@@ -1708,21 +1708,46 @@ class GameRepository(
         } else {
             GameMath.applyBattleRewards(character, monster)
         }
-        val loot = if (ambush) {
-            val tier = lootTierFor(LootSource.AMBUSH, character, monster.tier + 1)
-            LootTables.rollAmbushLoot(
-                level = character.level,
-                gearPool = eligibleGearTemplates(character, tier),
-                stackPool = stackTemplates(),
-                maxTier = tier
-            )
-        } else {
-            val tier = lootTierFor(LootSource.BATTLE, character, monster.tier)
-            LootTables.rollBattleLoot(
-                monster = monster,
-                gearPool = eligibleGearTemplates(character, tier),
-                stackPool = stackTemplates()
-            )
+
+        val isBoss = MonsterCatalog.isBoss(monster)
+        val currentProgress = if (isBoss) getOrCreateBiomeProgress(monster.biome.name) else null
+        val isFirstClear = isBoss && currentProgress != null && !currentProgress.firstClearRewardClaimed
+
+        val loot = when {
+            ambush -> {
+                val tier = lootTierFor(LootSource.AMBUSH, character, monster.tier + 1)
+                LootTables.rollAmbushLoot(
+                    level = character.level,
+                    gearPool = eligibleGearTemplates(character, tier),
+                    stackPool = stackTemplates(),
+                    maxTier = tier,
+                )
+            }
+            isFirstClear -> {
+                val tier = lootTierFor(LootSource.BOSS, character, monster.tier)
+                LootTables.bossFirstClearLoot(
+                    biome = monster.biome,
+                    character = character,
+                    gearPool = eligibleGearTemplates(character, tier),
+                    stackPool = stackTemplates(),
+                )
+            }
+            isBoss -> {
+                val tier = lootTierFor(LootSource.BOSS, character, monster.tier)
+                LootTables.rollBattleLoot(
+                    monster = monster,
+                    gearPool = eligibleGearTemplates(character, tier),
+                    stackPool = stackTemplates(),
+                )
+            }
+            else -> {
+                val tier = lootTierFor(LootSource.BATTLE, character, monster.tier)
+                LootTables.rollBattleLoot(
+                    monster = monster,
+                    gearPool = eligibleGearTemplates(character, tier),
+                    stackPool = stackTemplates(),
+                )
+            }
         }
         var updated = applyLootToCharacter(afterBattle, loot)
         val siphon = combatStatsFor(character).siphonHeal
@@ -1730,7 +1755,15 @@ class GameRepository(
             updated = updated.copy(energy = (updated.energy + siphon / 4).coerceAtMost(GameMath.MAX_ENERGY))
         }
         db.characterDao().upsert(updated)
-        if (!ambush) {
+
+        if (isBoss && currentProgress != null) {
+            val updatedProgress = currentProgress.copy(
+                bossDefeated = true,
+                bossUnlocked = true,
+                firstClearRewardClaimed = true,
+            )
+            db.biomeProgressDao().upsert(updatedProgress)
+        } else if (!ambush) {
             addBiomeProgress(monster.biome.name, ProgressionRules.progressForVictory(monster))
         }
 
@@ -1741,7 +1774,23 @@ class GameRepository(
         }
         rewards.addAll(loot.toRewards())
 
-        return RewardBatch(if (ambush) RewardSource.BATTLE else RewardSource.BATTLE, rewards)
+        if (isFirstClear) {
+            val nextOrdinal = monster.biome.ordinal + 1
+            if (nextOrdinal < Biome.entries.size) {
+                val nextBiome = Biome.entries[nextOrdinal]
+                rewards.add(Reward.BiomeUnlocked(nextBiome.name, nextBiome.label))
+            } else {
+                rewards.add(Reward.TitleUnlocked("Conqueror of the Realm"))
+            }
+        }
+
+        val source = when {
+            isBoss -> RewardSource.BOSS
+            ambush -> RewardSource.BATTLE
+            else -> RewardSource.BATTLE
+        }
+
+        RewardBatch(source, rewards)
     }
 
     suspend fun spendBattleEnergy() {

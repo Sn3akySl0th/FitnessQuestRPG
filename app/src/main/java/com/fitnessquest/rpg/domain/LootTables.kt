@@ -1,5 +1,6 @@
 package com.fitnessquest.rpg.domain
 
+import com.fitnessquest.rpg.data.db.CharacterEntity
 import com.fitnessquest.rpg.data.db.ItemEntity
 import com.fitnessquest.rpg.data.db.ItemSlot
 import com.fitnessquest.rpg.data.db.isEquippable
@@ -255,6 +256,53 @@ object LootTables {
             goldBonus = 25 + level * 3,
             xpBoostBonus = 40 + level * 2,
             energyBonus = 5
+        )
+    }
+
+    fun bossFirstClearLoot(
+        biome: Biome,
+        character: CharacterEntity,
+        gearPool: List<ItemEntity>,
+        stackPool: List<ItemEntity>,
+        rng: Random = Random.Default,
+    ): LootResult {
+        val targetTier = when (biome) {
+            Biome.MEADOWLANDS -> 2
+            Biome.DARKWOOD, Biome.CRYSTAL_CAVES -> 3
+            Biome.EMBER_PEAKS, Biome.FROZEN_WASTES -> 4
+            Biome.SHADOWFEN -> 5
+        }.coerceIn(1, ProgressionRules.MAX_GEAR_TIER)
+
+        val grants = mutableListOf<LootGrant>()
+
+        // 1. Guaranteed high-tier gear piece
+        val filteredGear = ProgressionRules.filterGearPool(gearPool, targetTier, character)
+            .filter { it.tier == targetTier }
+            .ifEmpty { ProgressionRules.filterGearPool(gearPool, targetTier, character) }
+        val guaranteedGear = filteredGear.randomOrNull(rng) ?: pickGear(gearPool, targetTier, rng)
+        if (guaranteedGear != null) {
+            grants += LootGrant.Gear(guaranteedGear)
+        }
+
+        // 2. Guaranteed Biome Chest with contents
+        val biomeChest = stackPool.find { it.id == LootChests.BIOME }
+            ?: stackPool.find { it.id == LootChests.WAR_CACHE }
+            ?: stackPool.find { it.id == LootChests.WOODEN }
+        if (biomeChest != null) {
+            grants += LootGrant.ChestOpened(biomeChest, openChest(targetTier, gearPool, stackPool, rng))
+        }
+
+        // 3. Guaranteed Crafting Materials
+        val matSlots = stackPool.filter { it.slot == ItemSlot.MATERIAL && it.tier <= targetTier }
+        matSlots.randomOrNull(rng)?.let {
+            grants += LootGrant.Stack(it, 3)
+        }
+
+        return LootResult(
+            grants = grants,
+            goldBonus = 50 + (biome.ordinal + 1) * 35,
+            energyBonus = 10,
+            xpBoostBonus = 30 + (biome.ordinal + 1) * 15,
         )
     }
 

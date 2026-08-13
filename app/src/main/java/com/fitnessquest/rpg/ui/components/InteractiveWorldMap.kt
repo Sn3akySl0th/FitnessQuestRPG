@@ -122,62 +122,71 @@ fun InteractiveWorldMap(
                 Row(
                     modifier = Modifier.padding(12.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     when (biomeRequirement) {
                         is ProgressionRules.BiomeRequirement.Locked -> {
-                            Text("🔒", fontSize = 24.sp)
-                            Column {
+                            val threshold = ProgressionRules.bossUnlockPointsFor(currentBiome)
+                            val currentPts = (threshold - biomeRequirement.pointsNeeded).coerceAtLeast(0)
+                            val percent = (currentPts * 100 / threshold.coerceAtLeast(1)).coerceIn(0, 100)
+
+                            Text(
+                                if (biomeRequirement.pointsNeeded > 0) "🔒" else "⚔️",
+                                fontSize = 24.sp,
+                            )
+                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                 Text(
                                     biomeRequirement.reason,
                                     style = MaterialTheme.typography.bodySmall,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color.White
+                                    color = Color.White,
                                 )
                                 if (biomeRequirement.pointsNeeded > 0) {
                                     Text(
-                                        "Earn ${biomeRequirement.pointsNeeded} more points to unlock the boss.",
+                                        "🎯 Boss Gate: $currentPts / $threshold pts ($percent%) • Earn ${biomeRequirement.pointsNeeded} more pts to unlock",
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = Gold
+                                        color = Gold,
+                                        fontWeight = FontWeight.SemiBold,
                                     )
                                 } else {
                                     Text(
-                                        "The boss is ready! Defeat it to unlock travel.",
+                                        "⚔️ Boss Ready! Defeat the boss below to unlock travel.",
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = HealthRed
+                                        color = HealthRed,
+                                        fontWeight = FontWeight.Black,
                                     )
                                 }
                             }
                         }
                         is ProgressionRules.BiomeRequirement.Unlocked -> {
                             Text("✨", fontSize = 24.sp)
-                            Column {
+                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                 Text(
                                     "Path Unlocked!",
                                     style = MaterialTheme.typography.bodySmall,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF6BC96B)
+                                    color = Color(0xFF6BC96B),
                                 )
                                 Text(
-                                    "You can now travel to ${biomeRequirement.nextBiome.label}.",
+                                    "You can now travel to ${biomeRequirement.nextBiome.label}. Select it below to start your journey.",
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = Color.White.copy(alpha = 0.8f)
+                                    color = Color.White.copy(alpha = 0.85f),
                                 )
                             }
                         }
                         ProgressionRules.BiomeRequirement.MaxBiome -> {
                             Text("🏆", fontSize = 24.sp)
-                            Column {
+                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                 Text(
                                     "World Conquered!",
                                     style = MaterialTheme.typography.bodySmall,
                                     fontWeight = FontWeight.Bold,
-                                    color = Gold
+                                    color = Gold,
                                 )
                                 Text(
                                     "All biomes cleared. You've reached the final frontier!",
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = Color.White.copy(alpha = 0.8f)
+                                    color = Color.White.copy(alpha = 0.85f),
                                 )
                             }
                         }

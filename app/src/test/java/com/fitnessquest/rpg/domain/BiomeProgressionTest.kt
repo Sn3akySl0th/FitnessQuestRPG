@@ -2,6 +2,7 @@ package com.fitnessquest.rpg.domain
 
 import com.fitnessquest.rpg.data.db.BiomeProgressEntity
 import com.fitnessquest.rpg.data.db.CharacterEntity
+import com.fitnessquest.rpg.data.db.isStackable
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -129,5 +130,57 @@ class BiomeProgressionTest {
         
         val tier = ProgressionRules.maxUnlockedGearTier(character, allProgress)
         assertEquals(3, tier)
+    }
+
+    @Test
+    fun `bossForBiome - returns designated boss with isBoss true and matching bossOf`() {
+        val expectedBosses = mapOf(
+            Biome.MEADOWLANDS to (9 to "Lazy Boar"),
+            Biome.DARKWOOD to (4 to "Skeleton Spotter"),
+            Biome.CRYSTAL_CAVES to (5 to "Ogre of Excuses"),
+            Biome.EMBER_PEAKS to (6 to "Cardio Wraith"),
+            Biome.FROZEN_WASTES to (7 to "Iron Golem"),
+            Biome.SHADOWFEN to (8 to "Burnout Dragon"),
+        )
+
+        for ((biome, expected) in expectedBosses) {
+            val boss = MonsterCatalog.bossForBiome(biome)
+            assertEquals(expected.first, boss.id)
+            assertEquals(expected.second, boss.name)
+            assertEquals(biome, boss.bossOf)
+            assertTrue("Boss for $biome must have isBoss=true", boss.isBoss)
+            assertTrue("MonsterCatalog.isBoss must return true", MonsterCatalog.isBoss(boss))
+        }
+    }
+
+    @Test
+    fun `regularMonstersByBiome - excludes boss from roaming monster list`() {
+        for (biome in Biome.entries) {
+            val regularList = MonsterCatalog.regularMonstersByBiome(biome)
+            val boss = MonsterCatalog.bossForBiome(biome)
+            assertFalse(regularList.any { it.id == boss.id })
+            assertTrue(regularList.none { it.isBoss })
+        }
+    }
+
+    @Test
+    fun `bossFirstClearLoot - guarantees high-tier gear and milestone rewards`() {
+        val character = CharacterEntity(level = 10, currentBiome = Biome.MEADOWLANDS.name)
+        val gearPool = ItemCatalog.all.filter { it.tier <= 4 }
+        val stackPool = ItemCatalog.all.filter { it.slot.isStackable() }
+
+        val loot = LootTables.bossFirstClearLoot(
+            biome = Biome.MEADOWLANDS,
+            character = character,
+            gearPool = gearPool,
+            stackPool = stackPool,
+        )
+
+        assertFalse(loot.isEmpty)
+        assertTrue("Must include gold bonus", loot.goldBonus > 0)
+        assertTrue("Must include energy bonus", loot.energyBonus > 0)
+        assertTrue("Must include gear grant", loot.grants.any { it is LootGrant.Gear })
+        assertTrue("Must include chest grant", loot.grants.any { it is LootGrant.ChestOpened })
+        assertTrue("Must include material grant", loot.grants.any { it is LootGrant.Stack })
     }
 }
