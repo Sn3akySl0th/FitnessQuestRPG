@@ -40,7 +40,7 @@ android {
         applicationId = "com.fitnessquest.rpg"
         minSdk = 26
         targetSdk = 36
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner = "com.fitnessquest.rpg.FitQuestTestRunner"
         versionCode = versionProps.get().getProperty("phoneVersionCode", "20").toInt()
         versionName = versionProps.get().getProperty("versionName", "1.0.3")
 

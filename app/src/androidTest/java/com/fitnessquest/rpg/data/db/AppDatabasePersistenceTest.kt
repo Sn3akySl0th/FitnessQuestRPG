@@ -16,14 +16,26 @@ import org.junit.Assert.fail
 import org.junit.Test
 import org.junit.runner.RunWith
 
+/**
+ * Persistence & schema constraints test suite for AppDatabase (Version 25).
+ *
+ * STORAGE CONTEXT NOTE:
+ * Tests in this suite utilize Device-Protected Storage ([Context.createDeviceProtectedStorageContext])
+ * for synthetic database creation. On Android 14+ emulators running under [AndroidJUnitRunner],
+ * credential-protected storage (`/data/user/0/`) is locked prior to user unlock (`SQLiteCantOpenDatabaseException` / `IllegalStateException`).
+ * Device-Protected Storage (`/data/user_de/0/`) guarantees consistent read/write access and isolation across test runs.
+ */
 @RunWith(AndroidJUnit4::class)
 class AppDatabasePersistenceTest {
     private val context = ApplicationProvider.getApplicationContext<Context>()
+    private val dpContext = context.createDeviceProtectedStorageContext()
     private val databaseNames = mutableSetOf<String>()
 
     @After
     fun cleanUp() {
-        databaseNames.forEach(context::deleteDatabase)
+        databaseNames.forEach { name ->
+            runCatching { dpContext.deleteDatabase(name) }
+        }
     }
 
     @Test
@@ -160,9 +172,12 @@ class AppDatabasePersistenceTest {
         completionToken = token
     )
 
-    private fun buildDatabase(name: String): AppDatabase =
-        Room.databaseBuilder(context, AppDatabase::class.java, name)
-            .addMigrations(AppDatabase.MIGRATION_23_24, AppDatabase.MIGRATION_24_25)
+    private fun buildDatabase(name: String): AppDatabase {
+        dpContext.openOrCreateDatabase("init_test_dir.db", Context.MODE_PRIVATE, null).close()
+        dpContext.deleteDatabase("init_test_dir.db")
+        return Room.databaseBuilder(dpContext, AppDatabase::class.java, name)
+            .addMigrations(*AppDatabase.ALL_MIGRATIONS)
             .allowMainThreadQueries()
             .build()
+    }
 }
