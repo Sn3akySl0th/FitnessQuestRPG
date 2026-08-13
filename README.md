@@ -74,6 +74,16 @@ $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
 The APK lands in `app/build/outputs/apk/debug/app-debug.apk`. To install directly to a
 plugged-in phone with USB debugging enabled: `.\gradlew.bat :app:installDebug`.
 
+### Running Tests
+
+```powershell
+# Run active session unit tests
+.\gradlew.bat :app:testDebugUnitTest --tests "com.fitnessquest.rpg.ActiveSessionTest" --no-configuration-cache
+
+# Run database migration matrix & persistence instrumented tests on an attached device
+.\gradlew.bat :app:connectedDebugAndroidTest "-Pandroid.testInstrumentationRunnerArguments.class=com.fitnessquest.rpg.data.db.AppDatabaseMigrationTest,com.fitnessquest.rpg.data.db.AppDatabasePersistenceTest" --no-configuration-cache
+```
+
 ## Tech stack
 
 - Kotlin + Jetpack Compose (Material 3, dark fantasy theme), single-activity, Compose Navigation

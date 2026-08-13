@@ -16,14 +16,26 @@ import org.junit.Assert.fail
 import org.junit.Test
 import org.junit.runner.RunWith
 
+/**
+ * Persistence & schema constraints test suite for AppDatabase (Version 25).
+ *
+ * STORAGE CONTEXT NOTE:
+ * Tests in this suite utilize Device-Protected Storage ([Context.createDeviceProtectedStorageContext])
+ * for synthetic database creation. On Android 14+ emulators running under [AndroidJUnitRunner],
+ * credential-protected storage (`/data/user/0/`) is locked prior to user unlock (`SQLiteCantOpenDatabaseException` / `IllegalStateException`).
+ * Device-Protected Storage (`/data/user_de/0/`) guarantees consistent read/write access and isolation across test runs.
+ */
 @RunWith(AndroidJUnit4::class)
 class AppDatabasePersistenceTest {
     private val context = ApplicationProvider.getApplicationContext<Context>()
+    private val dpContext = context.createDeviceProtectedStorageContext()
     private val databaseNames = mutableSetOf<String>()
 
     @After
     fun cleanUp() {
-        databaseNames.forEach(context::deleteDatabase)
+        databaseNames.forEach { name ->
+            runCatching { dpContext.deleteDatabase(name) }
+        }
     }
 
     @Test
@@ -104,16 +116,27 @@ class AppDatabasePersistenceTest {
         val restored = reopenedDao.getActiveSessionWithDetails()
         assertNotNull(restored)
         assertEquals(startedAt, restored?.session?.startedAt)
+        assertEquals(startedAt + 5_000, restored?.session?.pausedAt)
+        assertEquals(2_000L, restored?.session?.accumulatedPausedMs)
+        assertEquals(startedAt + 90_000, restored?.session?.restEndsAt)
         assertEquals(completionToken, restored?.session?.completionToken)
         assertEquals(1, restored?.session?.currentExerciseIndex)
         assertEquals(listOf("Warmup Run", "Bench Press"), restored?.sortedExercises?.map { it.exercise.exerciseName })
 
         val bench = restored?.sortedExercises?.last()
+        assertEquals(4, bench?.exercise?.targetSets)
+        assertEquals(8, bench?.exercise?.targetReps)
         assertEquals(82.5, bench?.exercise?.targetWeightKg ?: 0.0, 0.0)
         assertEquals("Pause at the chest", bench?.exercise?.notes)
         assertEquals(1, bench?.sets?.size)
         assertEquals(SetType.WARM_UP, bench?.sets?.single()?.setType)
+        assertEquals(2, bench?.sets?.single()?.rir)
         assertEquals(132, bench?.sets?.single()?.avgHr)
+        assertEquals(151, bench?.sets?.single()?.maxHr)
+        assertEquals(startedAt + 60_000, bench?.sets?.single()?.loggedAt)
+
+        val warmupRun = restored?.sortedExercises?.first()
+        assertEquals("DISTANCE_TIME", warmupRun?.exercise?.trackingType)
 
         reopenedDao.deleteActiveSession()
         assertNull(reopenedDao.getActiveSessionWithDetails())
@@ -160,9 +183,12 @@ class AppDatabasePersistenceTest {
         completionToken = token
     )
 
-    private fun buildDatabase(name: String): AppDatabase =
-        Room.databaseBuilder(context, AppDatabase::class.java, name)
-            .addMigrations(AppDatabase.MIGRATION_23_24, AppDatabase.MIGRATION_24_25)
+    private fun buildDatabase(name: String): AppDatabase {
+        dpContext.openOrCreateDatabase("init_test_dir.db", Context.MODE_PRIVATE, null).close()
+        dpContext.deleteDatabase("init_test_dir.db")
+        return Room.databaseBuilder(dpContext, AppDatabase::class.java, name)
+            .addMigrations(*AppDatabase.ALL_MIGRATIONS)
             .allowMainThreadQueries()
             .build()
+    }
 }

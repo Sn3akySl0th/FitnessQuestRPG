@@ -45,3 +45,22 @@ Look for:
 - Bad resource reference after shrink/minify.
 - Firebase or Google Services config mismatch.
 - Startup work throwing before the first screen is shown.
+
+## Database Migration & Restored-Database Crash Recovery
+
+When Android Auto-Backup or Cloud Restore restores a database from an older app release (or a malformed legacy schema), Room may crash on startup with `IllegalStateException: Room cannot verify the data integrity` if schema migrations or expected columns are missing.
+
+### Crash Prevention & Self-Healing Migrations
+- `MIGRATION_22_23`, `MIGRATION_23_24`, and `MIGRATION_24_25` implement self-healing column repair checks (`addColumnIfNotExists`) for key tables (`workout_exercises.targetWeightKg`, `set_logs.setType`, `sessions.completionToken`, `sessions.completionReceiptJson`).
+- Schema export tracking is committed in `app/schemas/com.fitnessquest.rpg.data.db.AppDatabase/25.json` starting at Version 25.
+
+### Running Migration & Persistence Regression Suite
+To test active session unit tests and migration persistence locally:
+
+```powershell
+# JVM unit tests for active sessions & outbox
+.\gradlew.bat :app:testDebugUnitTest --tests "com.fitnessquest.rpg.ActiveSessionTest" --no-configuration-cache
+
+# Instrumented database migration matrix (V1->V25 matrix, clean V25 creation, malformed restored DB repair)
+.\gradlew.bat :app:connectedDebugAndroidTest "-Pandroid.testInstrumentationRunnerArguments.class=com.fitnessquest.rpg.data.db.AppDatabaseMigrationTest,com.fitnessquest.rpg.data.db.AppDatabasePersistenceTest" --no-configuration-cache
+```
