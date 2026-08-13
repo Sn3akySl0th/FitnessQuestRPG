@@ -283,10 +283,15 @@ class PartyService(
      * Called after every completed workout session: the XP earned is dealt to
      * the party's raid boss as damage. Transactionally checks eventId for remote idempotency.
      */
-    suspend fun reportSessionXp(xp: Int, eventId: String): OutboxSyncResult {
+    suspend fun reportSessionXp(
+        xp: Int,
+        eventId: String,
+        targetPartyId: String? = null,
+        targetUid: String? = null
+    ): OutboxSyncResult {
         if (xp <= 0) return OutboxSyncResult.NOT_APPLICABLE
-        val partyId = _partyId.value ?: return OutboxSyncResult.NOT_APPLICABLE
-        val uid = auth.state.value.uid ?: return OutboxSyncResult.NOT_APPLICABLE
+        val partyId = targetPartyId ?: _partyId.value ?: return OutboxSyncResult.NOT_APPLICABLE
+        val uid = targetUid ?: auth.state.value.uid ?: return OutboxSyncResult.NOT_APPLICABLE
         
         val doc = partyDoc(partyId)
         val eventDoc = doc.collection("processedEvents").document(eventId)
@@ -297,7 +302,7 @@ class PartyService(
                 if (snapshot.exists()) {
                     OutboxSyncResult.ALREADY_PROCESSED
                 } else {
-                    transaction.set(eventDoc, mapOf("processedAt" to FieldValue.serverTimestamp(), "xp" to xp))
+                    transaction.set(eventDoc, mapOf("processedAt" to FieldValue.serverTimestamp(), "xp" to xp, "uid" to uid))
                     transaction.update(
                         doc,
                         mapOf(

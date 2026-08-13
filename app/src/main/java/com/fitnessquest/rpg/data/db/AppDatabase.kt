@@ -397,6 +397,7 @@ abstract class AppDatabase : RoomDatabase() {
                 db.addColumnIfNotExists("workout_exercises", "targetWeightKg", "REAL")
                 db.addColumnIfNotExists("set_logs", "setType", "TEXT NOT NULL DEFAULT 'NORMAL'")
                 db.addColumnIfNotExists("sessions", "completionToken", "TEXT")
+                db.addColumnIfNotExists("sessions", "completionReceiptJson", "TEXT")
                 db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_sessions_completion_token ON sessions(completionToken)")
             }
         }

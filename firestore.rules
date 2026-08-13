@@ -77,6 +77,10 @@ service cloud.firestore {
         allow delete: if isSignedIn()
           && resource.data.authorUid == request.auth.uid;
       }
+
+      match /processedEvents/{eventId} {
+        allow read, create, update: if isSignedIn();
+      }
     }
 
     match /guilds/{guildId} {
@@ -86,6 +90,10 @@ service cloud.firestore {
       match /members/{uid} {
         allow read: if isSignedIn();
         allow write: if isOwner(uid);
+      }
+
+      match /processedEvents/{eventId} {
+        allow read, create, update: if isSignedIn();
       }
     }
 

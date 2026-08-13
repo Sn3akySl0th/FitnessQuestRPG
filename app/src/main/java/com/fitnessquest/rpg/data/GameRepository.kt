@@ -660,45 +660,13 @@ class GameRepository(
         // Idempotency Check: return existing result if completion already succeeded
         val existingSession = db.activeSessionDao().getSessionByCompletionToken(token)
         if (existingSession != null) {
-            val character = getCharacter()
-            return SessionResult(
-                updatedCharacter = character,
-                xp = existingSession.xpEarned,
-                gold = existingSession.goldEarned,
-                energy = existingSession.energyEarned,
-                levelsGained = 0,
-                statGains = com.fitnessquest.rpg.domain.StatGains(),
-                travelKm = 0.0,
-                arrivedAt = null,
-                streak = character.streak,
-                streakSaved = false,
-                xpBoostApplied = 0,
-                prs = emptyList(),
-                lootLabels = emptyList(),
-                rewardBatch = RewardBatch(RewardSource.WORKOUT, emptyList())
-            )
+            return restoreSessionResult(existingSession, getCharacter())
         }
 
         val result = db.withTransaction {
             val innerExisting = db.activeSessionDao().getSessionByCompletionToken(token)
             if (innerExisting != null) {
-                val character = getCharacter()
-                return@withTransaction SessionResult(
-                    updatedCharacter = character,
-                    xp = innerExisting.xpEarned,
-                    gold = innerExisting.goldEarned,
-                    energy = innerExisting.energyEarned,
-                    levelsGained = 0,
-                    statGains = com.fitnessquest.rpg.domain.StatGains(),
-                    travelKm = 0.0,
-                    arrivedAt = null,
-                    streak = character.streak,
-                    streakSaved = false,
-                    xpBoostApplied = 0,
-                    prs = emptyList(),
-                    lootLabels = emptyList(),
-                    rewardBatch = RewardBatch(RewardSource.WORKOUT, emptyList())
-                )
+                return@withTransaction restoreSessionResult(innerExisting, getCharacter())
             }
 
             val endedAt = System.currentTimeMillis()
@@ -824,19 +792,6 @@ class GameRepository(
             )
             
             res = res.copy(xpBoostApplied = character.pendingXpBoost, prs = prs)
-            val sessionId = db.sessionDao().insertSession(
-                SessionEntity(
-                    name = name,
-                    startedAt = startedAt,
-                    endedAt = endedAt,
-                    xpEarned = res.xp,
-                    goldEarned = res.gold,
-                    energyEarned = res.energy,
-                    setCount = withXp.size,
-                    completionToken = token
-                )
-            )
-            db.sessionDao().insertSetLogs(withXp.map { it.copy(sessionId = sessionId) })
 
             val today = LocalDate.now().toEpochDay()
             val lastDay = character.lastWorkoutDay
@@ -913,23 +868,48 @@ class GameRepository(
                 gold = res.gold + loot.goldBonus,
                 rewardBatch = RewardBatch(RewardSource.WORKOUT, allRewards)
             )
-            db.characterDao().upsert(updated)
+            val receipt = serializeSessionResult(res)
+            val sessionId = db.sessionDao().insertSession(
+                SessionEntity(
+                    name = name,
+                    startedAt = startedAt,
+                    endedAt = endedAt,
+                    xpEarned = res.xp,
+                    goldEarned = res.gold,
+                    energyEarned = res.energy,
+                    setCount = withXp.size,
+                    completionToken = token,
+                    completionReceiptJson = receipt
+                )
+            )
+            db.sessionDao().insertSetLogs(withXp.map { it.copy(sessionId = sessionId) })
 
             // Durable outbox events for social sync (Party & Guild)
-            db.activeSessionDao().insertOutboxEvent(
-                PendingSyncEntity(
-                    eventId = "${token}:PARTY",
-                    type = "PARTY_XP",
-                    payloadJson = "{\"xp\":${res.xp}}"
+            val partyId = updated.partyId
+            val guildId = updated.guildId
+            val uid = updated.id.toString()
+
+            if (!partyId.isNullOrBlank()) {
+                val partyPayload = "{\"xp\":${res.xp},\"partyId\":\"$partyId\",\"uid\":\"$uid\"}"
+                db.activeSessionDao().insertOutboxEvent(
+                    PendingSyncEntity(
+                        eventId = "${token}:PARTY",
+                        type = "PARTY_XP",
+                        payloadJson = partyPayload
+                    )
                 )
-            )
-            db.activeSessionDao().insertOutboxEvent(
-                PendingSyncEntity(
-                    eventId = "${token}:GUILD",
-                    type = "GUILD_XP",
-                    payloadJson = "{\"xp\":${res.xp}}"
+            }
+
+            if (!guildId.isNullOrBlank()) {
+                val guildPayload = "{\"xp\":${res.xp},\"guildId\":\"$guildId\",\"uid\":\"$uid\"}"
+                db.activeSessionDao().insertOutboxEvent(
+                    PendingSyncEntity(
+                        eventId = "${token}:GUILD",
+                        type = "GUILD_XP",
+                        payloadJson = guildPayload
+                    )
                 )
-            )
+            }
 
             // Delete active workout draft (cascade deletes exercises and draft sets)
             db.activeSessionDao().deleteActiveSession(1L)
@@ -938,6 +918,136 @@ class GameRepository(
         }
 
         return result
+    }
+
+    private fun restoreSessionResult(existingSession: SessionEntity, character: CharacterEntity): SessionResult {
+        val jsonStr = existingSession.completionReceiptJson
+        if (!jsonStr.isNullOrEmpty()) {
+            try {
+                val xp = extractJsonInt(jsonStr, "xp", existingSession.xpEarned)
+                val gold = extractJsonInt(jsonStr, "gold", existingSession.goldEarned)
+                val energy = extractJsonInt(jsonStr, "energy", existingSession.energyEarned)
+                val levelsGained = extractJsonInt(jsonStr, "levelsGained", 0)
+                val travelKm = extractJsonDouble(jsonStr, "travelKm", 0.0)
+                val arrivedAt = extractJsonString(jsonStr, "arrivedAt").ifEmpty { null }
+                val streak = extractJsonInt(jsonStr, "streak", character.streak)
+                val streakSaved = extractJsonBool(jsonStr, "streakSaved", false)
+                val xpBoostApplied = extractJsonInt(jsonStr, "xpBoostApplied", 0)
+
+                val rewards = mutableListOf<Reward>()
+                if (xp > 0) rewards.add(Reward.Xp(xp))
+                if (gold > 0) rewards.add(Reward.Gold(gold))
+                if (energy > 0) rewards.add(Reward.Energy(energy))
+                if (levelsGained > 0) rewards.add(Reward.LevelUp(character.level))
+                if (arrivedAt != null) rewards.add(Reward.BiomeUnlocked(character.currentBiome, arrivedAt))
+
+                val lootLabels = extractJsonStringList(jsonStr, "lootLabels")
+
+                return SessionResult(
+                    updatedCharacter = character,
+                    xp = xp,
+                    gold = gold,
+                    energy = energy,
+                    levelsGained = levelsGained,
+                    statGains = com.fitnessquest.rpg.domain.StatGains(),
+                    travelKm = travelKm,
+                    arrivedAt = arrivedAt,
+                    streak = streak,
+                    streakSaved = streakSaved,
+                    xpBoostApplied = xpBoostApplied,
+                    prs = emptyList(),
+                    lootLabels = lootLabels,
+                    rewardBatch = RewardBatch(RewardSource.WORKOUT, rewards)
+                )
+            } catch (e: Exception) {
+                // Fallback to basic reconstruction below
+            }
+        }
+        return SessionResult(
+            updatedCharacter = character,
+            xp = existingSession.xpEarned,
+            gold = existingSession.goldEarned,
+            energy = existingSession.energyEarned,
+            levelsGained = 0,
+            statGains = com.fitnessquest.rpg.domain.StatGains(),
+            travelKm = 0.0,
+            arrivedAt = null,
+            streak = character.streak,
+            streakSaved = false,
+            xpBoostApplied = 0,
+            prs = emptyList(),
+            lootLabels = emptyList(),
+            rewardBatch = RewardBatch(RewardSource.WORKOUT, emptyList())
+        )
+    }
+
+    private fun serializeSessionResult(res: SessionResult): String {
+        return try {
+            val obj = org.json.JSONObject()
+            obj.put("xp", res.xp)
+            obj.put("gold", res.gold)
+            obj.put("energy", res.energy)
+            obj.put("levelsGained", res.levelsGained)
+            obj.put("travelKm", res.travelKm)
+            obj.put("arrivedAt", res.arrivedAt ?: "")
+            obj.put("streak", res.streak)
+            obj.put("streakSaved", res.streakSaved)
+            obj.put("xpBoostApplied", res.xpBoostApplied)
+            val prArray = org.json.JSONArray()
+            res.prs.forEach { pr ->
+                prArray.put(org.json.JSONObject().apply {
+                    put("exerciseName", pr.exerciseName)
+                    put("kind", pr.kind.name)
+                    put("value", pr.value)
+                    put("reps", pr.reps)
+                    put("isNew", pr.isNew)
+                })
+            }
+            obj.put("prs", prArray)
+            val lootArray = org.json.JSONArray()
+            res.lootLabels.forEach { lootArray.put(it) }
+            obj.put("lootLabels", lootArray)
+            val str = obj.toString()
+            if (!str.isNullOrBlank()) str else buildManualSessionResultJson(res)
+        } catch (e: Throwable) {
+            buildManualSessionResultJson(res)
+        }
+    }
+
+    private fun buildManualSessionResultJson(res: SessionResult): String {
+        val prsJson = res.prs.joinToString(",") { pr ->
+            "{\"exerciseName\":\"${pr.exerciseName}\",\"kind\":\"${pr.kind.name}\",\"value\":${pr.value},\"reps\":${pr.reps},\"isNew\":${pr.isNew}}"
+        }
+        val lootJson = res.lootLabels.joinToString(",") { "\"$it\"" }
+        return "{\"xp\":${res.xp},\"gold\":${res.gold},\"energy\":${res.energy},\"levelsGained\":${res.levelsGained},\"travelKm\":${res.travelKm},\"arrivedAt\":\"${res.arrivedAt ?: ""}\",\"streak\":${res.streak},\"streakSaved\":${res.streakSaved},\"xpBoostApplied\":${res.xpBoostApplied},\"prs\":[$prsJson],\"lootLabels\":[$lootJson]}"
+    }
+
+    private fun extractJsonInt(json: String, key: String, default: Int): Int {
+        val regex = Regex("\"$key\"\\s*:\\s*(-?\\d+)")
+        return regex.find(json)?.groupValues?.get(1)?.toIntOrNull() ?: default
+    }
+
+    private fun extractJsonDouble(json: String, key: String, default: Double): Double {
+        val regex = Regex("\"$key\"\\s*:\\s*(-?\\d+(?:\\.\\d+)?)")
+        return regex.find(json)?.groupValues?.get(1)?.toDoubleOrNull() ?: default
+    }
+
+    private fun extractJsonString(json: String, key: String): String {
+        val regex = Regex("\"$key\"\\s*:\\s*\"([^\"]*)\"")
+        return regex.find(json)?.groupValues?.get(1) ?: ""
+    }
+
+    private fun extractJsonBool(json: String, key: String, default: Boolean): Boolean {
+        val regex = Regex("\"$key\"\\s*:\\s*(true|false)")
+        return regex.find(json)?.groupValues?.get(1)?.toBooleanStrictOrNull() ?: default
+    }
+
+    private fun extractJsonStringList(json: String, key: String): List<String> {
+        val regex = Regex("\"$key\"\\s*:\\s*\\[([^\\]]*)\\]")
+        val match = regex.find(json)?.groupValues?.get(1) ?: return emptyList()
+        if (match.isBlank()) return emptyList()
+        val itemRegex = Regex("\"([^\"]*)\"")
+        return itemRegex.findAll(match).map { it.groupValues[1] }.toList()
     }
 
     val allSetLogs: Flow<List<SetLogEntity>> = db.sessionDao().observeAllSetLogs()

@@ -238,10 +238,15 @@ class GuildService(
      * Called after every completed workout session: the XP earned is dealt to
      * the guild's raid boss as damage. Transactionally checks eventId for remote idempotency.
      */
-    suspend fun reportSessionXp(xp: Int, eventId: String): OutboxSyncResult {
+    suspend fun reportSessionXp(
+        xp: Int,
+        eventId: String,
+        targetGuildId: String? = null,
+        targetUid: String? = null
+    ): OutboxSyncResult {
         if (xp <= 0) return OutboxSyncResult.NOT_APPLICABLE
-        val guildId = _guildId.value ?: return OutboxSyncResult.NOT_APPLICABLE
-        val uid = auth.state.value.uid ?: return OutboxSyncResult.NOT_APPLICABLE
+        val guildId = targetGuildId ?: _guildId.value ?: return OutboxSyncResult.NOT_APPLICABLE
+        val uid = targetUid ?: auth.state.value.uid ?: return OutboxSyncResult.NOT_APPLICABLE
         // Guild raids take scaled damage so large rosters still need teamwork.
         val damage = (xp * 1.25).toLong().coerceAtLeast(1L)
         val doc = guildDoc(guildId)
@@ -253,7 +258,7 @@ class GuildService(
                 if (snapshot.exists()) {
                     OutboxSyncResult.ALREADY_PROCESSED
                 } else {
-                    transaction.set(eventDoc, mapOf("processedAt" to FieldValue.serverTimestamp(), "xp" to xp))
+                    transaction.set(eventDoc, mapOf("processedAt" to FieldValue.serverTimestamp(), "xp" to xp, "uid" to uid))
                     transaction.update(
                         doc,
                         mapOf(

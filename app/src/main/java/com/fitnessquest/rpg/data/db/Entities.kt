@@ -221,7 +221,8 @@ data class SessionEntity(
     val goldEarned: Int,
     val energyEarned: Int,
     val setCount: Int,
-    val completionToken: String? = null
+    val completionToken: String? = null,
+    val completionReceiptJson: String? = null
 )
 
 @Entity(tableName = "set_logs")

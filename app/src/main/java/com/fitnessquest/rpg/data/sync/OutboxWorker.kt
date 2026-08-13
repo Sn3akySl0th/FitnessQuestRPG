@@ -10,13 +10,55 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.fitnessquest.rpg.FitQuestApp
+import com.fitnessquest.rpg.data.db.PendingSyncEntity
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
 class OutboxWorker(
     appContext: Context,
     params: WorkerParameters
-) : CoroutineWorker(appContext, params) {
+) : CoroutineWorker(appContext, params), OutboxProcessor {
+
+    override suspend fun processEvent(event: PendingSyncEntity): OutboxSyncResult {
+        val app = applicationContext as? FitQuestApp ?: return OutboxSyncResult.RETRYABLE_FAILURE
+        val container = app.container
+
+        return try {
+            when (event.type) {
+                "PARTY_XP" -> {
+                    val json = JSONObject(event.payloadJson)
+                    val xp = json.optInt("xp", 0)
+                    val partyId = json.optString("partyId", "")
+                    val uid = json.optString("uid", "")
+                    if (xp > 0) {
+                        container.party.reportSessionXp(
+                            xp = xp,
+                            eventId = event.eventId,
+                            targetPartyId = partyId.ifEmpty { null },
+                            targetUid = uid.ifEmpty { null }
+                        )
+                    } else OutboxSyncResult.NOT_APPLICABLE
+                }
+                "GUILD_XP" -> {
+                    val json = JSONObject(event.payloadJson)
+                    val xp = json.optInt("xp", 0)
+                    val guildId = json.optString("guildId", "")
+                    val uid = json.optString("uid", "")
+                    if (xp > 0) {
+                        container.guild.reportSessionXp(
+                            xp = xp,
+                            eventId = event.eventId,
+                            targetGuildId = guildId.ifEmpty { null },
+                            targetUid = uid.ifEmpty { null }
+                        )
+                    } else OutboxSyncResult.NOT_APPLICABLE
+                }
+                else -> OutboxSyncResult.NOT_APPLICABLE
+            }
+        } catch (e: Exception) {
+            OutboxSyncResult.RETRYABLE_FAILURE
+        }
+    }
 
     override suspend fun doWork(): Result {
         val app = applicationContext as? FitQuestApp ?: return Result.failure()
@@ -29,28 +71,7 @@ class OutboxWorker(
         var hasFailures = false
 
         for (event in pending) {
-            val syncResult = try {
-                when (event.type) {
-                    "PARTY_XP" -> {
-                        val json = JSONObject(event.payloadJson)
-                        val xp = json.optInt("xp", 0)
-                        if (xp > 0) {
-                            container.party.reportSessionXp(xp, event.eventId)
-                        } else OutboxSyncResult.NOT_APPLICABLE
-                    }
-                    "GUILD_XP" -> {
-                        val json = JSONObject(event.payloadJson)
-                        val xp = json.optInt("xp", 0)
-                        if (xp > 0) {
-                            container.guild.reportSessionXp(xp, event.eventId)
-                        } else OutboxSyncResult.NOT_APPLICABLE
-                    }
-                    else -> OutboxSyncResult.NOT_APPLICABLE
-                }
-            } catch (e: Exception) {
-                OutboxSyncResult.RETRYABLE_FAILURE
-            }
-
+            val syncResult = processEvent(event)
             when (syncResult) {
                 OutboxSyncResult.DELIVERED,
                 OutboxSyncResult.ALREADY_PROCESSED,

@@ -296,6 +296,7 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
     private var activeCompletionToken: String? = null
     private var loadedFor: Long? = null
     private var demoMode: Boolean = false
+    private var isFinishing = false
 
     init {
         wearBridge.bind()
@@ -1076,9 +1077,11 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
     }
 
     fun finish() {
+        if (isFinishing) return
         val state = _uiState.value
         val logs = state.exercises.flatMap { it.loggedSets }
         if (logs.isEmpty()) return
+        isFinishing = true
         viewModelScope.launch {
             if (demoMode) {
                 val character = container.repository.getCharacter()

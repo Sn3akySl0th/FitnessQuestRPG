@@ -1,30 +1,299 @@
 package com.fitnessquest.rpg
 
+import android.database.Cursor
+import androidx.room.InvalidationTracker
+import androidx.sqlite.db.SupportSQLiteDatabase
+import com.fitnessquest.rpg.data.GameRepository
 import com.fitnessquest.rpg.data.db.ActiveExerciseEntity
 import com.fitnessquest.rpg.data.db.ActiveExerciseWithSets
+import com.fitnessquest.rpg.data.db.ActiveSessionDao
 import com.fitnessquest.rpg.data.db.ActiveSessionEntity
 import com.fitnessquest.rpg.data.db.ActiveSessionWithDetails
 import com.fitnessquest.rpg.data.db.ActiveSetLogEntity
 import com.fitnessquest.rpg.data.db.AppDatabase
+import com.fitnessquest.rpg.data.db.BiomeProgressDao
+import com.fitnessquest.rpg.data.db.BodyMetricDao
+import com.fitnessquest.rpg.data.db.CharacterDao
+import com.fitnessquest.rpg.data.db.CharacterEntity
+import com.fitnessquest.rpg.data.db.ClassProgressDao
 import com.fitnessquest.rpg.data.db.ExerciseCategory
+import com.fitnessquest.rpg.data.db.GearInstanceDao
+import com.fitnessquest.rpg.data.db.ItemDao
 import com.fitnessquest.rpg.data.db.PendingSyncEntity
+import com.fitnessquest.rpg.data.db.SessionDao
 import com.fitnessquest.rpg.data.db.SessionEntity
+import com.fitnessquest.rpg.data.db.SetLogEntity
+import com.fitnessquest.rpg.data.db.WorkoutDao
+import com.fitnessquest.rpg.data.sync.OutboxProcessor
 import com.fitnessquest.rpg.data.sync.OutboxSyncResult
+import com.fitnessquest.rpg.domain.CharacterClass
 import com.fitnessquest.rpg.domain.SetType
-import androidx.sqlite.db.SupportSQLiteDatabase
-import org.junit.After
+import com.fitnessquest.rpg.ui.screens.SessionExercise
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
 import java.lang.reflect.Proxy
+import kotlin.coroutines.Continuation
+
+private inline fun <reified T> createDummyProxy(): T {
+    return Proxy.newProxyInstance(
+        T::class.java.classLoader,
+        arrayOf(T::class.java)
+    ) { _, method, args ->
+        val returnType = method.returnType
+        val lastArg = args?.lastOrNull()
+        if (lastArg is Continuation<*>) {
+            if (method.name.endsWith("UpToTier") ||
+                method.name.contains("List") ||
+                method.name.contains("All") ||
+                method.name.contains("Logs") ||
+                method.name.contains("Events") ||
+                method.name.startsWith("by")
+            ) {
+                emptyList<Any>()
+            } else {
+                null
+            }
+        } else if (returnType == java.util.List::class.java || returnType.name.contains("List")) {
+            emptyList<Any>()
+        } else if (returnType == Boolean::class.javaPrimitiveType) {
+            false
+        } else if (returnType == Int::class.javaPrimitiveType) {
+            0
+        } else if (returnType == Long::class.javaPrimitiveType) {
+            0L
+        } else if (returnType == Float::class.javaPrimitiveType) {
+            0f
+        } else if (returnType == Double::class.javaPrimitiveType) {
+            0.0
+        } else {
+            null
+        }
+    } as T
+}
 
 class ActiveSessionTest {
 
+    private lateinit var db: FakeAppDatabase
+    private lateinit var repository: GameRepository
+
+    private class FakeAppDatabase : AppDatabase() {
+        var activeSessionEntity: ActiveSessionEntity? = null
+        val exercises = mutableListOf<ActiveExerciseEntity>()
+        val setLogs = mutableListOf<ActiveSetLogEntity>()
+        val outboxEvents = mutableListOf<PendingSyncEntity>()
+        val completedSessions = mutableMapOf<String, SessionEntity>()
+        val savedSessions = mutableListOf<SessionEntity>()
+        val savedSetLogs = mutableListOf<SetLogEntity>()
+        var character: CharacterEntity? = null
+
+        private val activeSessionState = MutableStateFlow<ActiveSessionWithDetails?>(null)
+        private val characterState = MutableStateFlow<CharacterEntity?>(null)
+
+        private fun updateActiveFlow() {
+            val session = activeSessionEntity
+            if (session == null) {
+                activeSessionState.value = null
+                return
+            }
+            val details = ActiveSessionWithDetails(
+                session = session,
+                exercises = exercises.map { ex ->
+                    ActiveExerciseWithSets(
+                        exercise = ex,
+                        sets = setLogs.filter { it.exerciseId == ex.id }
+                    )
+                }
+            )
+            activeSessionState.value = details
+        }
+
+        val activeSessionDaoProxy = Proxy.newProxyInstance(
+            ActiveSessionDao::class.java.classLoader,
+            arrayOf(ActiveSessionDao::class.java)
+        ) { _, method, args ->
+            when (method.name) {
+                "getActiveSessionFlow", "observeActiveSessionWithDetails" -> activeSessionState
+                "getActiveSession" -> activeSessionEntity
+                "getActiveSessionWithDetails" -> {
+                    val session = activeSessionEntity
+                    if (session == null) null
+                    else ActiveSessionWithDetails(
+                        session = session,
+                        exercises = exercises.map { ex ->
+                            ActiveExerciseWithSets(
+                                exercise = ex,
+                                sets = setLogs.filter { it.exerciseId == ex.id }
+                            )
+                        }
+                    )
+                }
+                "getActiveExercises" -> exercises.toList()
+                "getActiveSetLogs" -> setLogs.toList()
+                "insertActiveSession", "upsertActiveSession" -> {
+                    val session = args[0] as ActiveSessionEntity
+                    activeSessionEntity = session
+                    updateActiveFlow()
+                    session.id
+                }
+                "insertActiveExercises" -> {
+                    @Suppress("UNCHECKED_CAST")
+                    val list = args[0] as List<ActiveExerciseEntity>
+                    val assigned = list.mapIndexed { index, ex -> ex.copy(id = (index + 1).toLong()) }
+                    exercises.addAll(assigned)
+                    updateActiveFlow()
+                    assigned.map { it.id }
+                }
+                "insertActiveSetLogs" -> {
+                    @Suppress("UNCHECKED_CAST")
+                    val list = args[0] as List<ActiveSetLogEntity>
+                    setLogs.addAll(list)
+                    updateActiveFlow()
+                    null
+                }
+                "insertActiveSetLog" -> {
+                    val log = args[0] as ActiveSetLogEntity
+                    setLogs.add(log)
+                    updateActiveFlow()
+                    log.id
+                }
+                "updateActiveSession" -> {
+                    activeSessionEntity = args[0] as ActiveSessionEntity
+                    updateActiveFlow()
+                    null
+                }
+                "deleteActiveSession" -> {
+                    val count = if (activeSessionEntity != null) 1 else 0
+                    activeSessionEntity = null
+                    exercises.clear()
+                    setLogs.clear()
+                    updateActiveFlow()
+                    count
+                }
+                "insertOutboxEvent" -> {
+                    outboxEvents.add(args[0] as PendingSyncEntity)
+                    null
+                }
+                "getPendingOutboxEvents" -> outboxEvents.filter { it.status == "PENDING" }
+                "markOutboxEventSent" -> {
+                    val eventId = args[0] as String
+                    val idx = outboxEvents.indexOfFirst { it.eventId == eventId }
+                    if (idx != -1) outboxEvents[idx] = outboxEvents[idx].copy(status = "SENT")
+                    null
+                }
+                "incrementOutboxEventRetry" -> {
+                    val eventId = args[0] as String
+                    val idx = outboxEvents.indexOfFirst { it.eventId == eventId }
+                    if (idx != -1) {
+                        val ev = outboxEvents[idx]
+                        outboxEvents[idx] = ev.copy(retryCount = ev.retryCount + 1)
+                    }
+                    null
+                }
+                "getSessionByCompletionToken" -> completedSessions[args[0] as String]
+                else -> null
+            }
+        } as ActiveSessionDao
+
+        val sessionDaoProxy = Proxy.newProxyInstance(
+            SessionDao::class.java.classLoader,
+            arrayOf(SessionDao::class.java)
+        ) { _, method, args ->
+            when (method.name) {
+                "insertSession" -> {
+                    val session = args[0] as SessionEntity
+                    val id = (savedSessions.size + 1).toLong()
+                    val created = session.copy(id = id)
+                    savedSessions.add(created)
+                    session.completionToken?.let { token ->
+                        completedSessions[token] = created
+                    }
+                    id
+                }
+                "insertSetLogs" -> {
+                    @Suppress("UNCHECKED_CAST")
+                    savedSetLogs.addAll(args[0] as List<SetLogEntity>)
+                    null
+                }
+                "logsForExercise" -> {
+                    val exName = args[0] as String
+                    savedSetLogs.filter { it.exerciseName == exName }
+                }
+                "countSessionsSince" -> {
+                    val sinceMs = args[0] as Long
+                    savedSessions.count { it.endedAt >= sinceMs }
+                }
+                else -> null
+            }
+        } as SessionDao
+
+        val characterDaoProxy = Proxy.newProxyInstance(
+            CharacterDao::class.java.classLoader,
+            arrayOf(CharacterDao::class.java)
+        ) { _, method, args ->
+            when (method.name) {
+                "get" -> character
+                "observe", "getCharacterFlow" -> characterState
+                "upsert", "update" -> {
+                    val char = args[0] as CharacterEntity
+                    character = char
+                    characterState.value = char
+                    null
+                }
+                else -> null
+            }
+        } as CharacterDao
+
+        override fun activeSessionDao(): ActiveSessionDao = activeSessionDaoProxy
+        override fun sessionDao(): SessionDao = sessionDaoProxy
+        override fun characterDao(): CharacterDao = characterDaoProxy
+        override fun workoutDao(): WorkoutDao = createDummyProxy()
+        override fun itemDao(): ItemDao = createDummyProxy()
+        override fun gearInstanceDao(): GearInstanceDao = createDummyProxy()
+        override fun biomeProgressDao(): BiomeProgressDao = createDummyProxy()
+        override fun classProgressDao(): ClassProgressDao = createDummyProxy()
+        override fun bodyMetricDao(): BodyMetricDao = createDummyProxy()
+
+        private val directExecutor = java.util.concurrent.Executor { it.run() }
+        override val transactionExecutor: java.util.concurrent.Executor = directExecutor
+        override val queryExecutor: java.util.concurrent.Executor = directExecutor
+
+        override fun createInvalidationTracker(): InvalidationTracker = createDummyProxy()
+        override fun clearAllTables() {}
+        override fun beginTransaction() {}
+        override fun setTransactionSuccessful() {}
+        override fun endTransaction() {}
+        override fun runInTransaction(body: Runnable) { body.run() }
+        override fun <V> runInTransaction(body: java.util.concurrent.Callable<V>): V = body.call()
+    }
+
+    @Before
+    fun setUp() {
+        db = FakeAppDatabase()
+        repository = GameRepository(db)
+
+        runBlocking {
+            db.characterDao().upsert(
+                CharacterEntity(
+                    id = 1,
+                    name = "Hero",
+                    characterClass = CharacterClass.WARRIOR,
+                    partyId = "party_777",
+                    guildId = "guild_888"
+                )
+            )
+        }
+    }
+
     /**
      * V23 Fixture Migration Test:
-     * Exercises MIGRATION_23_24 and MIGRATION_24_25 on a simulated V23 database state lacking
-     * targetWeightKg, setType, and completionToken. Verifies repaired columns, unique index,
-     * new active session tables, and outbox schema creations.
+     * Executes MIGRATION_23_24 and MIGRATION_24_25 on a simulated V23 database state lacking
+     * targetWeightKg, setType, completionToken, and completionReceiptJson. Verifies repaired columns,
+     * unique index, new active session tables, and outbox schema creations.
      */
     @Test
     fun v23_sqlite_fixture_migration_test() {
@@ -34,19 +303,6 @@ class ActiveSessionTest {
             "set_logs" to mutableSetOf("id", "sessionId", "exerciseName", "category", "weightKg", "reps", "durationMin", "distanceKm", "xp", "loggedAt"),
             "sessions" to mutableSetOf("id", "name", "startedAt", "endedAt", "xpEarned", "goldEarned", "energyEarned", "setCount")
         )
-
-        val cursorProxy = Proxy.newProxyInstance(
-            android.database.Cursor::class.java.classLoader,
-            arrayOf(android.database.Cursor::class.java)
-        ) { _, method, args ->
-            when (method.name) {
-                "getColumnIndex" -> 0
-                "moveToNext" -> false
-                "getString" -> ""
-                "close" -> null
-                else -> null
-            }
-        } as android.database.Cursor
 
         val dbProxy = Proxy.newProxyInstance(
             SupportSQLiteDatabase::class.java.classLoader,
@@ -71,9 +327,9 @@ class ActiveSessionTest {
                     var index = -1
                     val colList = cols.toList()
                     Proxy.newProxyInstance(
-                        android.database.Cursor::class.java.classLoader,
-                        arrayOf(android.database.Cursor::class.java)
-                    ) { _, cMethod, cArgs ->
+                        Cursor::class.java.classLoader,
+                        arrayOf(Cursor::class.java)
+                    ) { _, cMethod, _ ->
                         when (cMethod.name) {
                             "getColumnIndex" -> 0
                             "moveToNext" -> {
@@ -82,11 +338,29 @@ class ActiveSessionTest {
                             }
                             "getString" -> colList.getOrNull(index) ?: ""
                             "close" -> null
-                            else -> null
+                            else -> {
+                                when (cMethod.returnType) {
+                                    Boolean::class.javaPrimitiveType -> false
+                                    Int::class.javaPrimitiveType -> 0
+                                    Long::class.javaPrimitiveType -> 0L
+                                    Float::class.javaPrimitiveType -> 0f
+                                    Double::class.javaPrimitiveType -> 0.0
+                                    else -> null
+                                }
+                            }
                         }
                     }
                 }
-                else -> null
+                else -> {
+                    when (method.returnType) {
+                        Boolean::class.javaPrimitiveType -> false
+                        Int::class.javaPrimitiveType -> 0
+                        Long::class.javaPrimitiveType -> 0L
+                        Float::class.javaPrimitiveType -> 0f
+                        Double::class.javaPrimitiveType -> 0.0
+                        else -> null
+                    }
+                }
             }
         } as SupportSQLiteDatabase
 
@@ -98,6 +372,7 @@ class ActiveSessionTest {
         assertTrue("workout_exercises.targetWeightKg repaired", existingColumns["workout_exercises"]?.contains("targetWeightKg") == true)
         assertTrue("set_logs.setType repaired", existingColumns["set_logs"]?.contains("setType") == true)
         assertTrue("sessions.completionToken added", existingColumns["sessions"]?.contains("completionToken") == true)
+        assertTrue("sessions.completionReceiptJson added", existingColumns["sessions"]?.contains("completionReceiptJson") == true)
         assertTrue("sessions completionToken unique index created", executedSqls.any { it.contains("index_sessions_completion_token") })
 
         // Verify MIGRATION_24_25 tables created
@@ -108,178 +383,155 @@ class ActiveSessionTest {
     }
 
     @Test
-    fun activeSession_structureAndSorting() {
-        val session = ActiveSessionEntity(
-            id = 1L,
-            title = "Chest & Triceps",
-            startedAt = 100000L,
-            status = "ACTIVE",
-            completionToken = "uuid_token_123"
+    fun completeSession_fullReceiptRestoration_andIdempotency() = runBlocking {
+        val char = db.characterDao().get()!!
+        db.characterDao().upsert(char.copy(partyId = "party_777", guildId = "guild_888"))
+
+        val exercises = listOf(
+            SessionExercise(name = "Bench Press", category = ExerciseCategory.STRENGTH)
         )
-        val ex1 = ActiveExerciseEntity(
-            id = 10L,
-            activeSessionId = 1L,
+        val activeDetails = repository.startActiveSession("Chest Day", 1L, exercises)
+        val token = activeDetails.session.completionToken!!
+
+        val exId = activeDetails.sortedExercises.first().exercise.id
+        repository.logActiveSet(
+            exerciseId = exId,
             exerciseName = "Bench Press",
             category = ExerciseCategory.STRENGTH,
-            sortOrder = 1
-        )
-        val ex2 = ActiveExerciseEntity(
-            id = 11L,
-            activeSessionId = 1L,
-            exerciseName = "Incline Dumbbell Press",
-            category = ExerciseCategory.STRENGTH,
-            sortOrder = 0
-        )
-        val set1 = ActiveSetLogEntity(
-            id = 100L,
-            activeSessionId = 1L,
-            exerciseId = 10L,
-            exerciseName = "Bench Press",
-            category = ExerciseCategory.STRENGTH,
-            weightKg = 80.0,
+            weightKg = 100.0,
             reps = 10,
-            loggedAt = 100050L
+            durationMin = 0.0,
+            distanceKm = 0.0,
+            xp = 100,
+            rir = null,
+            avgHr = null,
+            maxHr = null,
+            speedKmh = 0.0,
+            inclinePercent = 0.0,
+            cardioProgram = "",
+            setType = SetType.NORMAL,
+            heatStreak = 1,
+            restDurationSec = 90
         )
 
-        val details = ActiveSessionWithDetails(
-            session = session,
-            exercises = listOf(
-                ActiveExerciseWithSets(ex1, listOf(set1)),
-                ActiveExerciseWithSets(ex2, emptyList())
+        val logs = listOf(
+            SetLogEntity(
+                sessionId = 0,
+                exerciseName = "Bench Press",
+                category = ExerciseCategory.STRENGTH,
+                weightKg = 100.0,
+                reps = 10,
+                xp = 100
             )
         )
+        val startMs = System.currentTimeMillis()
 
-        assertEquals("Chest & Triceps", details.session.title)
-        assertEquals("uuid_token_123", details.session.completionToken)
-        assertEquals(2, details.exercises.size)
-        // Verify sortedExercises sorts by sortOrder ASC
-        assertEquals("Incline Dumbbell Press", details.sortedExercises[0].exercise.exerciseName)
-        assertEquals("Bench Press", details.sortedExercises[1].exercise.exerciseName)
-        assertEquals(1, details.sortedExercises[1].sets.size)
-        assertEquals(80.0, details.sortedExercises[1].sets[0].weightKg, 0.01)
+        // First completion call
+        val result1 = repository.completeSession("Chest Day", startMs, logs, completionToken = token)
+        val char1 = db.characterDao().get()
+
+        // Verify outbox payload contains destination partyId, guildId, and uid
+        val outboxEvents = db.activeSessionDao().getPendingOutboxEvents()
+        assertEquals(2, outboxEvents.size)
+        val partyEvent = outboxEvents.find { it.type == "PARTY_XP" }
+        assertNotNull(partyEvent)
+        assertTrue(partyEvent!!.payloadJson.contains("party_777"))
+        assertTrue(partyEvent.payloadJson.contains("1"))
+
+        // Second completion call (idempotent retry)
+        val result2 = repository.completeSession("Chest Day", startMs, logs, completionToken = token)
+        val char2 = db.characterDao().get()
+
+        // Verify full SessionResult restoration
+        assertEquals(result1.xp, result2.xp)
+        assertEquals(result1.gold, result2.gold)
+        assertEquals(result1.energy, result2.energy)
+        assertEquals(result1.prs.size, result2.prs.size)
+        assertEquals(result1.lootLabels, result2.lootLabels)
+        assertNotNull(result2.rewardBatch)
+
+        // Verify character state was NOT mutated a second time
+        assertEquals(char1?.xp, char2?.xp)
+        assertEquals(char1?.gold, char2?.gold)
     }
 
     @Test
-    fun idempotencyToken_uniqueness() {
-        val token = "token_abc_123"
-        val session1 = SessionEntity(
-            id = 1,
-            name = "Morning Quest",
-            startedAt = 100000L,
-            endedAt = 103000L,
-            xpEarned = 150,
-            goldEarned = 25,
-            energyEarned = 10,
-            setCount = 5,
-            completionToken = token
-        )
-        val session2 = SessionEntity(
-            id = 2,
-            name = "Morning Quest Retry",
-            startedAt = 100000L,
-            endedAt = 103000L,
-            xpEarned = 150,
-            goldEarned = 25,
-            energyEarned = 10,
-            setCount = 5,
-            completionToken = token
-        )
+    fun outboxProcessor_deliveryOutcomes_test() = runBlocking {
+        val dao = db.activeSessionDao()
+        val eventDelivered = PendingSyncEntity(eventId = "tok1:PARTY", type = "PARTY_XP", payloadJson = "{\"xp\":100,\"partyId\":\"p1\",\"uid\":\"u1\"}")
+        val eventAlready = PendingSyncEntity(eventId = "tok2:PARTY", type = "PARTY_XP", payloadJson = "{\"xp\":100,\"partyId\":\"p1\",\"uid\":\"u1\"}")
+        val eventNotApp = PendingSyncEntity(eventId = "tok3:PARTY", type = "PARTY_XP", payloadJson = "{\"xp\":100}")
+        val eventFailure = PendingSyncEntity(eventId = "tok4:PARTY", type = "PARTY_XP", payloadJson = "{\"xp\":100,\"partyId\":\"p1\",\"uid\":\"u1\"}")
 
-        assertEquals(session1.completionToken, session2.completionToken)
-        assertNotNull(session1.completionToken)
-    }
+        dao.insertOutboxEvent(eventDelivered)
+        dao.insertOutboxEvent(eventAlready)
+        dao.insertOutboxEvent(eventNotApp)
+        dao.insertOutboxEvent(eventFailure)
 
-    @Test
-    fun outboxEvents_formatAndKeyDerivation() {
-        val token = "session_token_xyz"
-        val partyEvent = PendingSyncEntity(
-            eventId = "${token}:PARTY",
-            type = "PARTY_XP",
-            payloadJson = "{\"xp\":200}"
-        )
-        val guildEvent = PendingSyncEntity(
-            eventId = "${token}:GUILD",
-            type = "GUILD_XP",
-            payloadJson = "{\"xp\":200}"
-        )
-
-        assertEquals("session_token_xyz:PARTY", partyEvent.eventId)
-        assertEquals("session_token_xyz:GUILD", guildEvent.eventId)
-        assertEquals("PENDING", partyEvent.status)
-        assertEquals(0, partyEvent.retryCount)
-    }
-
-    @Test
-    fun outboxSyncResult_classification_test() {
-        // Simulating the 4 sync result classifications
-        fun processResult(result: OutboxSyncResult, currentRetry: Int): Pair<String, Int> {
-            return when (result) {
-                OutboxSyncResult.DELIVERED,
-                OutboxSyncResult.ALREADY_PROCESSED,
-                OutboxSyncResult.NOT_APPLICABLE -> "SENT" to currentRetry
-                OutboxSyncResult.RETRYABLE_FAILURE -> "PENDING" to (currentRetry + 1)
+        val fakeProcessor = object : OutboxProcessor {
+            override suspend fun processEvent(event: PendingSyncEntity): OutboxSyncResult {
+                return when (event.eventId) {
+                    "tok1:PARTY" -> OutboxSyncResult.DELIVERED
+                    "tok2:PARTY" -> OutboxSyncResult.ALREADY_PROCESSED
+                    "tok3:PARTY" -> OutboxSyncResult.NOT_APPLICABLE
+                    "tok4:PARTY" -> OutboxSyncResult.RETRYABLE_FAILURE
+                    else -> OutboxSyncResult.NOT_APPLICABLE
+                }
             }
         }
 
-        // 1. DELIVERED -> SENT
-        val (status1, retries1) = processResult(OutboxSyncResult.DELIVERED, 0)
-        assertEquals("SENT", status1)
-        assertEquals(0, retries1)
-
-        // 2. ALREADY_PROCESSED -> SENT
-        val (status2, retries2) = processResult(OutboxSyncResult.ALREADY_PROCESSED, 0)
-        assertEquals("SENT", status2)
-        assertEquals(0, retries2)
-
-        // 3. NOT_APPLICABLE (no party/guild) -> SENT (completed no-op)
-        val (status3, retries3) = processResult(OutboxSyncResult.NOT_APPLICABLE, 0)
-        assertEquals("SENT", status3)
-        assertEquals(0, retries3)
-
-        // 4. RETRYABLE_FAILURE -> PENDING & retries incremented
-        val (status4, retries4) = processResult(OutboxSyncResult.RETRYABLE_FAILURE, 0)
-        assertEquals("PENDING", status4)
-        assertEquals(1, retries4)
-    }
-
-    @Test
-    fun exerciseReorderAndRemoval_byUniqueId() {
-        val exercises = mutableListOf(
-            ActiveExerciseEntity(id = 1, activeSessionId = 1, exerciseName = "Squats", category = ExerciseCategory.STRENGTH, sortOrder = 0),
-            ActiveExerciseEntity(id = 2, activeSessionId = 1, exerciseName = "Lunges", category = ExerciseCategory.STRENGTH, sortOrder = 1)
-        )
-
-        // Reorder by ID: place id=2 first, id=1 second
-        val newOrderIds = listOf(2L, 1L)
-        val reordered = exercises.map { ex ->
-            val newIndex = newOrderIds.indexOf(ex.id)
-            ex.copy(sortOrder = if (newIndex != -1) newIndex else ex.sortOrder)
-        }.sortedBy { it.sortOrder }
-
-        assertEquals("Lunges", reordered[0].exerciseName)
-        assertEquals(0, reordered[0].sortOrder)
-        assertEquals("Squats", reordered[1].exerciseName)
-        assertEquals(1, reordered[1].sortOrder)
-
-        // Remove exercise by ID
-        val filtered = reordered.filterNot { it.id == 2L }
-        assertEquals(1, filtered.size)
-        assertEquals("Squats", filtered[0].exerciseName)
-    }
-
-    @Test
-    fun durationDerivation_fromTimestamps() {
-        val startedAt = 1_000_000L
-        val now = 1_060_000L // 60 seconds later
-        val pausedAt: Long? = null
-        val accumulatedPausedMs = 0L
-
-        val elapsedMs = if (pausedAt != null) {
-            pausedAt - startedAt - accumulatedPausedMs
-        } else {
-            now - startedAt - accumulatedPausedMs
+        // Process all events
+        for (event in dao.getPendingOutboxEvents()) {
+            val result = fakeProcessor.processEvent(event)
+            when (result) {
+                OutboxSyncResult.DELIVERED,
+                OutboxSyncResult.ALREADY_PROCESSED,
+                OutboxSyncResult.NOT_APPLICABLE -> dao.markOutboxEventSent(event.eventId)
+                OutboxSyncResult.RETRYABLE_FAILURE -> dao.incrementOutboxEventRetry(event.eventId)
+            }
         }
 
-        assertEquals(60_000L, elapsedMs)
+        // Assert tok1, tok2, tok3 marked SENT (only tok4 remains pending with retryCount = 1)
+        val pending = dao.getPendingOutboxEvents()
+        assertEquals(1, pending.size)
+        assertEquals("tok4:PARTY", pending.first().eventId)
+        assertEquals(1, pending.first().retryCount)
+    }
+
+    @Test
+    fun activeSession_cascadingDeletion_test() = runBlocking {
+        val exercises = listOf(
+            SessionExercise(name = "Deadlift", category = ExerciseCategory.STRENGTH)
+        )
+        repository.startActiveSession("Pull Day", 1L, exercises)
+        val active = repository.activeSession.first()!!
+        val exId = active.sortedExercises.first().exercise.id
+
+        repository.logActiveSet(
+            exerciseId = exId,
+            exerciseName = "Deadlift",
+            category = ExerciseCategory.STRENGTH,
+            weightKg = 140.0,
+            reps = 5,
+            durationMin = 0.0,
+            distanceKm = 0.0,
+            xp = 120,
+            rir = null,
+            avgHr = null,
+            maxHr = null,
+            speedKmh = 0.0,
+            inclinePercent = 0.0,
+            cardioProgram = "",
+            setType = SetType.NORMAL,
+            heatStreak = 1,
+            restDurationSec = 90
+        )
+
+        // Discard active session
+        repository.discardActiveSession()
+
+        // Assert all exercises and sets were CASCADE deleted
+        assertNull(repository.getActiveSessionWithDetails())
+        assertEquals(0, db.activeSessionDao().getActiveExercises().size)
     }
 }
