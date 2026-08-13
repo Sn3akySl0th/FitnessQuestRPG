@@ -59,6 +59,7 @@ import com.fitnessquest.rpg.domain.toRewards
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.time.DayOfWeek
@@ -117,6 +118,11 @@ class GameRepository(
 
     val allClassProgress: Flow<List<ClassProgressEntity>> = db.classProgressDao().observeAll()
     val allBiomeProgress: Flow<List<BiomeProgressEntity>> = db.biomeProgressDao().observeAll()
+
+    fun getBiomeRequirement(biome: Biome): Flow<ProgressionRules.BiomeRequirement> =
+        allBiomeProgress.map { allProgress ->
+            ProgressionRules.nextBiomeRequirement(biome, allProgress)
+        }
 
     suspend fun ensureSeeded() {
         if (db.characterDao().get() == null) {
@@ -828,14 +834,24 @@ class GameRepository(
                 .sumOf { if (it.distanceKm > 0.0) it.distanceKm else it.durationMin / 10.0 }
             if ((cardioKm > 0.0) && (updated.travelTarget != null)) {
                 val target = Biome.fromName(updated.travelTarget)
-                val progress = updated.travelProgress + cardioKm
-                updated = if (progress >= target.travelKm) {
-                    res = res.copy(arrivedAt = target.label)
-                    updated.copy(currentBiome = target.name, travelTarget = null, travelProgress = 0.0)
+                val currentBiome = Biome.fromName(updated.currentBiome)
+                val allProgress = db.biomeProgressDao().getAll()
+                
+                if (ProgressionRules.canAdvanceFromBiome(currentBiome, allProgress)) {
+                    val progress = updated.travelProgress + cardioKm
+                    updated = if (progress >= target.travelKm) {
+                        res = res.copy(arrivedAt = target.label)
+                        updated.copy(currentBiome = target.name, travelTarget = null, travelProgress = 0.0)
+                    } else {
+                        updated.copy(travelProgress = progress)
+                    }
+                    res = res.copy(travelKm = cardioKm)
                 } else {
-                    updated.copy(travelProgress = progress)
+                    // Boss not defeated; progress accumulates but cap at just before arrival
+                    val progress = (updated.travelProgress + cardioKm).coerceAtMost(target.travelKm - 0.1)
+                    updated = updated.copy(travelProgress = progress)
+                    res = res.copy(travelKm = cardioKm)
                 }
-                res = res.copy(travelKm = cardioKm)
             }
 
             val workoutTier = lootTierFor(
@@ -1539,8 +1555,10 @@ class GameRepository(
     private suspend fun addBiomeProgress(biomeName: String, points: Int): BiomeProgressEntity {
         val current = getOrCreateBiomeProgress(biomeName)
         val updatedPoints = current.progressPoints + points.coerceAtLeast(0)
-        val unlocked = current.bossUnlocked || ProgressionRules.shouldUnlockBoss(current.biomeName, updatedPoints)
-        val updated = current.copy(progressPoints = updatedPoints, bossUnlocked = unlocked)
+        var updated = current.copy(progressPoints = updatedPoints)
+        if (ProgressionRules.canUnlockBoss(updated)) {
+            updated = updated.copy(bossUnlocked = true)
+        }
         db.biomeProgressDao().upsert(updated)
         return updated
     }
@@ -1564,14 +1582,27 @@ class GameRepository(
         val character = getCharacter()
         val targetName = character.travelTarget ?: return null
         val target = Biome.fromName(targetName)
-        val progress = character.travelProgress + km
-        return if (progress >= target.travelKm) {
-            db.characterDao().upsert(
-                character.copy(currentBiome = target.name, travelTarget = null, travelProgress = 0.0)
-            )
-            target
+        
+        val currentBiome = Biome.fromName(character.currentBiome)
+        val allProgress = db.biomeProgressDao().getAll()
+        val canAdvance = ProgressionRules.canAdvanceFromBiome(currentBiome, allProgress)
+
+        val newProgressRaw = character.travelProgress + km
+        
+        return if (canAdvance) {
+            if (newProgressRaw >= target.travelKm) {
+                db.characterDao().upsert(
+                    character.copy(currentBiome = target.name, travelTarget = null, travelProgress = 0.0)
+                )
+                target
+            } else {
+                db.characterDao().upsert(character.copy(travelProgress = newProgressRaw))
+                null
+            }
         } else {
-            db.characterDao().upsert(character.copy(travelProgress = progress))
+            // Boss gated: accumulate but cap just before arrival
+            val cappedProgress = newProgressRaw.coerceAtMost(target.travelKm - 0.1).coerceAtLeast(0.0)
+            db.characterDao().upsert(character.copy(travelProgress = cappedProgress))
             null
         }
     }

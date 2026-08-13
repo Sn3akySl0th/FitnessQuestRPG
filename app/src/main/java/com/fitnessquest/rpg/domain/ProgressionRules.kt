@@ -39,7 +39,8 @@ object ProgressionRules {
     }
 
     /**
-     * Returns true if the boss is ready to be fought but not yet unlocked.
+     * Returns true only when the boss threshold is met AND the boss has not yet been
+     * unlocked for combat. Returns false if already unlocked OR already defeated.
      */
     fun canUnlockBoss(biomeProgress: BiomeProgressEntity): Boolean {
         val biome = Biome.fromName(biomeProgress.biomeName)
@@ -93,6 +94,13 @@ object ProgressionRules {
         if (nextOrdinal >= Biome.entries.size) {
             return if (currentProgress.bossDefeated) BiomeRequirement.MaxBiome 
             else {
+                if (currentProgress.bossUnlocked) {
+                    return BiomeRequirement.Locked(
+                        reason = "Fight the ${currentBiome.label} boss to advance.",
+                        pointsNeeded = 0,
+                        bossDefeated = false
+                    )
+                }
                 val pointsNeeded = bossUnlockPointsFor(currentBiome) - currentProgress.progressPoints
                 BiomeRequirement.Locked(
                     reason = "Defeat the final boss to complete your journey.",
@@ -106,6 +114,13 @@ object ProgressionRules {
         return if (currentProgress.bossDefeated) {
             BiomeRequirement.Unlocked(nextBiome)
         } else {
+            if (currentProgress.bossUnlocked) {
+                return BiomeRequirement.Locked(
+                    reason = "Fight the ${currentBiome.label} boss to advance.",
+                    pointsNeeded = 0,
+                    bossDefeated = false
+                )
+            }
             val pointsNeeded = bossUnlockPointsFor(currentBiome) - currentProgress.progressPoints
             BiomeRequirement.Locked(
                 reason = lockedBiomeReason(nextBiome, allProgress) ?: "Defeat the ${currentBiome.label} boss to advance.",

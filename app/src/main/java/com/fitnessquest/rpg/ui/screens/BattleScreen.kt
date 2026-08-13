@@ -37,6 +37,12 @@ import com.fitnessquest.rpg.domain.CombatStats
 import com.fitnessquest.rpg.domain.GameMath
 import com.fitnessquest.rpg.domain.Monster
 import com.fitnessquest.rpg.domain.MonsterCatalog
+import com.fitnessquest.rpg.data.db.BiomeProgressEntity
+import com.fitnessquest.rpg.domain.ProgressionRules
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.combine
 import com.fitnessquest.rpg.domain.Units
 import com.fitnessquest.rpg.ui.appContainer
@@ -77,6 +83,15 @@ class BattleSelectViewModel(private val container: AppContainer) : ViewModel() {
     val stepTracking: StateFlow<Boolean> = container.steps.tracking
     val stepSensorAvailable: Boolean get() = container.steps.hasSensor
 
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val biomeRequirement: StateFlow<ProgressionRules.BiomeRequirement> = container.repository.character
+        .map { Biome.fromName(it.currentBiome) }
+        .distinctUntilChanged()
+        .flatMapLatest { biome ->
+            container.repository.getBiomeRequirement(biome)
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ProgressionRules.BiomeRequirement.MaxBiome)
+
     fun startStepTracking() = container.steps.start()
 
     fun startTravel(biome: Biome) {
@@ -94,6 +109,9 @@ class BattleSelectViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     val encounterClaimed: StateFlow<Boolean> = container.prefs.encounterClaimedThisTravel
+
+    val allBiomeProgress: StateFlow<List<BiomeProgressEntity>> = container.repository.allBiomeProgress
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun claimEncounterBonus() {
         if (battleState.value.character?.travelTarget == null) return
@@ -127,6 +145,8 @@ fun BattleScreen(
     val battleState by viewModel.battleState.collectAsState()
     val imperial by viewModel.imperial.collectAsState()
     val encounterClaimed by viewModel.encounterClaimed.collectAsState()
+    val biomeRequirement by viewModel.biomeRequirement.collectAsState()
+    val allProgress by viewModel.allBiomeProgress.collectAsState()
     val c = battleState.character ?: return
     val combat = battleState.combat
     val canFight = c.energy >= GameMath.BATTLE_ENERGY_COST
@@ -159,6 +179,8 @@ fun BattleScreen(
                     character = c,
                     imperial = imperial,
                     encounterClaimed = encounterClaimed,
+                    biomeRequirement = biomeRequirement,
+                    allProgress = allProgress,
                     onStartTravel = viewModel::startTravel,
                     onCancelTravel = viewModel::cancelTravel,
                     onClaimEncounter = viewModel::claimEncounterBonus

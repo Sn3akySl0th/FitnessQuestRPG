@@ -45,10 +45,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.fitnessquest.rpg.data.db.BiomeProgressEntity
 import com.fitnessquest.rpg.data.db.CharacterEntity
 import com.fitnessquest.rpg.domain.Biome
 import com.fitnessquest.rpg.domain.GameMath
 import com.fitnessquest.rpg.domain.Units
+import com.fitnessquest.rpg.domain.ProgressionRules
 import com.fitnessquest.rpg.ui.effects.AudioEffects
 import com.fitnessquest.rpg.ui.effects.HapticEffects
 import com.fitnessquest.rpg.ui.theme.Gold
@@ -65,6 +67,8 @@ fun InteractiveWorldMap(
     character: CharacterEntity,
     imperial: Boolean,
     encounterClaimed: Boolean,
+    biomeRequirement: ProgressionRules.BiomeRequirement,
+    allProgress: List<BiomeProgressEntity>,
     onStartTravel: (Biome) -> Unit,
     onCancelTravel: () -> Unit,
     onClaimEncounter: () -> Unit = {},
@@ -106,6 +110,79 @@ fun InteractiveWorldMap(
                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                     color = Color.White.copy(alpha = 0.8f)
                 )
+            }
+
+            // Progression Status Area
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    when (val req = biomeRequirement) {
+                        is ProgressionRules.BiomeRequirement.Locked -> {
+                            Text("🔒", fontSize = 24.sp)
+                            Column {
+                                Text(
+                                    req.reason,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                                if (req.pointsNeeded > 0) {
+                                    Text(
+                                        "Earn ${req.pointsNeeded} more points to unlock the boss.",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = Gold
+                                    )
+                                } else {
+                                    Text(
+                                        "The boss is ready! Defeat it to unlock travel.",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = HealthRed
+                                    )
+                                }
+                            }
+                        }
+                        is ProgressionRules.BiomeRequirement.Unlocked -> {
+                            Text("✨", fontSize = 24.sp)
+                            Column {
+                                Text(
+                                    "Path Unlocked!",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF6BC96B)
+                                )
+                                Text(
+                                    "You can now travel to ${req.nextBiome.label}.",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Color.White.copy(alpha = 0.8f)
+                                )
+                            }
+                        }
+                        ProgressionRules.BiomeRequirement.MaxBiome -> {
+                            Text("🏆", fontSize = 24.sp)
+                            Column {
+                                Text(
+                                    "World Conquered!",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Gold
+                                )
+                                Text(
+                                    "All biomes cleared. You've reached the final frontier!",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Color.White.copy(alpha = 0.8f)
+                                )
+                            }
+                        }
+                    }
+                }
             }
 
             if (travelTarget != null) {
@@ -176,7 +253,7 @@ fun InteractiveWorldMap(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 biomes.forEachIndexed { index, b ->
-                    val isUnlocked = character.level >= b.levelRequired
+                    val isUnlocked = character.level >= b.levelRequired && ProgressionRules.canEnterBiome(b, allProgress)
                     val isCurrent = b == currentBiome
                     val isTarget = b == travelTarget
 
@@ -264,7 +341,8 @@ fun InteractiveWorldMap(
     }
 
     selectedBiome?.let { b ->
-        val isUnlocked = character.level >= b.levelRequired
+        val levelMet = character.level >= b.levelRequired
+        val canEnter = ProgressionRules.canEnterBiome(b, allProgress)
         val isCurrent = b == currentBiome
         val isTarget = b == travelTarget
         val distanceText = Units.formatDistance(b.travelKm, imperial)
@@ -291,15 +369,36 @@ fun InteractiveWorldMap(
                 }
             },
             confirmButton = {
-                if (isUnlocked && !isCurrent && !isTarget) {
-                    Button(
-                        onClick = {
-                            selectedBiome = null
-                            onStartTravel(b)
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Color.Black)
-                    ) {
-                        Text("START TRAVEL ($distanceText)", fontWeight = FontWeight.Bold)
+                if (!isCurrent && !isTarget) {
+                    if (canEnter && levelMet) {
+                        Button(
+                            onClick = {
+                                selectedBiome = null
+                                onStartTravel(b)
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Color.Black)
+                        ) {
+                            Text("START TRAVEL ($distanceText)", fontWeight = FontWeight.Bold)
+                        }
+                    } else if (levelMet) {
+                        // Level unlocked but boss gated
+                        val prevBiome = Biome.entries.getOrNull(b.ordinal - 1)
+                        Text(
+                            "⚔️ Defeat the ${prevBiome?.label ?: "previous"} boss to unlock this path.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = HealthRed,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.End,
+                            modifier = Modifier.padding(8.dp)
+                        )
+                    } else {
+                        Text(
+                            "🔒 Level ${b.levelRequired} required.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.White.copy(alpha = 0.6f),
+                            textAlign = TextAlign.End,
+                            modifier = Modifier.padding(8.dp)
+                        )
                     }
                 }
             },

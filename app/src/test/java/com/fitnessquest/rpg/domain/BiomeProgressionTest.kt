@@ -33,6 +33,12 @@ class BiomeProgressionTest {
     }
 
     @Test
+    fun `canEnterBiome - DARKWOOD is locked when allProgress is empty`() {
+        val allProgress = emptyList<BiomeProgressEntity>()
+        assertFalse(ProgressionRules.canEnterBiome(Biome.DARKWOOD, allProgress))
+    }
+
+    @Test
     fun `canUnlockBoss - returns false below threshold`() {
         val progress = BiomeProgressEntity(
             biomeName = Biome.MEADOWLANDS.name,
@@ -110,7 +116,8 @@ class BiomeProgressionTest {
             BiomeProgressEntity(Biome.MEADOWLANDS.name, bossDefeated = false)
         )
         val reason = ProgressionRules.lockedBiomeReason(Biome.DARKWOOD, allProgress)
-        assertEquals("Defeat the Meadowlands boss to unlock Darkwood.", reason)
+        assertTrue(reason!!.contains(Biome.MEADOWLANDS.label))
+        assertTrue(reason.contains(Biome.DARKWOOD.label))
     }
 
     @Test

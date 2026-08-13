@@ -220,6 +220,9 @@ interface BiomeProgressDao {
     @Query("SELECT * FROM biome_progress ORDER BY biomeName")
     fun observeAll(): Flow<List<BiomeProgressEntity>>
 
+    @Query("SELECT * FROM biome_progress")
+    suspend fun getAll(): List<BiomeProgressEntity>
+
     @Query("SELECT * FROM biome_progress WHERE biomeName = :biomeName")
     suspend fun get(biomeName: String): BiomeProgressEntity?
 
