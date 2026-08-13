@@ -19,6 +19,8 @@ The next major focus is boss-gated biome progression, followed by Movement Maste
 
 ### Fixed Recently
 
+- Google Play Automatic In-App Updates: Integrated Google Play `AppUpdateManager` with non-blocking Flexible background downloads, lifecycle hooks in `MainActivity`, and a themed floating restart banner to apply updates seamlessly without interrupting workouts.
+- Boss Progression UI & First-Clear Milestone Reward Flow: Added dynamic boss gates (`BossProgressCard`), canonical biome boss assignments, readiness & trait previews, transactional `GameRepository.applyVictory` atomicity, and guaranteed milestone loot (high-tier gear, Biome Chest, crafting mats, gold/energy).
 - Hevy CSV Import Fix: Fixed CSV column index disambiguation (so workout_name and exercise_name columns are detected separately) and session grouping so all exercises (e.g. Bench Press, Bent Over Row, Shoulder Press, Bicep Curl) from the same Hevy workout are correctly grouped into a single routine template & history session.
 - Responsive Landscape Mode: converts bottom dock to a left side **NavigationRail** and main Hero Screen into a **2-Column Split View** (Left: Avatar & Currency; Right: Stats, Gear, and Saga tabs with independent scrolling).
 - Dynamic Username Auto-Scaling: scales username font size and line height so long names (e.g. `Sn3akySloth`) render completely on-screen without `...` truncation.
