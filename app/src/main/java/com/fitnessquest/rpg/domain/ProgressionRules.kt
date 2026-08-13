@@ -21,6 +21,15 @@ object ProgressionRules {
     const val MAX_GEAR_TIER = 5
     const val BOSS_UNLOCK_POINTS = 100
 
+    /**
+     * Requirement state for biome progression.
+     */
+    sealed class BiomeRequirement {
+        data class Locked(val reason: String, val pointsNeeded: Int, val bossDefeated: Boolean) : BiomeRequirement()
+        data class Unlocked(val nextBiome: Biome) : BiomeRequirement()
+        object MaxBiome : BiomeRequirement()
+    }
+
     fun bossUnlockPointsFor(biome: Biome): Int =
         BOSS_UNLOCK_POINTS + (biome.ordinal * 25)
 
@@ -29,6 +38,88 @@ object ProgressionRules {
         return progressPoints >= bossUnlockPointsFor(biome)
     }
 
+    /**
+     * Returns true if the boss is ready to be fought but not yet unlocked.
+     */
+    fun canUnlockBoss(biomeProgress: BiomeProgressEntity): Boolean {
+        val biome = Biome.fromName(biomeProgress.biomeName)
+        return biomeProgress.progressPoints >= bossUnlockPointsFor(biome) && !biomeProgress.bossUnlocked
+    }
+
+    /**
+     * Biome gating: MEADOWLANDS is always open. Any other biome requires the
+     * boss of the preceding biome to be defeated.
+     */
+    fun canEnterBiome(targetBiome: Biome, allProgress: List<BiomeProgressEntity>): Boolean {
+        if (targetBiome == Biome.MEADOWLANDS) return true
+        
+        val previousBiomeOrdinal = targetBiome.ordinal - 1
+        if (previousBiomeOrdinal < 0) return true
+        
+        val previousBiome = Biome.entries[previousBiomeOrdinal]
+        val prevProgress = allProgress.find { it.biomeName == previousBiome.name }
+        
+        return prevProgress?.bossDefeated ?: false
+    }
+
+    /**
+     * Returns a human-readable reason why a biome is locked, or null if it's open.
+     */
+    fun lockedBiomeReason(targetBiome: Biome, allProgress: List<BiomeProgressEntity>): String? {
+        if (canEnterBiome(targetBiome, allProgress)) return null
+        
+        val previousBiomeOrdinal = targetBiome.ordinal - 1
+        if (previousBiomeOrdinal < 0) return null
+        val previousBiome = Biome.entries[previousBiomeOrdinal]
+        
+        return "Defeat the ${previousBiome.label} boss to unlock ${targetBiome.label}."
+    }
+
+    /**
+     * Returns true if the hero has conquered the current biome's boss and can move on.
+     */
+    fun canAdvanceFromBiome(currentBiome: Biome, allProgress: List<BiomeProgressEntity>): Boolean {
+        val progress = allProgress.find { it.biomeName == currentBiome.name }
+        return progress?.bossDefeated ?: false
+    }
+
+    /**
+     * Determines the status of the next biome in the sequence.
+     */
+    fun nextBiomeRequirement(currentBiome: Biome, allProgress: List<BiomeProgressEntity>): BiomeRequirement {
+        val currentProgress = allProgress.find { it.biomeName == currentBiome.name } ?: BiomeProgressEntity(currentBiome.name)
+        val nextOrdinal = currentBiome.ordinal + 1
+        
+        if (nextOrdinal >= Biome.entries.size) {
+            return if (currentProgress.bossDefeated) BiomeRequirement.MaxBiome 
+            else {
+                val pointsNeeded = bossUnlockPointsFor(currentBiome) - currentProgress.progressPoints
+                BiomeRequirement.Locked(
+                    reason = "Defeat the final boss to complete your journey.",
+                    pointsNeeded = pointsNeeded.coerceAtLeast(0),
+                    bossDefeated = false
+                )
+            }
+        }
+        
+        val nextBiome = Biome.entries[nextOrdinal]
+        return if (currentProgress.bossDefeated) {
+            BiomeRequirement.Unlocked(nextBiome)
+        } else {
+            val pointsNeeded = bossUnlockPointsFor(currentBiome) - currentProgress.progressPoints
+            BiomeRequirement.Locked(
+                reason = lockedBiomeReason(nextBiome, allProgress) ?: "Defeat the ${currentBiome.label} boss to advance.",
+                pointsNeeded = pointsNeeded.coerceAtLeast(0),
+                bossDefeated = false
+            )
+        }
+    }
+
+    /**
+     * Calculates the highest gear tier the character can use/find.
+     * Note: This remains consistent with boss-gated progression as it relies on 'bossDefeated'
+     * counts to unlock higher tiers (Tier 3 at 1 boss, Tier 4 at 3 bosses, etc.).
+     */
     fun maxUnlockedGearTier(
         character: CharacterEntity,
         biomeProgress: List<BiomeProgressEntity>
