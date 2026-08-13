@@ -1,5 +1,6 @@
 package com.fitnessquest.rpg
 
+import android.annotation.SuppressLint
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -11,6 +12,7 @@ import com.fitnessquest.rpg.ui.theme.FitQuestTheme
 
 class MainActivity : ComponentActivity() {
 
+    @SuppressLint("InvalidFragmentVersionForActivityResult")
     private val updateLauncher = registerForActivityResult(
         ActivityResultContracts.StartIntentSenderForResult(),
     ) { result ->
