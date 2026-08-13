@@ -407,6 +407,33 @@ class GameRepository(
         return candidates.size
     }
 
+    /**
+     * Identifies and deletes fragmented routine templates created by past CSV imports
+     * where single exercises were created as individual workouts.
+     */
+    suspend fun cleanUpFragmentedSingleExerciseTemplates(): Int {
+        val workouts = db.workoutDao().getAllWorkouts()
+        var deletedCount = 0
+
+        for (workout in workouts) {
+            val exercises = db.workoutDao().exercisesFor(workout.id)
+            if (exercises.size == 1) {
+                val singleExName = exercises.first().exerciseName.trim().lowercase()
+                val workoutName = workout.name.trim().lowercase()
+
+                val isFragmented = workoutName == singleExName ||
+                        workoutName.contains("imported workout") ||
+                        importedHistoryTemplateDateMillis(workout.name) != null
+
+                if (isFragmented) {
+                    db.workoutDao().deleteWorkoutFully(workout.id)
+                    deletedCount++
+                }
+            }
+        }
+        return deletedCount
+    }
+
     suspend fun exercisesFor(workoutId: Long): List<WorkoutExerciseEntity> =
         db.workoutDao().exercisesFor(workoutId).map { e ->
             val fixed = ExerciseCategories.resolveStored(e.exerciseName, e.category)

@@ -585,7 +585,7 @@ private fun categoryForGuide(guide: ExerciseInfo): ExerciseCategory =
 private fun recentSetSummary(log: SetLogEntity): String = when {
     log.weightKg > 0 && log.reps > 0 -> "${trim(log.weightKg)} kg x ${log.reps}"
     log.distanceKm > 0.0 -> "${trim(log.distanceKm)} km"
-    log.durationMin > 0.0 -> "${trim(log.durationMin)} min"
+    log.durationMin > 0.0 -> com.fitnessquest.rpg.domain.Units.formatTimeMinutes(log.durationMin)
     log.reps > 0 -> "${log.reps} reps"
     else -> "${log.xp} XP"
 }

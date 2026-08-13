@@ -70,14 +70,14 @@ abstract class AppDatabase : RoomDatabase() {
 
         private val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE character ADD COLUMN characterClass TEXT")
+                db.addColumnIfNotExists("character", "characterClass", "TEXT")
             }
         }
 
         private val MIGRATION_2_3 = object : Migration(2, 3) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE items ADD COLUMN classAffinity TEXT")
-                db.execSQL("ALTER TABLE items ADD COLUMN style TEXT NOT NULL DEFAULT ''")
+                db.addColumnIfNotExists("items", "classAffinity", "TEXT")
+                db.addColumnIfNotExists("items", "style", "TEXT NOT NULL DEFAULT ''")
             }
         }
 
@@ -125,18 +125,18 @@ abstract class AppDatabase : RoomDatabase() {
         /** Adds workout streaks, consumable supplies, and stat respec support. */
         private val MIGRATION_4_5 = object : Migration(4, 5) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE character ADD COLUMN streak INTEGER NOT NULL DEFAULT 0")
-                db.execSQL("ALTER TABLE character ADD COLUMN lastWorkoutDay INTEGER NOT NULL DEFAULT 0")
-                db.execSQL("ALTER TABLE character ADD COLUMN pendingXpBoost INTEGER NOT NULL DEFAULT 0")
-                db.execSQL("ALTER TABLE character ADD COLUMN freeStatPoints INTEGER NOT NULL DEFAULT 0")
-                db.execSQL("ALTER TABLE items ADD COLUMN quantity INTEGER NOT NULL DEFAULT 0")
+                db.addColumnIfNotExists("character", "streak", "INTEGER NOT NULL DEFAULT 0")
+                db.addColumnIfNotExists("character", "lastWorkoutDay", "INTEGER NOT NULL DEFAULT 0")
+                db.addColumnIfNotExists("character", "pendingXpBoost", "INTEGER NOT NULL DEFAULT 0")
+                db.addColumnIfNotExists("character", "freeStatPoints", "INTEGER NOT NULL DEFAULT 0")
+                db.addColumnIfNotExists("items", "quantity", "INTEGER NOT NULL DEFAULT 0")
             }
         }
 
         /** Adds per-set effort tracking (RIR/RPE). */
         private val MIGRATION_5_6 = object : Migration(5, 6) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE set_logs ADD COLUMN rir INTEGER")
+                db.addColumnIfNotExists("set_logs", "rir", "INTEGER")
             }
         }
 
@@ -179,59 +179,59 @@ abstract class AppDatabase : RoomDatabase() {
 
         private val MIGRATION_7_8 = object : Migration(7, 8) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE set_logs ADD COLUMN avgHr INTEGER")
-                db.execSQL("ALTER TABLE set_logs ADD COLUMN maxHr INTEGER")
+                db.addColumnIfNotExists("set_logs", "avgHr", "INTEGER")
+                db.addColumnIfNotExists("set_logs", "maxHr", "INTEGER")
             }
         }
 
         private val MIGRATION_8_9 = object : Migration(8, 9) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE character ADD COLUMN idleSteps INTEGER NOT NULL DEFAULT 0")
-                db.execSQL("ALTER TABLE character ADD COLUMN idleKills INTEGER NOT NULL DEFAULT 0")
-                db.execSQL("ALTER TABLE character ADD COLUMN idleGold INTEGER NOT NULL DEFAULT 0")
-                db.execSQL("ALTER TABLE character ADD COLUMN idleXp INTEGER NOT NULL DEFAULT 0")
+                db.addColumnIfNotExists("character", "idleSteps", "INTEGER NOT NULL DEFAULT 0")
+                db.addColumnIfNotExists("character", "idleKills", "INTEGER NOT NULL DEFAULT 0")
+                db.addColumnIfNotExists("character", "idleGold", "INTEGER NOT NULL DEFAULT 0")
+                db.addColumnIfNotExists("character", "idleXp", "INTEGER NOT NULL DEFAULT 0")
             }
         }
 
         private val MIGRATION_9_10 = object : Migration(9, 10) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE character ADD COLUMN skinColor INTEGER NOT NULL DEFAULT 4293108103")
-                db.execSQL("ALTER TABLE character ADD COLUMN hairColor INTEGER NOT NULL DEFAULT 4285229618")
-                db.execSQL("ALTER TABLE character ADD COLUMN underwearColor INTEGER NOT NULL DEFAULT 4283319894")
-                db.execSQL("ALTER TABLE character ADD COLUMN eyeColor INTEGER NOT NULL DEFAULT 4280951347")
-                db.execSQL("ALTER TABLE character ADD COLUMN hairStyle TEXT NOT NULL DEFAULT 'short'")
+                db.addColumnIfNotExists("character", "skinColor", "INTEGER NOT NULL DEFAULT 4293108103")
+                db.addColumnIfNotExists("character", "hairColor", "INTEGER NOT NULL DEFAULT 4285229618")
+                db.addColumnIfNotExists("character", "underwearColor", "INTEGER NOT NULL DEFAULT 4283319894")
+                db.addColumnIfNotExists("character", "eyeColor", "INTEGER NOT NULL DEFAULT 4280951347")
+                db.addColumnIfNotExists("character", "hairStyle", "TEXT NOT NULL DEFAULT 'short'")
             }
         }
 
         private val MIGRATION_10_11 = object : Migration(10, 11) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE character ADD COLUMN gender TEXT NOT NULL DEFAULT 'male'")
-                db.execSQL("ALTER TABLE character ADD COLUMN braColor INTEGER NOT NULL DEFAULT 4283319894")
+                db.addColumnIfNotExists("character", "gender", "TEXT NOT NULL DEFAULT 'male'")
+                db.addColumnIfNotExists("character", "braColor", "INTEGER NOT NULL DEFAULT 4283319894")
             }
         }
 
         /** Cardio machine intensity: speed, incline, program. */
         private val MIGRATION_11_12 = object : Migration(11, 12) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE set_logs ADD COLUMN speedKmh REAL NOT NULL DEFAULT 0")
-                db.execSQL("ALTER TABLE set_logs ADD COLUMN inclinePercent REAL NOT NULL DEFAULT 0")
-                db.execSQL("ALTER TABLE set_logs ADD COLUMN cardioProgram TEXT NOT NULL DEFAULT ''")
+                db.addColumnIfNotExists("set_logs", "speedKmh", "REAL NOT NULL DEFAULT 0")
+                db.addColumnIfNotExists("set_logs", "inclinePercent", "REAL NOT NULL DEFAULT 0")
+                db.addColumnIfNotExists("set_logs", "cardioProgram", "TEXT NOT NULL DEFAULT ''")
             }
         }
 
         /** Fantasy race for avatar cosmetics. */
         private val MIGRATION_12_13 = object : Migration(12, 13) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE character ADD COLUMN race TEXT NOT NULL DEFAULT 'HUMAN'")
+                db.addColumnIfNotExists("character", "race", "TEXT NOT NULL DEFAULT 'HUMAN'")
             }
         }
 
         /** Druid shapeshifting, persistent HP, and wellness tracking. */
         private val MIGRATION_13_14 = object : Migration(13, 14) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE character ADD COLUMN currentHp INTEGER")
-                db.execSQL("ALTER TABLE character ADD COLUMN druidForm TEXT NOT NULL DEFAULT 'HUMAN'")
-                db.execSQL("ALTER TABLE character ADD COLUMN lastWellnessDay INTEGER NOT NULL DEFAULT 0")
+                db.addColumnIfNotExists("character", "currentHp", "INTEGER")
+                db.addColumnIfNotExists("character", "druidForm", "TEXT NOT NULL DEFAULT 'HUMAN'")
+                db.addColumnIfNotExists("character", "lastWellnessDay", "INTEGER NOT NULL DEFAULT 0")
             }
         }
 
@@ -248,39 +248,39 @@ abstract class AppDatabase : RoomDatabase() {
         /** Sync party and guild IDs to cloud. */
         private val MIGRATION_15_16 = object : Migration(15, 16) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE character ADD COLUMN partyId TEXT")
-                db.execSQL("ALTER TABLE character ADD COLUMN guildId TEXT")
+                db.addColumnIfNotExists("character", "partyId", "TEXT")
+                db.addColumnIfNotExists("character", "guildId", "TEXT")
             }
         }
 
         /** Migrate progress and profile fields from SharedPreferences to DB. */
         private val MIGRATION_16_17 = object : Migration(16, 17) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE character ADD COLUMN bodyWeightKg REAL")
-                db.execSQL("ALTER TABLE character ADD COLUMN heightM REAL")
-                db.execSQL("ALTER TABLE character ADD COLUMN dateOfBirthEpoch INTEGER")
-                db.execSQL("ALTER TABLE character ADD COLUMN trainingEquipment TEXT NOT NULL DEFAULT ''")
-                db.execSQL("ALTER TABLE character ADD COLUMN trainingDaysPerWeek INTEGER NOT NULL DEFAULT 3")
-                db.execSQL("ALTER TABLE character ADD COLUMN trainingSplit TEXT NOT NULL DEFAULT 'FULL_BODY'")
-                db.execSQL("ALTER TABLE character ADD COLUMN trainingLevel TEXT NOT NULL DEFAULT 'BEGINNER'")
-                db.execSQL("ALTER TABLE character ADD COLUMN fitnessGoal TEXT NOT NULL DEFAULT 'BUILD_MUSCLE'")
-                db.execSQL("ALTER TABLE character ADD COLUMN muscleFocus TEXT NOT NULL DEFAULT 'BALANCED'")
-                db.execSQL("ALTER TABLE character ADD COLUMN cardioPlacement TEXT NOT NULL DEFAULT 'NONE'")
-                db.execSQL("ALTER TABLE character ADD COLUMN workoutDuration TEXT NOT NULL DEFAULT 'STANDARD'")
-                db.execSQL("ALTER TABLE character ADD COLUMN effortMethod TEXT NOT NULL DEFAULT 'OFF'")
-                db.execSQL("ALTER TABLE character ADD COLUMN plateBarKg REAL")
-                db.execSQL("ALTER TABLE character ADD COLUMN claimedTrophies TEXT NOT NULL DEFAULT ''")
-                db.execSQL("ALTER TABLE character ADD COLUMN bountyDay INTEGER NOT NULL DEFAULT -1")
-                db.execSQL("ALTER TABLE character ADD COLUMN bountyBattlesStart INTEGER NOT NULL DEFAULT 0")
-                db.execSQL("ALTER TABLE character ADD COLUMN waterGlasses INTEGER NOT NULL DEFAULT 0")
-                db.execSQL("ALTER TABLE character ADD COLUMN stretchDone INTEGER NOT NULL DEFAULT 0")
-                db.execSQL("ALTER TABLE character ADD COLUMN claimedBounties TEXT NOT NULL DEFAULT ''")
-                db.execSQL("ALTER TABLE character ADD COLUMN campaignWeek INTEGER NOT NULL DEFAULT -1")
-                db.execSQL("ALTER TABLE character ADD COLUMN campaignBattlesStart INTEGER NOT NULL DEFAULT 0")
-                db.execSQL("ALTER TABLE character ADD COLUMN claimedCampaigns TEXT NOT NULL DEFAULT ''")
-                db.execSQL("ALTER TABLE character ADD COLUMN encounterClaimedThisTravel INTEGER NOT NULL DEFAULT 0")
-                db.execSQL("ALTER TABLE character ADD COLUMN pendingEncounterStrBoost INTEGER NOT NULL DEFAULT 0")
-                db.execSQL("ALTER TABLE character ADD COLUMN firstWorkoutDone INTEGER NOT NULL DEFAULT 0")
+                db.addColumnIfNotExists("character", "bodyWeightKg", "REAL")
+                db.addColumnIfNotExists("character", "heightM", "REAL")
+                db.addColumnIfNotExists("character", "dateOfBirthEpoch", "INTEGER")
+                db.addColumnIfNotExists("character", "trainingEquipment", "TEXT NOT NULL DEFAULT ''")
+                db.addColumnIfNotExists("character", "trainingDaysPerWeek", "INTEGER NOT NULL DEFAULT 3")
+                db.addColumnIfNotExists("character", "trainingSplit", "TEXT NOT NULL DEFAULT 'FULL_BODY'")
+                db.addColumnIfNotExists("character", "trainingLevel", "TEXT NOT NULL DEFAULT 'BEGINNER'")
+                db.addColumnIfNotExists("character", "fitnessGoal", "TEXT NOT NULL DEFAULT 'BUILD_MUSCLE'")
+                db.addColumnIfNotExists("character", "muscleFocus", "TEXT NOT NULL DEFAULT 'BALANCED'")
+                db.addColumnIfNotExists("character", "cardioPlacement", "TEXT NOT NULL DEFAULT 'NONE'")
+                db.addColumnIfNotExists("character", "workoutDuration", "TEXT NOT NULL DEFAULT 'STANDARD'")
+                db.addColumnIfNotExists("character", "effortMethod", "TEXT NOT NULL DEFAULT 'OFF'")
+                db.addColumnIfNotExists("character", "plateBarKg", "REAL")
+                db.addColumnIfNotExists("character", "claimedTrophies", "TEXT NOT NULL DEFAULT ''")
+                db.addColumnIfNotExists("character", "bountyDay", "INTEGER NOT NULL DEFAULT -1")
+                db.addColumnIfNotExists("character", "bountyBattlesStart", "INTEGER NOT NULL DEFAULT 0")
+                db.addColumnIfNotExists("character", "waterGlasses", "INTEGER NOT NULL DEFAULT 0")
+                db.addColumnIfNotExists("character", "stretchDone", "INTEGER NOT NULL DEFAULT 0")
+                db.addColumnIfNotExists("character", "claimedBounties", "TEXT NOT NULL DEFAULT ''")
+                db.addColumnIfNotExists("character", "campaignWeek", "INTEGER NOT NULL DEFAULT -1")
+                db.addColumnIfNotExists("character", "campaignBattlesStart", "INTEGER NOT NULL DEFAULT 0")
+                db.addColumnIfNotExists("character", "claimedCampaigns", "TEXT NOT NULL DEFAULT ''")
+                db.addColumnIfNotExists("character", "encounterClaimedThisTravel", "INTEGER NOT NULL DEFAULT 0")
+                db.addColumnIfNotExists("character", "pendingEncounterStrBoost", "INTEGER NOT NULL DEFAULT 0")
+                db.addColumnIfNotExists("character", "firstWorkoutDone", "INTEGER NOT NULL DEFAULT 0")
             }
         }
 
@@ -325,10 +325,10 @@ abstract class AppDatabase : RoomDatabase() {
         /** Progression foundation: biome boss state and forge-ready gear metadata. */
         private val MIGRATION_18_19 = object : Migration(18, 19) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE gear_instances ADD COLUMN upgradeLevel INTEGER NOT NULL DEFAULT 0")
-                db.execSQL("ALTER TABLE gear_instances ADD COLUMN rarity TEXT NOT NULL DEFAULT 'COMMON'")
-                db.execSQL("ALTER TABLE gear_instances ADD COLUMN traitIds TEXT NOT NULL DEFAULT ''")
-                db.execSQL("ALTER TABLE gear_instances ADD COLUMN originBiome TEXT")
+                db.addColumnIfNotExists("gear_instances", "upgradeLevel", "INTEGER NOT NULL DEFAULT 0")
+                db.addColumnIfNotExists("gear_instances", "rarity", "TEXT NOT NULL DEFAULT 'COMMON'")
+                db.addColumnIfNotExists("gear_instances", "traitIds", "TEXT NOT NULL DEFAULT ''")
+                db.addColumnIfNotExists("gear_instances", "originBiome", "TEXT")
                 db.execSQL(
                     """CREATE TABLE IF NOT EXISTS biome_progress (
                         biomeName TEXT NOT NULL PRIMARY KEY,
@@ -352,7 +352,7 @@ abstract class AppDatabase : RoomDatabase() {
         /** Pending idle loot is claimed through reward reveal instead of silently applied. */
         private val MIGRATION_19_20 = object : Migration(19, 20) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE character ADD COLUMN idlePendingLoot TEXT NOT NULL DEFAULT ''")
+                db.addColumnIfNotExists("character", "idlePendingLoot", "TEXT NOT NULL DEFAULT ''")
             }
         }
 
@@ -373,16 +373,16 @@ abstract class AppDatabase : RoomDatabase() {
 
         private val MIGRATION_21_22 = object : Migration(21, 22) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE workout_exercises ADD COLUMN targetWeightKg REAL")
-                db.execSQL("ALTER TABLE set_logs ADD COLUMN setType TEXT NOT NULL DEFAULT 'NORMAL'")
+                db.addColumnIfNotExists("workout_exercises", "targetWeightKg", "REAL")
+                db.addColumnIfNotExists("set_logs", "setType", "TEXT NOT NULL DEFAULT 'NORMAL'")
             }
         }
 
         private val MIGRATION_22_23 = object : Migration(22, 23) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 // "Repair" migration in case 21->22 was botched or skipped
-                runCatching { db.execSQL("ALTER TABLE workout_exercises ADD COLUMN targetWeightKg REAL") }
-                runCatching { db.execSQL("ALTER TABLE set_logs ADD COLUMN setType TEXT NOT NULL DEFAULT 'NORMAL'") }
+                db.addColumnIfNotExists("workout_exercises", "targetWeightKg", "REAL")
+                db.addColumnIfNotExists("set_logs", "setType", "TEXT NOT NULL DEFAULT 'NORMAL'")
             }
         }
 
@@ -392,24 +392,27 @@ abstract class AppDatabase : RoomDatabase() {
                 // This handles cases where Android Auto-Restore brings back a database
                 // that Room thinks is V23 but is missing V22 columns.
                 
-                if (!columnExists(db, "workout_exercises", "targetWeightKg")) {
-                    db.execSQL("ALTER TABLE workout_exercises ADD COLUMN targetWeightKg REAL")
-                }
-                if (!columnExists(db, "set_logs", "setType")) {
-                    db.execSQL("ALTER TABLE set_logs ADD COLUMN setType TEXT NOT NULL DEFAULT 'NORMAL'")
-                }
+                db.addColumnIfNotExists("workout_exercises", "targetWeightKg", "REAL")
+                db.addColumnIfNotExists("set_logs", "setType", "TEXT NOT NULL DEFAULT 'NORMAL'")
             }
+        }
 
-            private fun columnExists(db: SupportSQLiteDatabase, table: String, column: String): Boolean {
-                val cursor = db.query("PRAGMA table_info($table)")
-                cursor.use {
-                    val nameIdx = it.getColumnIndex("name")
-                    while (it.moveToNext()) {
-                        if (it.getString(nameIdx) == column) return true
-                    }
-                }
-                return false
+        private fun SupportSQLiteDatabase.addColumnIfNotExists(table: String, column: String, definition: String) {
+            if (!columnExists(this, table, column)) {
+                this.execSQL("ALTER TABLE $table ADD COLUMN $column $definition")
             }
+        }
+
+        private fun columnExists(db: SupportSQLiteDatabase, table: String, column: String): Boolean {
+            val cursor = db.query("PRAGMA table_info($table)")
+            cursor.use {
+                val nameIdx = it.getColumnIndex("name")
+                if (nameIdx == -1) return false
+                while (it.moveToNext()) {
+                    if (it.getString(nameIdx) == column) return true
+                }
+            }
+            return false
         }
 
         fun get(context: Context): AppDatabase =

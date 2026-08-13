@@ -22,6 +22,7 @@ keystore/
 
 # Local IDE/agent state
 .agents/
+.artifacts/
 .capture/
 .kotlin/
 .tmp-fitscape/
@@ -49,6 +50,7 @@ frames/
 /*.jpeg
 /*.mp4
 /*.py
+/*_dump.txt
 
 # Generated Wear binaries copied into product flavors
 app/src/*/assets/wear/*.apk

@@ -529,8 +529,8 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
                 exercises = s.exercises.toMutableList().also {
                     it[safeIndex] = ex.copy(loggedSets = ex.loggedSets + withXp)
                 },
-                // Logging a set kicks off the rest timer automatically.
-                restEndsAt = now + s.restDurationSec * 1000L,
+                // Logging a set kicks off the rest timer automatically (if restDurationSec > 0).
+                restEndsAt = if (s.restDurationSec > 0) now + s.restDurationSec * 1000L else null,
                 heatStreak = heatStreak,
                 lastLogAt = now,
                 currentExerciseIndex = safeIndex
@@ -757,13 +757,13 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
                     ExerciseCategory.STRENGTH -> "${set.weightKg}kg x ${set.reps}$effort"
                     ExerciseCategory.BODYWEIGHT -> "${set.reps} reps$effort"
                     ExerciseCategory.CARDIO -> buildString {
-                        append("${set.durationMin} min")
+                        append(Units.formatTimeMinutes(set.durationMin))
                         if (set.distanceKm > 0) append(" / ${set.distanceKm}km")
                         if (set.speedKmh > 0) append(" @ ${set.speedKmh} km/h")
                         if (set.inclinePercent > 0) append(" / ${set.inclinePercent}% incline")
                         if (set.cardioProgram.isNotBlank()) append(" [${set.cardioProgram}]")
                     }
-                    else -> "${set.durationMin} min"
+                    else -> Units.formatTimeMinutes(set.durationMin)
                 }
             }
             "- ${ex.name} (target ${ex.targetSets}x${ex.targetReps}): $sets"
@@ -911,8 +911,10 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
     }
 
     fun extendRest(seconds: Int) {
+        val now = System.currentTimeMillis()
         _uiState.update { s ->
-            s.restEndsAt?.let { s.copy(restEndsAt = it + seconds * 1000L) } ?: s
+            val baseTime = s.restEndsAt?.takeIf { it > now } ?: now
+            s.copy(restEndsAt = baseTime + seconds * 1000L)
         }
         publishWearState()
     }
@@ -1295,7 +1297,8 @@ fun ActiveSessionScreen(
             RestTimerBar(
                 endsAt = endsAt,
                 onExtend = { viewModel.extendRest(15) },
-                onSkip = viewModel::skipRest
+                onSkip = viewModel::skipRest,
+                onFinish = viewModel::skipRest
             )
         }
     }
@@ -1416,15 +1419,19 @@ private fun MetricItem(label: String, value: String) {
 private fun RestTimerBar(
     endsAt: Long,
     onExtend: () -> Unit,
-    onSkip: () -> Unit
+    onSkip: () -> Unit,
+    onFinish: () -> Unit
 ) {
-    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    var now by remember(endsAt) { mutableLongStateOf(System.currentTimeMillis()) }
+
     LaunchedEffect(endsAt) {
         while (System.currentTimeMillis() < endsAt) {
             now = System.currentTimeMillis()
             delay(200.milliseconds)
         }
         now = System.currentTimeMillis()
+        AudioEffects.playRestDone()
+        onFinish()
     }
 
     val remainingMs = (endsAt - now).coerceAtLeast(0L)
@@ -1444,13 +1451,16 @@ private fun RestTimerBar(
             Icon(Icons.Filled.Timer, contentDescription = null)
             
             Text(
-                text = "Resting: %d:%02d".format(remainingSec / 60, remainingSec % 60),
+                text = if (remainingSec > 0) "Resting: %d:%02d".format(remainingSec / 60, remainingSec % 60) else "Rest Complete!",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.weight(1f)
             )
 
-            TextButton(onClick = onExtend) {
+            TextButton(
+                onClick = onExtend,
+                enabled = true
+            ) {
                 Text("+15s", fontWeight = FontWeight.Bold)
             }
             
@@ -1736,18 +1746,24 @@ private fun ExerciseLogCard(
                 }
                 ExerciseTrackingType.CARDIO_MACHINE,
                 ExerciseTrackingType.DISTANCE_TIME -> {
-                    Row(Modifier.weight(1.5f), verticalAlignment = Alignment.CenterVertically) {
-                        NumberField(durationMin, { durationMin = it }, "min", Modifier.weight(1f))
-                        Text(":", modifier = Modifier.padding(horizontal = 4.dp))
-                        NumberField(durationSec, { durationSec = it }, "sec", Modifier.weight(1f))
-                        IconButton(onClick = { 
+                    NumberField(durationMin, { durationMin = it }, "min", Modifier.weight(1f))
+                    Text(":", style = MaterialTheme.typography.titleMedium, color = Gold, modifier = Modifier.padding(horizontal = 1.dp))
+                    NumberField(durationSec, { durationSec = it }, "sec", Modifier.weight(1f))
+                    IconButton(
+                        onClick = { 
                             timerRunning = !timerRunning
                             if (timerRunning) {
                                 timerSeconds = (durationMin.toIntOrNull() ?: 0) * 60 + (durationSec.toIntOrNull() ?: 0)
                             }
-                        }) {
-                            Icon(if (timerRunning) Icons.Default.Pause else Icons.Default.PlayArrow, null, tint = Gold)
-                        }
+                        },
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            if (timerRunning) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            contentDescription = "Stopwatch",
+                            tint = Gold,
+                            modifier = Modifier.size(20.dp)
+                        )
                     }
                     NumberField(distance, { distance = it }, Units.distLabel(imperial), Modifier.weight(1f))
                 }
@@ -1772,18 +1788,24 @@ private fun ExerciseLogCard(
                     NumberField(reps, { reps = it }, "reps", Modifier.weight(1f))
                 }
                 ExerciseTrackingType.TIME_ONLY -> {
-                    Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                        NumberField(durationMin, { durationMin = it }, "min", Modifier.weight(1f))
-                        Text(":", modifier = Modifier.padding(horizontal = 4.dp))
-                        NumberField(durationSec, { durationSec = it }, "sec", Modifier.weight(1f))
-                        IconButton(onClick = { 
+                    NumberField(durationMin, { durationMin = it }, "min", Modifier.weight(1f))
+                    Text(":", style = MaterialTheme.typography.titleMedium, color = Gold, modifier = Modifier.padding(horizontal = 1.dp))
+                    NumberField(durationSec, { durationSec = it }, "sec", Modifier.weight(1f))
+                    IconButton(
+                        onClick = { 
                             timerRunning = !timerRunning
                             if (timerRunning) {
                                 timerSeconds = (durationMin.toIntOrNull() ?: 0) * 60 + (durationSec.toIntOrNull() ?: 0)
                             }
-                        }) {
-                            Icon(if (timerRunning) Icons.Default.Pause else Icons.Default.PlayArrow, null, tint = Gold)
-                        }
+                        },
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            if (timerRunning) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            contentDescription = "Stopwatch",
+                            tint = Gold,
+                            modifier = Modifier.size(20.dp)
+                        )
                     }
                 }
             }
@@ -1929,10 +1951,18 @@ private fun NumberField(
     TextField(
         value = value,
         onValueChange = onChange,
-        label = { Text(label, fontSize = 10.sp, lineHeight = 12.sp) },
+        label = {
+            Text(
+                text = label,
+                fontSize = 9.sp,
+                maxLines = 1,
+                softWrap = false,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        },
         singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-        modifier = modifier.height(50.dp),
+        modifier = modifier.height(48.dp),
         textStyle = MaterialTheme.typography.bodyMedium,
         colors = TextFieldDefaults.colors(
             unfocusedContainerColor = Color.Transparent,
@@ -1946,7 +1976,7 @@ private fun setSummary(set: SetLogEntity, imperial: Boolean): String {
     val body = when (set.category) {
         ExerciseCategory.STRENGTH -> "${Units.formatWeight(set.weightKg, imperial)} \u00D7 ${set.reps}"
         ExerciseCategory.CARDIO -> buildString {
-            if (set.durationMin > 0) append("${trim(set.durationMin)} min")
+            if (set.durationMin > 0) append(Units.formatTimeMinutes(set.durationMin))
             if (set.distanceKm > 0) {
                 if (isNotEmpty()) append(" \u00B7 ")
                 append(Units.formatDistance(set.distanceKm, imperial))
@@ -1956,8 +1986,8 @@ private fun setSummary(set: SetLogEntity, imperial: Boolean): String {
             if (set.cardioProgram.isNotBlank()) append(" \u00B7 ${set.cardioProgram}")
             if (isBlank()) append("cardio")
         }
-        ExerciseCategory.BODYWEIGHT -> if (set.reps > 0) "${set.reps} reps" else "${trim(set.durationMin)} min"
-        ExerciseCategory.FLEXIBILITY -> "${trim(set.durationMin)} min"
+        ExerciseCategory.BODYWEIGHT -> if (set.reps > 0) "${set.reps} reps" else Units.formatTimeMinutes(set.durationMin)
+        ExerciseCategory.FLEXIBILITY -> Units.formatTimeMinutes(set.durationMin)
     }
     return typePrefix + body
 }

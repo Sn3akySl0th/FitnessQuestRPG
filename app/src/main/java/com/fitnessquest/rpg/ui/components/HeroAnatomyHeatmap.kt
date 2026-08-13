@@ -51,14 +51,13 @@ val FrontMuscles = listOf(
 )
 
 val BackMuscles = listOf(
-    MuscleRegion("LATS", "Lats / Back", AnatomyView.BACK, "🏹"),
     MuscleRegion("TRAPS", "Traps", AnatomyView.BACK, "🧛"),
+    MuscleRegion("LATS", "Lats / Back", AnatomyView.BACK, "🏹"),
+    MuscleRegion("LOWER_BACK", "Lower Back", AnatomyView.BACK, "🛡️"),
     MuscleRegion("TRICEPS", "Triceps", AnatomyView.BACK, "🗡️"),
-
     MuscleRegion("GLUTES", "Glutes", AnatomyView.BACK, "🔥"),
     MuscleRegion("HAMSTRINGS", "Hamstrings", AnatomyView.BACK, "🦵"),
-    MuscleRegion("CALVES", "Calves", AnatomyView.BACK, "⚡"),
-    MuscleRegion("LOWER_BACK", "Lower Back", AnatomyView.BACK, "🛡️")
+    MuscleRegion("CALVES", "Calves", AnatomyView.BACK, "⚡")
 )
 
 
@@ -167,17 +166,25 @@ fun HeroAnatomyHeatmap(
 
             // Muscle Region Selection Grid (Floating style below the box)
             Column(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp)
+                    .heightIn(min = 180.dp), // Fixed min height to prevent layout jump
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                currentMuscles.chunked(3).forEach { rowMuscles ->
+                // Use a balanced 2-column grid for both views
+                currentMuscles.chunked(2).forEach { rowMuscles ->
                     Row(
+                        modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         rowMuscles.forEach { region ->
-                            val isSore = soreMuscles.contains(region.id) || soreMuscles.contains(region.displayName.uppercase())
+                            val normalizedSore = soreMuscles.map { it.uppercase().replace("_", " ") }.toSet()
+                            val isSore = region.id.uppercase().replace("_", " ") in normalizedSore || 
+                                         region.displayName.uppercase() in normalizedSore
+                            
                             val freshness = freshnessMap[region.displayName] ?: freshnessMap[region.id] ?: 95
                             val chipColor = when {
                                 isSore -> Color(0xFFE53935)
@@ -198,38 +205,38 @@ fun HeroAnatomyHeatmap(
                                     }
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp),
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.Center
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
-                                    Text(region.icon, fontSize = 13.sp)
-                                    Spacer(Modifier.width(4.dp))
+                                    Text(region.icon, fontSize = 16.sp)
                                     Text(
-                                        region.displayName.substringBefore(" /"),
+                                        region.displayName,
                                         style = MaterialTheme.typography.labelSmall,
                                         fontWeight = FontWeight.Bold,
                                         color = Parchment,
                                         maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f)
                                     )
-                                    Spacer(Modifier.width(2.dp))
                                     if (isSore) {
-                                        Text("🔥", fontSize = 10.sp)
+                                        Text("🔥", fontSize = 11.sp)
                                     } else {
-                                        Text("$freshness%", style = MaterialTheme.typography.labelSmall, fontSize = 8.sp, color = chipColor)
+                                        Text("$freshness%", style = MaterialTheme.typography.labelSmall, fontSize = 9.sp, color = chipColor)
                                     }
                                 }
                             }
                         }
-                        if (rowMuscles.size < 3) {
-                            Spacer(Modifier.weight((3 - rowMuscles.size).toFloat()))
+                        if (rowMuscles.size < 2) {
+                            Spacer(Modifier.weight(1f))
                         }
                     }
                 }
             }
 
             // Reserved space for Tooltip to prevent shifting
-            Box(Modifier.fillMaxWidth().heightIn(min = 60.dp)) {
+            Box(Modifier.fillMaxWidth().heightIn(min = 64.dp)) {
+
                 selectedMuscle?.let { region ->
                     val isSore = soreMuscles.contains(region.id) || soreMuscles.contains(region.displayName.uppercase())
                     val freshness = freshnessMap[region.displayName] ?: freshnessMap[region.id] ?: 95

@@ -704,21 +704,21 @@ private fun DrawScope.drawArmsLayer(f: AvatarFrame, pose: AvatarPose) {
 
     fun DrawScope.drawBareArmSegments(baseX: Float, isLeft: Boolean) {
         // Forearm: bottom half
-        val forearmColor = f.skinColor("forearms", "arms")
+        val forearmColor = f.skinColor("forearms")
         drawRoundRect(forearmColor, topLeft = f.p(baseX, 60f), size = f.s(11f, 16f), cornerRadius = CornerRadius(4f * f.u))
         
         // Triceps: outer half of upper arm
-        val tricepColor = f.skinColor("triceps", "arms")
+        val tricepColor = f.skinColor("triceps")
         val tricepX = if (isLeft) baseX else baseX + 5.5f
         drawRect(tricepColor, topLeft = f.p(tricepX, 52f), size = f.s(5.5f, 12f))
         
         // Biceps: inner half of upper arm
-        val bicepColor = f.skinColor("biceps", "arms")
+        val bicepColor = f.skinColor("biceps")
         val bicepX = if (isLeft) baseX + 5.5f else baseX
         drawRect(bicepColor, topLeft = f.p(bicepX, 52f), size = f.s(5.5f, 12f))
 
         // Shoulders (Deltoid): top cap, slightly wider
-        val shoulderColor = f.skinColor("shoulders", "arms", "delts")
+        val shoulderColor = f.skinColor("shoulders", "delts")
         drawRoundRect(shoulderColor, topLeft = f.p(baseX - 0.5f, 45.5f), size = f.s(12f, 9f), cornerRadius = CornerRadius(4.5f * f.u))
     }
 
@@ -782,19 +782,19 @@ private fun DrawScope.drawLowerBodyLayer(f: AvatarFrame, pose: AvatarPose) {
     
     fun DrawScope.drawBareLegSegments(baseX: Float, isLeft: Boolean) {
         // Glutes: top back.
-        val glutesColor = f.skinColor("glutes", "legs")
+        val glutesColor = f.skinColor("glutes")
         drawRoundRect(glutesColor, topLeft = f.p(baseX - 0.5f, 73f), size = f.s(11f, 8f), cornerRadius = CornerRadius(3f * f.u))
         
         // Quads (Front/Inner Thigh) and Hamstrings (Back/Outer Thigh)
-        val quadsColor = f.skinColor("quads", "legs")
-        val hamstringsColor = f.skinColor("hamstrings", "legs")
+        val quadsColor = f.skinColor("quads")
+        val hamstringsColor = f.skinColor("hamstrings")
         val innerX = if (isLeft) baseX + 5f else baseX
         val outerX = if (isLeft) baseX else baseX + 5f
         drawRect(hamstringsColor, topLeft = f.p(outerX, 74f), size = f.s(5f, 15f))
         drawRect(quadsColor, topLeft = f.p(innerX, 74f), size = f.s(5f, 15f))
         
         // Calves (lower leg)
-        val calvesColor = f.skinColor("calves", "legs")
+        val calvesColor = f.skinColor("calves")
         drawRoundRect(calvesColor, topLeft = f.p(baseX, 88f), size = f.s(10f, 15f), cornerRadius = CornerRadius(3f * f.u))
     }
 
@@ -949,26 +949,26 @@ private fun DrawScope.drawBareTorsoSegments(f: AvatarFrame) {
     if (f.facingBack) {
         // Lower back (bottom band)
         drawRoundRect(
-            f.skinColor("lower back", "back"),
+            f.skinColor("lower back"),
             topLeft = f.p(34f, 64f),
             size = f.s(32f, 7f), // Reduced height from 12f to 7f to end at y=71
             cornerRadius = CornerRadius(4f * f.u)
         )
         // Lats / middle back (side wedges + center)
-        val latColor = f.skinColor("lats", "middle back", "back")
+        val latColor = f.skinColor("lats", "middle back")
         drawRect(latColor, topLeft = f.p(34f, 50f), size = f.s(10f, 14f)) // Height reduced to 14f
         drawRect(latColor, topLeft = f.p(56f, 50f), size = f.s(10f, 14f)) // Height reduced to 14f
         drawRect(latColor, topLeft = f.p(44f, 52f), size = f.s(12f, 12f)) // Height reduced to 12f
         // Traps (upper center)
         drawRoundRect(
-            f.skinColor("traps", "back"),
+            f.skinColor("traps"),
             topLeft = f.p(38f, 44f),
             size = f.s(24f, 10f),
             cornerRadius = CornerRadius(5f * f.u)
         )
         // Shoulder-blade corners so the silhouette stays full-width at top
-        drawRect(f.skinColor("traps", "lats", "back"), topLeft = f.p(34f, 44f), size = f.s(6f, 8f))
-        drawRect(f.skinColor("traps", "lats", "back"), topLeft = f.p(60f, 44f), size = f.s(6f, 8f))
+        drawRect(f.skinColor("traps", "lats"), topLeft = f.p(34f, 44f), size = f.s(6f, 8f))
+        drawRect(f.skinColor("traps", "lats"), topLeft = f.p(60f, 44f), size = f.s(6f, 8f))
     } else {
         // Full torso base (skin) so zones never leave holes; highlights paint on top.
         drawRoundRect(

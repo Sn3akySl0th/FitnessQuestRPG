@@ -19,6 +19,7 @@ The next major focus is boss-gated biome progression, followed by Movement Maste
 
 ### Fixed Recently
 
+- Hevy CSV Import Fix: Fixed CSV column index disambiguation (so workout_name and exercise_name columns are detected separately) and session grouping so all exercises (e.g. Bench Press, Bent Over Row, Shoulder Press, Bicep Curl) from the same Hevy workout are correctly grouped into a single routine template & history session.
 - Responsive Landscape Mode: converts bottom dock to a left side **NavigationRail** and main Hero Screen into a **2-Column Split View** (Left: Avatar & Currency; Right: Stats, Gear, and Saga tabs with independent scrolling).
 - Dynamic Username Auto-Scaling: scales username font size and line height so long names (e.g. `Sn3akySloth`) render completely on-screen without `...` truncation.
 - Resumable Local Model Downloader & Wake Locks: HTTP Range download resuming and screen wake lock (`FLAG_KEEP_SCREEN_ON`) prevent screen dimming from aborting model downloads.

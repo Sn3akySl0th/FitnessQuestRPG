@@ -1597,5 +1597,20 @@ private fun HevySyncSection(
         ) {
             Text(if (isRepairing) "Repairing..." else "Repair Hevy history import")
         }
+
+        OutlinedButton(
+            onClick = {
+                scope.launch {
+                    isRepairing = true
+                    val deleted = repository.cleanUpFragmentedSingleExerciseTemplates()
+                    isRepairing = false
+                    syncMessage = "Cleaned up $deleted fragmented single-exercise routine templates from Training Grounds!"
+                }
+            },
+            enabled = !isRepairing && !isSyncing,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(if (isRepairing) "Cleaning..." else "🧹 Clean Up Fragmented CSV Routines")
+        }
     }
 }

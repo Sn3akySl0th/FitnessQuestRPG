@@ -63,6 +63,7 @@ import androidx.compose.ui.window.DialogProperties
 import com.fitnessquest.rpg.data.importexport.ImportedWorkout
 import com.fitnessquest.rpg.data.importexport.ImportedWorkoutKind
 import com.fitnessquest.rpg.data.importexport.WorkoutImportService
+import com.fitnessquest.rpg.ui.appContainer
 import com.fitnessquest.rpg.ui.theme.Gold
 import com.fitnessquest.rpg.ui.theme.NightBg
 import kotlinx.coroutines.launch
@@ -182,6 +183,19 @@ fun WorkoutImportDialog(
                             Icon(Icons.Filled.FolderZip, contentDescription = null, tint = NightBg)
                             Spacer(Modifier.width(8.dp))
                             Text("Choose CSV File", color = NightBg, fontWeight = FontWeight.Bold)
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        OutlinedButton(
+                            onClick = {
+                                scope.launch {
+                                    val container = (context.applicationContext as com.fitnessquest.rpg.FitQuestApp).container
+                                    val deleted = container.repository.cleanUpFragmentedSingleExerciseTemplates()
+                                    errorMessage = "Cleaned up $deleted fragmented CSV routine templates!"
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("🧹 Clean Up Fragmented CSV Routines", fontSize = 12.sp)
                         }
                     }
                 } else {

@@ -1,3 +1,4 @@
+- Hevy CSV Import Fix: Disambiguated CSV column detection and session grouping so all exercises (e.g. Bench Press, Bent Over Row, Shoulder Press, Bicep Curl) from the same Hevy workout are correctly grouped into a single routine template & history session.
 - Smart Workout Recommendation Engine: Split sequence intelligence (Upper -> Lower -> Push -> Pull -> Legs), 48-hour muscle recovery decay math, and "Today's Recommended Quest" hero card on Training Grounds.
 - Interactive Hero Muscle Anatomy Heatmap: Front & Back body views with real-time green/yellow/red recovery overlays, status tooltips, and direct tap-to-flag muscle soreness.
 - Rest Day Active Recovery Quests & "Well Rested" Buff: Optional light 10-minute mobility/walking/bodyweight side quests on rest days that award Gold + a temporary +15% XP & Gold boost on your next workout!

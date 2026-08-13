@@ -484,31 +484,81 @@ object WorkoutImportService {
             val headerLine = lines[0]
             val headers = parseCsvRow(headerLine).map { it.trim().lowercase().replace("_", " ") }
 
-            // Column Index Detection
-            val titleIdx = headers.indexOfFirst { it.contains("workout name") || it.contains("title") || it.contains("routine") }.coerceAtLeast(0)
-            val exerciseIdx = headers.indexOfFirst { it.contains("exercise name") || it.contains("exercise title") || it.contains("exercise") || it.contains("name") }.coerceAtLeast(1.coerceAtMost(headers.size - 1))
+            // Precise Disambiguated Column Index Detection
+            val titleIdx = headers.indexOfFirst { h ->
+                (h.contains("workout name") || h.contains("workout title") || h.contains("routine name") || h.contains("routine title") || h.contains("routine") || h == "title" || h == "workout") &&
+                !h.contains("exercise")
+            }.let { idx ->
+                if (idx >= 0) idx
+                else headers.indexOfFirst { h -> (h == "name" || h.contains("title")) && !h.contains("exercise") }.coerceAtLeast(0)
+            }
+
+            val exerciseIdx = headers.indexOfFirst { h ->
+                (h.contains("exercise name") || h.contains("exercise title") || h.contains("exercise_name") || h.contains("exercise_title") || h.contains("movement")) &&
+                !h.contains("workout") && !h.contains("routine")
+            }.let { idx ->
+                if (idx >= 0) idx
+                else headers.indexOfFirst { h ->
+                    (h.contains("exercise") || h.contains("name")) && !h.contains("workout") && !h.contains("routine")
+                }.let { idx2 ->
+                    if (idx2 >= 0 && idx2 != titleIdx) idx2
+                    else if (titleIdx == 0) 1.coerceAtMost(headers.size - 1) else 0
+                }
+            }
+
+            val sessionIdIdx = headers.indexOfFirst { h ->
+                (h.contains("workout id") || h.contains("session id") || h.contains("workout_id") || h.contains("session_id")) && !h.contains("exercise")
+            }
             val weightIdx = headers.indexOfFirst { it.contains("weight") || it.contains("kg") || it.contains("lbs") }
             val repsIdx = headers.indexOfFirst { it.contains("reps") || it.contains("rep") }
             val notesIdx = headers.indexOfFirst { it.contains("notes") || it.contains("comment") }
-            val startIdx = headers.indexOfFirst { it.contains("start time") || it == "start" || it.contains("date") }
-            val endIdx = headers.indexOfFirst { it.contains("end time") || it == "end" }
+            val startIdx = headers.indexOfFirst { it.contains("start time") || it.contains("started") || it == "start" || it.contains("date") }
+            val endIdx = headers.indexOfFirst { it.contains("end time") || it.contains("ended") || it == "end" }
             val durationIdx = headers.indexOfFirst { it.contains("duration") || it.contains("seconds") || it.contains("time") }
             val distanceIdx = headers.indexOfFirst { it.contains("distance") || it.contains("km") || it.contains("mile") }
-            val csvLooksLikeHistory = startIdx >= 0 || endIdx >= 0
-
-            // Grouping: Workout Title -> Exercise Name -> List of (sets/reps/weight)
-            val workoutMap = LinkedHashMap<String, LinkedHashMap<String, MutableList<Triple<Int, Double, String>>>>()
-            val historyMap = LinkedHashMap<String, MutableList<SetLogEntity>>()
-            val historyTimes = LinkedHashMap<String, Pair<Long?, Long?>>()
+            val csvLooksLikeHistory = startIdx >= 0 || endIdx >= 0 || sessionIdIdx >= 0
 
             fun parseCsvTime(raw: String?): Long? {
                 val value = raw?.trim().orEmpty()
                 if (value.isBlank()) return null
                 return runCatching { Instant.parse(value).toEpochMilli() }.getOrNull()
                     ?: runCatching {
-                        LocalDate.parse(value.substringBefore("T").substringBefore(" ")).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+                        val cleaned = value.replace(" ", "T")
+                        Instant.parse(if (cleaned.contains("T") && !cleaned.endsWith("Z")) "${cleaned}Z" else cleaned).toEpochMilli()
+                    }.getOrNull()
+                    ?: runCatching {
+                        val datePart = value.substringBefore("T").substringBefore(" ")
+                        val parts = datePart.split("-", "/")
+                        if (parts.size == 3) {
+                            val year = if (parts[0].length == 4) parts[0].toInt() else parts[2].toInt()
+                            val month = if (parts[0].length == 4) parts[1].toInt() else parts[0].toInt()
+                            val day = if (parts[0].length == 4) parts[2].toInt() else parts[1].toInt()
+                            LocalDate.of(year, month, day).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+                        } else null
                     }.getOrNull()
             }
+
+            class CsvSetInfo(
+                val exerciseName: String,
+                val category: ExerciseCategory,
+                val weightKg: Double,
+                val reps: Int,
+                val durationMin: Double,
+                val distanceKm: Double,
+                val notes: String
+            )
+
+            class CsvSessionInfo(
+                val workoutTitle: String,
+                val startedAt: Long?,
+                val endedAt: Long?,
+                val explicitId: String?,
+                val rawStart: String?,
+                val sets: MutableList<CsvSetInfo> = mutableListOf()
+            )
+
+            val sessionList = mutableListOf<CsvSessionInfo>()
+            var currentSession: CsvSessionInfo? = null
 
             for (i in 1 until lines.size) {
                 val row = parseCsvRow(lines[i])
@@ -522,51 +572,73 @@ object WorkoutImportService {
                 val notesVal = if (notesIdx >= 0 && notesIdx < row.size) row[notesIdx] else ""
                 val category = ExerciseCategories.infer(exerciseName)
 
-                if (csvLooksLikeHistory) {
-                    val startRaw = row.getOrNull(startIdx)
-                    val endRaw = row.getOrNull(endIdx)
-                    val startedAt = parseCsvTime(startRaw)
-                    val endedAt = parseCsvTime(endRaw) ?: startedAt
-                    val sessionKey = "${workoutTitle.trim()}|${startedAt ?: i}"
-                    val durationRaw = if (durationIdx >= 0 && durationIdx < row.size) row[durationIdx].toDoubleOrNull() ?: 0.0 else 0.0
-                    val durationMin = when {
-                        durationRaw <= 0.0 -> 0.0
-                        headers.getOrNull(durationIdx)?.contains("second") == true -> durationRaw / 60.0
-                        else -> durationRaw
-                    }
-                    val distanceRaw = if (distanceIdx >= 0 && distanceIdx < row.size) row[distanceIdx].toDoubleOrNull() ?: 0.0 else 0.0
-                    val distanceKm = if (headers.getOrNull(distanceIdx)?.contains("mile") == true) distanceRaw * 1.609344 else distanceRaw
-                    historyMap.getOrPut(sessionKey) { mutableListOf() }.add(
-                        SetLogEntity(
-                            sessionId = 0,
-                            exerciseName = exerciseName,
-                            category = category,
-                            weightKg = weightVal.coerceAtLeast(0.0),
-                            reps = repsVal.coerceAtLeast(0),
-                            durationMin = durationMin.coerceAtLeast(0.0),
-                            distanceKm = distanceKm.coerceAtLeast(0.0)
-                        )
+                val startRaw = if (startIdx >= 0 && startIdx < row.size) row[startIdx].takeIf { it.isNotBlank() } else null
+                val endRaw = if (endIdx >= 0 && endIdx < row.size) row[endIdx].takeIf { it.isNotBlank() } else null
+                val explicitSessionId = if (sessionIdIdx >= 0 && sessionIdIdx < row.size) row[sessionIdIdx].takeIf { it.isNotBlank() } else null
+                val startedAt = parseCsvTime(startRaw)
+                val endedAt = parseCsvTime(endRaw) ?: startedAt
+
+                val durationRaw = if (durationIdx >= 0 && durationIdx < row.size) row[durationIdx].toDoubleOrNull() ?: 0.0 else 0.0
+                val durationMin = when {
+                    durationRaw <= 0.0 -> 0.0
+                    headers.getOrNull(durationIdx)?.contains("second") == true -> durationRaw / 60.0
+                    else -> durationRaw
+                }
+                val distanceRaw = if (distanceIdx >= 0 && distanceIdx < row.size) row[distanceIdx].toDoubleOrNull() ?: 0.0 else 0.0
+                val distanceKm = if (headers.getOrNull(distanceIdx)?.contains("mile") == true) distanceRaw * 1.609344 else distanceRaw
+
+                val belongsToCurrent = currentSession != null && (
+                    (explicitSessionId != null && explicitSessionId == currentSession!!.explicitId) ||
+                    (startedAt != null && startedAt == currentSession!!.startedAt && currentSession!!.workoutTitle.equals(workoutTitle, ignoreCase = true)) ||
+                    (startedAt == null && startRaw != null && startRaw == currentSession!!.rawStart && currentSession!!.workoutTitle.equals(workoutTitle, ignoreCase = true)) ||
+                    (startedAt == null && startRaw == null && currentSession!!.workoutTitle.equals(workoutTitle, ignoreCase = true))
+                )
+
+                if (!belongsToCurrent) {
+                    val newSession = CsvSessionInfo(
+                        workoutTitle = workoutTitle,
+                        startedAt = startedAt,
+                        endedAt = endedAt,
+                        explicitId = explicitSessionId,
+                        rawStart = startRaw
                     )
-                    historyTimes[sessionKey] = startedAt to endedAt
-                    continue
+                    sessionList.add(newSession)
+                    currentSession = newSession
                 }
 
-                val exercisesForWorkout = workoutMap.getOrPut(workoutTitle) { LinkedHashMap() }
-                val setsForExercise = exercisesForWorkout.getOrPut(exerciseName) { mutableListOf() }
-                setsForExercise.add(Triple(repsVal, weightVal, notesVal))
+                currentSession!!.sets.add(
+                    CsvSetInfo(
+                        exerciseName = exerciseName,
+                        category = category,
+                        weightKg = weightVal.coerceAtLeast(0.0),
+                        reps = repsVal.coerceAtLeast(0),
+                        durationMin = durationMin.coerceAtLeast(0.0),
+                        distanceKm = distanceKm.coerceAtLeast(0.0),
+                        notes = notesVal
+                    )
+                )
             }
 
             val result = mutableListOf<ImportedWorkout>()
 
-            for ((title, exercises) in workoutMap) {
-                val importedExercises = mutableListOf<ImportedExercise>()
-                for ((exName, setTuples) in exercises) {
-                    val setsCount = setTuples.size
-                    val avgReps = if (setTuples.isNotEmpty()) setTuples.first().first else 10
-                    val weight = if (setTuples.isNotEmpty()) setTuples.first().second else 0.0
-                    val notes = setTuples.firstOrNull { it.third.isNotBlank() }?.third ?: ""
+            // 1. Create Workout Routine Templates for Training Grounds (grouped by Workout Title)
+            val templateGroupMap = LinkedHashMap<String, LinkedHashMap<String, MutableList<CsvSetInfo>>>()
+            for (session in sessionList) {
+                val exerciseMap = templateGroupMap.getOrPut(session.workoutTitle) { LinkedHashMap() }
+                for (setData in session.sets) {
+                    exerciseMap.getOrPut(setData.exerciseName) { mutableListOf() }.add(setData)
+                }
+            }
 
+            for ((title, exerciseMap) in templateGroupMap) {
+                val importedExercises = mutableListOf<ImportedExercise>()
+                for ((exName, setList) in exerciseMap) {
+                    val setsCount = setList.size
+                    val avgReps = if (setList.isNotEmpty()) setList.first().reps else 10
+                    val weight = if (setList.isNotEmpty()) setList.first().weightKg else 0.0
+                    val notes = setList.firstOrNull { it.notes.isNotBlank() }?.notes ?: ""
                     val category = ExerciseCategories.infer(exName)
+
                     importedExercises.add(
                         ImportedExercise(
                             name = exName,
@@ -579,33 +651,54 @@ object WorkoutImportService {
                     )
                 }
                 if (importedExercises.isNotEmpty()) {
-                    result.add(ImportedWorkout(title = title, exercises = importedExercises))
+                    result.add(
+                        ImportedWorkout(
+                            title = title,
+                            exercises = importedExercises,
+                            kind = ImportedWorkoutKind.TEMPLATE
+                        )
+                    )
                 }
             }
 
-            for ((key, logs) in historyMap) {
-                val title = key.substringBefore("|").ifBlank { "Imported Workout" }
-                val byExercise = logs.groupBy { it.exerciseName }
-                val importedExercises = byExercise.map { (exName, setLogs) ->
-                    ImportedExercise(
-                        name = exName,
-                        category = ExerciseCategories.infer(exName),
-                        sets = setLogs.size.coerceAtLeast(1),
-                        reps = setLogs.firstOrNull { it.reps > 0 }?.reps ?: 0,
-                        weightKg = setLogs.firstOrNull { it.weightKg > 0.0 }?.weightKg ?: 0.0
+            // 2. If history columns exist, also create History Sessions with set logs
+            if (csvLooksLikeHistory) {
+                for (session in sessionList) {
+                    val setLogs = session.sets.map { s ->
+                        SetLogEntity(
+                            sessionId = 0,
+                            exerciseName = s.exerciseName,
+                            category = s.category,
+                            weightKg = s.weightKg,
+                            reps = s.reps,
+                            durationMin = s.durationMin,
+                            distanceKm = s.distanceKm
+                        )
+                    }
+
+                    val byExercise = session.sets.groupBy { it.exerciseName }
+                    val importedExercises = byExercise.map { (exName, sets) ->
+                        ImportedExercise(
+                            name = exName,
+                            category = ExerciseCategories.infer(exName),
+                            sets = sets.size.coerceAtLeast(1),
+                            reps = sets.firstOrNull { it.reps > 0 }?.reps ?: 0,
+                            weightKg = sets.firstOrNull { it.weightKg > 0.0 }?.weightKg ?: 0.0,
+                            notes = sets.firstOrNull { it.notes.isNotBlank() }?.notes ?: ""
+                        )
+                    }
+
+                    result.add(
+                        ImportedWorkout(
+                            title = session.workoutTitle,
+                            exercises = importedExercises,
+                            kind = ImportedWorkoutKind.HISTORY,
+                            startedAt = session.startedAt,
+                            endedAt = session.endedAt,
+                            logs = setLogs
+                        )
                     )
                 }
-                val times = historyTimes[key]
-                result.add(
-                    ImportedWorkout(
-                        title = title,
-                        exercises = importedExercises,
-                        kind = ImportedWorkoutKind.HISTORY,
-                        startedAt = times?.first,
-                        endedAt = times?.second,
-                        logs = logs
-                    )
-                )
             }
 
             check(result.isNotEmpty()) { "Could not find any workouts in the selected CSV file." }
