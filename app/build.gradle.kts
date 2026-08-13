@@ -106,6 +106,9 @@ android {
             )
         }
     }
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
 }
 
 androidComponents {
@@ -178,4 +181,10 @@ dependencies {
         exclude(group = "junit")
     }
     debugImplementation(libs.androidx.ui.tooling)
+
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("androidx.test.ext:junit:1.2.1")
+    testImplementation("androidx.test:core-ktx:1.6.1")
+    testImplementation("org.robolectric:robolectric:4.14.1")
+    testImplementation("androidx.room:room-testing:2.8.4")
 }

@@ -24,6 +24,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.foundation.layout.Column
+import androidx.compose.runtime.rememberCoroutineScope
+import com.fitnessquest.rpg.data.db.ActiveSessionWithDetails
+import kotlinx.coroutines.launch
 
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -307,6 +311,34 @@ fun FitQuestNav() {
                         ambush = ambush,
                         onDone = { navController.popBackStack() }
                     )
+                }
+            }
+
+            val activeSessionDetails by container.repository.activeSession.collectAsState(initial = null)
+            val scope = androidx.compose.runtime.rememberCoroutineScope()
+
+            Column(
+                modifier = Modifier
+                    .align(if (isLandscape) Alignment.BottomEnd else Alignment.BottomCenter)
+                    .padding(bottom = if (showBottomBar && !isLandscape) 80.dp else 0.dp)
+            ) {
+                activeSessionDetails?.let { details ->
+                    if (currentRoute != Routes.SESSION) {
+                        com.fitnessquest.rpg.ui.components.ActiveQuestBanner(
+                            title = details.session.title,
+                            startedAt = details.session.startedAt,
+                            pausedAt = details.session.pausedAt,
+                            accumulatedPausedMs = details.session.accumulatedPausedMs,
+                            setCount = details.exercises.sumOf { it.sets.size },
+                            provisionalXp = details.exercises.sumOf { ex -> ex.sets.sumOf { it.xp } },
+                            onResume = {
+                                navController.navigate(Routes.session(details.session.workoutId ?: -1L))
+                            },
+                            onDiscard = {
+                                scope.launch { container.repository.discardActiveSession() }
+                            }
+                        )
+                    }
                 }
             }
 

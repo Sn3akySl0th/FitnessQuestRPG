@@ -109,6 +109,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.fitnessquest.rpg.AppContainer
 import com.fitnessquest.rpg.data.ai.CoachAdvice
+import com.fitnessquest.rpg.data.db.ActiveSessionWithDetails
 import com.fitnessquest.rpg.data.db.ExerciseCategory
 import com.fitnessquest.rpg.data.db.SetLogEntity
 import com.fitnessquest.rpg.data.health.HeightFormat
@@ -162,6 +163,7 @@ import kotlin.math.roundToInt
 import kotlin.time.Duration.Companion.milliseconds
 
 data class SessionExercise(
+    val dbId: Long = 0L,
     val name: String,
     val category: ExerciseCategory,
     val targetSets: Int = 3,
@@ -358,6 +360,64 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
         }.launchIn(viewModelScope)
         
         container.music.start()
+
+        container.repository.activeSession.onEach { details ->
+            if (demoMode || details == null) return@onEach
+            val session = details.session
+            val exercises = details.sortedExercises.map { exWithSets ->
+                val ex = exWithSets.exercise
+                val trackingType = try {
+                    ExerciseTrackingType.valueOf(ex.trackingType)
+                } catch (e: Exception) {
+                    ExerciseTrackingType.WEIGHT_REPS
+                }
+                SessionExercise(
+                    dbId = ex.id,
+                    name = ex.exerciseName,
+                    category = ex.category,
+                    targetSets = ex.targetSets,
+                    targetReps = ex.targetReps,
+                    targetWeightKg = ex.targetWeightKg,
+                    trackingType = trackingType,
+                    loggedSets = exWithSets.sets.map { s ->
+                        SetLogEntity(
+                            id = s.id,
+                            sessionId = 0,
+                            exerciseName = s.exerciseName,
+                            category = s.category,
+                            weightKg = s.weightKg,
+                            reps = s.reps,
+                            durationMin = s.durationMin,
+                            distanceKm = s.distanceKm,
+                            xp = s.xp,
+                            rir = s.rir,
+                            avgHr = s.avgHr,
+                            maxHr = s.maxHr,
+                            speedKmh = s.speedKmh,
+                            inclinePercent = s.inclinePercent,
+                            cardioProgram = s.cardioProgram,
+                            setType = s.setType
+                        )
+                    }
+                )
+            }
+            _uiState.update { s ->
+                s.copy(
+                    loading = false,
+                    title = session.title,
+                    exercises = exercises,
+                    restEndsAt = session.restEndsAt,
+                    restDurationSec = session.restDurationSec,
+                    heatStreak = session.heatStreak,
+                    lastLogAt = session.lastLogAt,
+                    currentExerciseIndex = session.currentExerciseIndex,
+                    ambushOfferedThisSession = session.ambushOfferedThisSession,
+                    ambushXpMult = session.ambushXpMult,
+                    momentSpoilsUsed = session.momentSpoilsUsed
+                )
+            }
+            publishWearState()
+        }.launchIn(viewModelScope)
     }
 
     fun toggleMusic() = container.music.togglePlayPause()
@@ -369,34 +429,33 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
         loadedFor = workoutId
         demoMode = false
         viewModelScope.launch {
+            val existing = container.repository.getActiveSessionWithDetails()
+            if (existing != null) {
+                publishWearState()
+                return@launch
+            }
+            val title: String
+            val exercises: List<SessionExercise>
             if (workoutId < 0) {
-                _uiState.update { it.copy(loading = false, title = "Freestyle Session", isDemo = false) }
+                title = "Freestyle Session"
+                exercises = emptyList()
             } else {
                 val workout = container.repository.getWorkout(workoutId)
-                val exercises = container.repository.exercisesFor(workoutId)
-                val resolved = exercises.map { e ->
+                val exEntities = container.repository.exercisesFor(workoutId)
+                title = workout?.name ?: "Session"
+                exercises = exEntities.map { e ->
                     val tracking = resolveExerciseTracking(e.exerciseName, e.category)
-                    e to tracking
-                }
-                _uiState.update {
-                    it.copy(
-                        loading = false,
-                        title = workout?.name ?: "Session",
-                        isDemo = false,
-                        exercises = resolved.map { (e, tracking) ->
-                            SessionExercise(
-                                name = e.exerciseName,
-                                category = tracking.first,
-                                targetSets = e.targetSets,
-                                targetReps = e.targetReps,
-                                targetWeightKg = e.targetWeightKg,
-                                trackingType = tracking.second
-                            )
-
-                        }
+                    SessionExercise(
+                        name = e.exerciseName,
+                        category = tracking.first,
+                        targetSets = e.targetSets,
+                        targetReps = e.targetReps,
+                        targetWeightKg = e.targetWeightKg,
+                        trackingType = tracking.second
                     )
                 }
             }
+            container.repository.startActiveSession(title, if (workoutId > 0) workoutId else null, exercises)
             publishWearState()
         }
     }
@@ -428,8 +487,12 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
     fun addExercise(name: String, category: ExerciseCategory) {
         viewModelScope.launch {
             val resolved = resolveExerciseTracking(name, category)
-            _uiState.update { s ->
-                s.copy(exercises = s.exercises + SessionExercise(name, resolved.first, trackingType = resolved.second))
+            if (demoMode) {
+                _uiState.update { s ->
+                    s.copy(exercises = s.exercises + SessionExercise(name = name, category = resolved.first, trackingType = resolved.second))
+                }
+            } else {
+                container.repository.addActiveExercise(name, resolved.first, resolved.second.name)
             }
             publishWearState()
         }
@@ -457,14 +520,19 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
     }
 
     fun removeExercise(index: Int) {
-        _uiState.update { s ->
-            if (index !in s.exercises.indices || s.exercises.size <= 1) return@update s
-            val updated = s.exercises.filterIndexed { i, _ -> i != index }
-            val newIndex = s.currentExerciseIndex.coerceAtMost(updated.size - 1)
-            s.copy(
-                exercises = updated,
-                currentExerciseIndex = newIndex
-            )
+        val s = _uiState.value
+        val ex = s.exercises.getOrNull(index) ?: return
+        if (s.exercises.size <= 1) return
+        if (demoMode) {
+            _uiState.update { state ->
+                val updated = state.exercises.filterIndexed { i, _ -> i != index }
+                val newIndex = state.currentExerciseIndex.coerceAtMost(updated.size - 1)
+                state.copy(exercises = updated, currentExerciseIndex = newIndex)
+            }
+        } else {
+            viewModelScope.launch {
+                container.repository.removeActiveExercise(ex.dbId)
+            }
         }
         publishWearState()
     }
@@ -489,53 +557,71 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
         val hrMax = maxHr ?: wearBridge.sessionHrStats().second
         val prior = _uiState.value
         val safeIndex = index.coerceIn(0, (prior.exercises.size - 1).coerceAtLeast(0))
-        val priorEx = prior.exercises.getOrNull(safeIndex)
-        val effectiveWeight = when (priorEx?.category) {
+        val priorEx = prior.exercises.getOrNull(safeIndex) ?: return
+        val effectiveWeight = when (priorEx.category) {
             ExerciseCategory.BODYWEIGHT -> if (weightKg <= 0) container.prefs.bodyWeightKg() ?: 0.0 else weightKg
             else -> weightKg
         }
-        _uiState.update { s ->
-            if (s.exercises.isEmpty()) return@update s
-            val ex = s.exercises[safeIndex]
-            val log = SetLogEntity(
-                sessionId = 0,
-                exerciseName = ex.name,
-                category = ex.category,
-                weightKg = if (ex.category == ExerciseCategory.BODYWEIGHT && weightKg <= 0) {
-                    container.prefs.bodyWeightKg() ?: 0.0
-                } else {
-                    weightKg
-                },
-                reps = reps,
-                durationMin = durationMin,
-                distanceKm = distanceKm,
-                rir = rir,
-                avgHr = hrAvg,
-                maxHr = hrMax,
-                speedKmh = speedKmh,
-                inclinePercent = inclinePercent,
-                cardioProgram = cardioProgram.trim(),
-                setType = setType
-            )
 
-            // Workout heat: staying on pace (rest window + time for the set itself)
-            // builds a streak that multiplies set XP.
-            val now = System.currentTimeMillis()
-            val windowMs = (s.restDurationSec + GameMath.HEAT_GRACE_SEC) * 1000L
-            val heatStreak = if (s.lastLogAt > 0 && now - s.lastLogAt <= windowMs) s.heatStreak + 1 else 1
-            val multiplier = GameMath.calculateHeatMultiplier(heatStreak) * s.ambushXpMult
-            val withXp = log.copy(xp = (GameMath.xpForSet(log) * multiplier).toInt())
-            s.copy(
-                exercises = s.exercises.toMutableList().also {
-                    it[safeIndex] = ex.copy(loggedSets = ex.loggedSets + withXp)
-                },
-                // Logging a set kicks off the rest timer automatically (if restDurationSec > 0).
-                restEndsAt = if (s.restDurationSec > 0) now + s.restDurationSec * 1000L else null,
-                heatStreak = heatStreak,
-                lastLogAt = now,
-                currentExerciseIndex = safeIndex
-            )
+        val now = System.currentTimeMillis()
+        val windowMs = (prior.restDurationSec + GameMath.HEAT_GRACE_SEC) * 1000L
+        val heatStreak = if (prior.lastLogAt > 0 && now - prior.lastLogAt <= windowMs) prior.heatStreak + 1 else 1
+        val multiplier = GameMath.calculateHeatMultiplier(heatStreak) * prior.ambushXpMult
+        val log = SetLogEntity(
+            sessionId = 0,
+            exerciseName = priorEx.name,
+            category = priorEx.category,
+            weightKg = effectiveWeight,
+            reps = reps,
+            durationMin = durationMin,
+            distanceKm = distanceKm,
+            rir = rir,
+            avgHr = hrAvg,
+            maxHr = hrMax,
+            speedKmh = speedKmh,
+            inclinePercent = inclinePercent,
+            cardioProgram = cardioProgram.trim(),
+            setType = setType
+        )
+        val setXp = (GameMath.xpForSet(log) * multiplier).toInt()
+
+        if (demoMode) {
+            _uiState.update { s ->
+                val withXp = log.copy(xp = setXp)
+                s.copy(
+                    exercises = s.exercises.toMutableList().also {
+                        it[safeIndex] = priorEx.copy(loggedSets = priorEx.loggedSets + withXp)
+                    },
+                    restEndsAt = if (s.restDurationSec > 0) now + s.restDurationSec * 1000L else null,
+                    heatStreak = heatStreak,
+                    lastLogAt = now,
+                    currentExerciseIndex = safeIndex
+                )
+            }
+        } else {
+            viewModelScope.launch {
+                container.repository.logActiveSet(
+                    exerciseId = priorEx.dbId,
+                    exerciseName = priorEx.name,
+                    category = priorEx.category,
+                    weightKg = effectiveWeight,
+                    reps = reps,
+                    durationMin = durationMin,
+                    distanceKm = distanceKm,
+                    xp = setXp,
+                    rir = rir,
+                    avgHr = hrAvg,
+                    maxHr = hrMax,
+                    speedKmh = speedKmh,
+                    inclinePercent = inclinePercent,
+                    cardioProgram = cardioProgram.trim(),
+                    setType = setType,
+                    heatStreak = heatStreak,
+                    restDurationSec = prior.restDurationSec
+                )
+            }
         }
+
         maybeAutoCoach(index)
         maybeMomentLoot(index, effectiveWeight, reps, rir)
         maybeAmbushOffer()
@@ -838,27 +924,35 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
     fun dismissSwapNote() = _uiState.update { it.copy(swapNote = null) }
 
     fun moveExercise(index: Int, delta: Int) {
-        _uiState.update { s ->
-            val target = index + delta
-            if (target !in s.exercises.indices) return@update s
-            s.copy(
-                exercises = s.exercises.toMutableList().also { list ->
-                    val tmp = list[index]
-                    list[index] = list[target]
-                    list[target] = tmp
-                }
-            )
+        val s = _uiState.value
+        val target = index + delta
+        if (target !in s.exercises.indices) return
+        val reordered = s.exercises.toMutableList().also { list ->
+            val tmp = list[index]
+            list[index] = list[target]
+            list[target] = tmp
+        }
+        if (demoMode) {
+            _uiState.update { it.copy(exercises = reordered) }
+        } else {
+            viewModelScope.launch {
+                container.repository.reorderActiveExercises(reordered.map { it.dbId })
+            }
         }
     }
 
     fun swapExercise(index: Int, name: String, category: ExerciseCategory) {
         viewModelScope.launch {
             val resolved = resolveExerciseTracking(name, category)
-            _uiState.update { s ->
-                val ex = s.exercises.getOrNull(index) ?: return@update s
-                s.copy(exercises = s.exercises.toMutableList().also {
-                    it[index] = ex.copy(name = name, category = resolved.first, trackingType = resolved.second)
-                })
+            val ex = _uiState.value.exercises.getOrNull(index) ?: return@launch
+            if (demoMode) {
+                _uiState.update { s ->
+                    s.copy(exercises = s.exercises.toMutableList().also {
+                        it[index] = ex.copy(name = name, category = resolved.first, trackingType = resolved.second)
+                    })
+                }
+            } else {
+                container.repository.swapActiveExercise(ex.dbId, name, resolved.first, resolved.second.name)
             }
             publishWearState()
         }
@@ -880,22 +974,27 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
                 profile = container.prefs.profile.value
             ).onSuccess { swap ->
                 val tracking = resolveExerciseTracking(swap.name, swap.category)
-                _uiState.update { state ->
-                    val current = state.exercises.getOrNull(index)
-                    if (current == null) state.copy(aiSwapIndex = null)
-                    else state.copy(
-                        aiSwapIndex = null,
-                        swapNote = "Swapped ${current.name} \u2192 ${swap.name}. ${swap.reason}",
-                        exercises = state.exercises.toMutableList().also {
-                            it[index] = current.copy(
-                                name = swap.name,
-                                category = tracking.first,
-                                targetSets = swap.sets,
-                                targetReps = swap.reps,
-                                trackingType = tracking.second
-                            )
-                        }
-                    )
+                if (demoMode) {
+                    _uiState.update { state ->
+                        val current = state.exercises.getOrNull(index)
+                        if (current == null) state.copy(aiSwapIndex = null)
+                        else state.copy(
+                            aiSwapIndex = null,
+                            swapNote = "Swapped ${current.name} \u2192 ${swap.name}. ${swap.reason}",
+                            exercises = state.exercises.toMutableList().also {
+                                it[index] = current.copy(
+                                    name = swap.name,
+                                    category = tracking.first,
+                                    targetSets = swap.sets,
+                                    targetReps = swap.reps,
+                                    trackingType = tracking.second
+                                )
+                            }
+                        )
+                    }
+                } else {
+                    container.repository.swapActiveExercise(ex.dbId, swap.name, tracking.first, tracking.second.name)
+                    _uiState.update { it.copy(aiSwapIndex = null, swapNote = "Swapped ${ex.name} \u2192 ${swap.name}. ${swap.reason}") }
                 }
             }.onFailure { e ->
                 _uiState.update {
@@ -906,35 +1005,71 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
     }
 
     fun skipRest() {
-        _uiState.update { it.copy(restEndsAt = null) }
+        val s = _uiState.value
+        if (demoMode) {
+            _uiState.update { it.copy(restEndsAt = null) }
+        } else {
+            viewModelScope.launch {
+                container.repository.updateActiveRestTimer(null, s.restDurationSec)
+            }
+        }
         publishWearState()
     }
 
     fun extendRest(seconds: Int) {
         val now = System.currentTimeMillis()
-        _uiState.update { s ->
-            val baseTime = s.restEndsAt?.takeIf { it > now } ?: now
-            s.copy(restEndsAt = baseTime + seconds * 1000L)
+        val s = _uiState.value
+        val baseTime = s.restEndsAt?.takeIf { it > now } ?: now
+        val newEndsAt = baseTime + seconds * 1000L
+        if (demoMode) {
+            _uiState.update { it.copy(restEndsAt = newEndsAt) }
+        } else {
+            viewModelScope.launch {
+                container.repository.updateActiveRestTimer(newEndsAt, s.restDurationSec)
+            }
         }
         publishWearState()
     }
 
     fun setRestDuration(seconds: Int) {
-        _uiState.update { it.copy(restDurationSec = seconds) }
+        val s = _uiState.value
+        if (demoMode) {
+            _uiState.update { it.copy(restDurationSec = seconds) }
+        } else {
+            viewModelScope.launch {
+                container.repository.updateActiveRestTimer(s.restEndsAt, seconds)
+            }
+        }
         publishWearState()
     }
 
     fun removeLastSet(index: Int) {
-        _uiState.update { s ->
-            val ex = s.exercises[index]
-            if (ex.loggedSets.isEmpty()) return@update s
-            s.copy(
-                exercises = s.exercises.toMutableList().also {
-                    it[index] = ex.copy(loggedSets = ex.loggedSets.dropLast(1))
-                }
-            )
+        val ex = _uiState.value.exercises.getOrNull(index) ?: return
+        if (ex.loggedSets.isEmpty()) return
+        if (demoMode) {
+            _uiState.update { s ->
+                s.copy(
+                    exercises = s.exercises.toMutableList().also {
+                        it[index] = ex.copy(loggedSets = ex.loggedSets.dropLast(1))
+                    }
+                )
+            }
+        } else {
+            viewModelScope.launch {
+                container.repository.removeLastActiveSet(ex.dbId)
+            }
         }
         publishWearState()
+    }
+
+    fun abandon() {
+        viewModelScope.launch {
+            if (!demoMode) {
+                container.repository.discardActiveSession()
+            }
+            wearBridge.unbind()
+            workoutNotification.cancel()
+        }
     }
 
     fun finish() {
@@ -981,15 +1116,16 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
             }
 
             val strMult = if (container.prefs.consumeEncounterStrBoost()) 1.15f else 1f
+            val token = "session_${startedAt}_${logs.size}"
             val result = container.repository.completeSession(
                 state.title,
                 startedAt,
                 logs,
-                strengthXpMultiplier = strMult
+                strengthXpMultiplier = strMult,
+                completionToken = token
             )
-            // Every XP point earned is dealt to the party raid boss as damage.
-            container.party.reportSessionXp(result.xp)
-            container.guild.reportSessionXp(result.xp)
+            // OutboxWorker drains party and guild XP sync reliably
+            com.fitnessquest.rpg.data.sync.OutboxWorker.enqueue(container.app)
             
             val summaryItems = state.exercises.map { ex ->
                 val exPrs = result.prs.filter { it.exerciseName == ex.name }
