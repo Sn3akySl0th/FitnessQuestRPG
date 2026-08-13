@@ -23,6 +23,7 @@ import com.fitnessquest.rpg.AppContainer
 import com.fitnessquest.rpg.data.ai.LocalAiEngine
 import com.fitnessquest.rpg.data.ai.RoutineRecommendation
 import com.fitnessquest.rpg.data.ai.WorkoutRecommendationEngine
+import com.fitnessquest.rpg.data.db.ActiveSessionWithDetails
 import com.fitnessquest.rpg.data.db.CharacterEntity
 import com.fitnessquest.rpg.data.db.ItemEntity
 import com.fitnessquest.rpg.data.db.ItemSlot
@@ -239,6 +240,62 @@ fun WorkoutsScreen(
     var importRewardBatch by remember { mutableStateOf<RewardBatch?>(null) }
     var importSummary by remember { mutableStateOf<String?>(null) }
 
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val container = (context.applicationContext as com.fitnessquest.rpg.FitQuestApp).container
+    val activeSessionDetails by container.repository.activeSession.collectAsState(initial = null)
+    val coroutineScope = rememberCoroutineScope()
+    var pendingStartWorkoutId by remember { mutableStateOf<Long?>(null) }
+    var showActiveSessionPrompt by remember { mutableStateOf(false) }
+
+    fun handleStartWorkout(workoutId: Long) {
+        if (activeSessionDetails != null) {
+            pendingStartWorkoutId = workoutId
+            showActiveSessionPrompt = true
+        } else {
+            onStartWorkout(workoutId)
+        }
+    }
+
+    if (showActiveSessionPrompt) {
+        AlertDialog(
+            onDismissRequest = { showActiveSessionPrompt = false },
+            title = { Text("Active Quest in Progress") },
+            text = { Text("You already have an active workout in progress. Would you like to resume your active quest or discard it to start a new one?") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showActiveSessionPrompt = false
+                        activeSessionDetails?.session?.let { s ->
+                            onStartWorkout(s.workoutId ?: -1L)
+                        }
+                    }
+                ) {
+                    Text("Resume Quest")
+                }
+            },
+            dismissButton = {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(
+                        onClick = {
+                            showActiveSessionPrompt = false
+                            val nextId = pendingStartWorkoutId ?: -1L
+                            coroutineScope.launch {
+                                container.repository.discardActiveSession()
+                                onStartWorkout(nextId)
+                            }
+                        },
+                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Text("Discard & Start")
+                    }
+                    TextButton(onClick = { showActiveSessionPrompt = false }) {
+                        Text("Cancel")
+                    }
+                }
+            }
+        )
+    }
+
     if (showPlates) {
         PlateCalculatorDialog(onDismiss = { showPlates = false })
     }
@@ -295,7 +352,7 @@ fun WorkoutsScreen(
                 RecommendedQuestCard(
                     recommendation = state.recommendation,
                     wellRestedBuff = state.wellRestedBuff,
-                    onStartWorkout = onStartWorkout,
+                    onStartWorkout = ::handleStartWorkout,
                     onCompleteSideQuest = { title ->
                         viewModel.completeSideQuest(title)
                     },
@@ -327,7 +384,7 @@ fun WorkoutsScreen(
                             Text("AI Forge", maxLines = 1)
                         }
                     }
-                    OutlinedButton(onClick = onFreestyle, modifier = Modifier.fillMaxWidth()) {
+                    OutlinedButton(onClick = { handleStartWorkout(-1L) }, modifier = Modifier.fillMaxWidth()) {
                         Text("🏃 Freestyle session — log anything")
                     }
                     OutlinedButton(onClick = onExerciseLibrary, modifier = Modifier.fillMaxWidth()) {
@@ -403,7 +460,7 @@ fun WorkoutsScreen(
                             if (state.renaming) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
                             else Icon(Icons.Filled.AutoAwesome, contentDescription = "Rename with AI", tint = MaterialTheme.colorScheme.tertiary)
                         }
-                        Button(onClick = { onStartWorkout(workout.id) }) {
+                        Button(onClick = { handleStartWorkout(workout.id) }) {
                             Icon(Icons.Filled.PlayArrow, contentDescription = null)
                             Text("Start")
                         }

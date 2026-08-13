@@ -1,6 +1,10 @@
 package com.fitnessquest.rpg.data
 
 import androidx.room.withTransaction
+import com.fitnessquest.rpg.data.db.ActiveExerciseEntity
+import com.fitnessquest.rpg.data.db.ActiveSessionEntity
+import com.fitnessquest.rpg.data.db.ActiveSessionWithDetails
+import com.fitnessquest.rpg.data.db.ActiveSetLogEntity
 import com.fitnessquest.rpg.data.db.AppDatabase
 import com.fitnessquest.rpg.data.db.BiomeProgressEntity
 import com.fitnessquest.rpg.data.db.BodyMetricEntity
@@ -11,8 +15,11 @@ import com.fitnessquest.rpg.data.db.ExerciseCategory
 import com.fitnessquest.rpg.data.db.GearInstanceEntity
 import com.fitnessquest.rpg.data.db.ItemEntity
 import com.fitnessquest.rpg.data.db.ItemSlot
+import com.fitnessquest.rpg.data.db.PendingSyncEntity
 import com.fitnessquest.rpg.data.db.SessionEntity
+import com.fitnessquest.rpg.data.db.SessionReceiptCodec
 import com.fitnessquest.rpg.data.db.SetLogEntity
+import com.fitnessquest.rpg.domain.SetType
 import com.fitnessquest.rpg.data.db.WorkoutEntity
 import com.fitnessquest.rpg.data.db.WorkoutExerciseEntity
 import com.fitnessquest.rpg.data.db.isEquippable
@@ -469,230 +476,481 @@ class GameRepository(
         return (previous > 0.0) && (weightKg > previous)
     }
 
+    // ---- Active Sessions (Room Source of Truth) ----
+
+    val activeSession: Flow<ActiveSessionWithDetails?> = db.activeSessionDao().observeActiveSessionWithDetails()
+
+    suspend fun getActiveSessionWithDetails(): ActiveSessionWithDetails? =
+        db.activeSessionDao().getActiveSessionWithDetails()
+
+    suspend fun startActiveSession(
+        title: String,
+        workoutId: Long?,
+        exercises: List<com.fitnessquest.rpg.ui.screens.SessionExercise>
+    ): ActiveSessionWithDetails {
+        return db.withTransaction {
+            val token = java.util.UUID.randomUUID().toString()
+            val session = ActiveSessionEntity(
+                id = 1L,
+                title = title,
+                workoutId = workoutId,
+                startedAt = System.currentTimeMillis(),
+                status = "ACTIVE",
+                completionToken = token
+            )
+            db.activeSessionDao().upsertActiveSession(session)
+
+            val exerciseEntities = exercises.mapIndexed { idx, ex ->
+                ActiveExerciseEntity(
+                    activeSessionId = 1L,
+                    exerciseName = ex.name,
+                    category = ex.category,
+                    targetSets = ex.targetSets,
+                    targetReps = ex.targetReps,
+                    targetWeightKg = ex.targetWeightKg,
+                    trackingType = ex.trackingType.name,
+                    sortOrder = idx
+                )
+            }
+            db.activeSessionDao().insertActiveExercises(exerciseEntities)
+
+            db.activeSessionDao().getActiveSessionWithDetails()!!
+        }
+    }
+
+    suspend fun logActiveSet(
+        exerciseId: Long,
+        exerciseName: String,
+        category: ExerciseCategory,
+        weightKg: Double,
+        reps: Int,
+        durationMin: Double,
+        distanceKm: Double,
+        xp: Int,
+        rir: Int?,
+        avgHr: Int?,
+        maxHr: Int?,
+        speedKmh: Double,
+        inclinePercent: Double,
+        cardioProgram: String,
+        setType: SetType,
+        heatStreak: Int,
+        restDurationSec: Int
+    ) {
+        val now = System.currentTimeMillis()
+        db.withTransaction {
+            val current = db.activeSessionDao().getActiveSession() ?: return@withTransaction
+            db.activeSessionDao().upsertActiveSession(
+                current.copy(
+                    restEndsAt = if (restDurationSec > 0) now + restDurationSec * 1000L else null,
+                    restDurationSec = restDurationSec,
+                    heatStreak = heatStreak,
+                    lastLogAt = now
+                )
+            )
+            db.activeSessionDao().insertActiveSetLog(
+                ActiveSetLogEntity(
+                    activeSessionId = 1L,
+                    exerciseId = exerciseId,
+                    exerciseName = exerciseName,
+                    category = category,
+                    weightKg = weightKg,
+                    reps = reps,
+                    durationMin = durationMin,
+                    distanceKm = distanceKm,
+                    xp = xp,
+                    rir = rir,
+                    avgHr = avgHr,
+                    maxHr = maxHr,
+                    speedKmh = speedKmh,
+                    inclinePercent = inclinePercent,
+                    cardioProgram = cardioProgram,
+                    setType = setType,
+                    loggedAt = now
+                )
+            )
+        }
+    }
+
+    suspend fun removeLastActiveSet(exerciseId: Long) {
+        db.activeSessionDao().deleteLastSetLogForExercise(exerciseId)
+    }
+
+    suspend fun addActiveExercise(name: String, category: ExerciseCategory, trackingType: String) {
+        db.withTransaction {
+            val existing = db.activeSessionDao().getActiveExercises()
+            val nextSort = if (existing.isEmpty()) 0 else existing.maxOf { it.sortOrder } + 1
+            db.activeSessionDao().insertActiveExercise(
+                ActiveExerciseEntity(
+                    activeSessionId = 1L,
+                    exerciseName = name,
+                    category = category,
+                    trackingType = trackingType,
+                    sortOrder = nextSort
+                )
+            )
+        }
+    }
+
+    suspend fun removeActiveExercise(exerciseId: Long) {
+        db.activeSessionDao().deleteActiveExercise(exerciseId)
+    }
+
+    suspend fun swapActiveExercise(exerciseId: Long, newName: String, newCategory: ExerciseCategory, trackingType: String) {
+        db.withTransaction {
+            val current = db.activeSessionDao().getActiveExercises().find { it.id == exerciseId } ?: return@withTransaction
+            db.activeSessionDao().updateActiveExercise(
+                current.copy(
+                    exerciseName = newName,
+                    category = newCategory,
+                    trackingType = trackingType
+                )
+            )
+        }
+    }
+
+    suspend fun reorderActiveExercises(orderedExerciseIds: List<Long>) {
+        db.withTransaction {
+            val current = db.activeSessionDao().getActiveExercises().associateBy { it.id }
+            orderedExerciseIds.forEachIndexed { idx, id ->
+                current[id]?.let { ex ->
+                    db.activeSessionDao().updateActiveExercise(ex.copy(sortOrder = idx))
+                }
+            }
+        }
+    }
+
+    suspend fun updateActiveRestTimer(restEndsAt: Long?, restDurationSec: Int) {
+        val current = db.activeSessionDao().getActiveSession() ?: return
+        db.activeSessionDao().upsertActiveSession(current.copy(restEndsAt = restEndsAt, restDurationSec = restDurationSec))
+    }
+
+    suspend fun updateActivePauseState(pausedAt: Long?, accumulatedPausedMs: Long) {
+        val current = db.activeSessionDao().getActiveSession() ?: return
+        db.activeSessionDao().upsertActiveSession(current.copy(pausedAt = pausedAt, accumulatedPausedMs = accumulatedPausedMs))
+    }
+
+    suspend fun updateActiveAmbushOffer(offered: Boolean, xpMult: Float) {
+        val current = db.activeSessionDao().getActiveSession() ?: return
+        db.activeSessionDao().upsertActiveSession(
+            current.copy(
+                ambushOfferedThisSession = offered,
+                ambushXpMult = xpMult
+            )
+        )
+    }
+
+    suspend fun updateActiveMomentSpoilsUsed(count: Int) {
+        val current = db.activeSessionDao().getActiveSession() ?: return
+        db.activeSessionDao().upsertActiveSession(current.copy(momentSpoilsUsed = count))
+    }
+
+    suspend fun discardActiveSession() {
+        db.activeSessionDao().deleteActiveSession(1L)
+    }
+
     suspend fun completeSession(
         name: String,
         startedAt: Long,
         logs: List<SetLogEntity>,
-        strengthXpMultiplier: Float = 1f
+        strengthXpMultiplier: Float = 1f,
+        completionToken: String? = null,
+        userId: String? = null
     ): SessionResult {
-        val endedAt = System.currentTimeMillis()
-        val durationMs = endedAt - startedAt
-        var withXp = logs.map { it.copy(xp = GameMath.xpForSet(it)) }
-        if ((strengthXpMultiplier != 1f) && (strengthXpMultiplier > 0f)) {
-            withXp = withXp.map { log ->
-                if (log.category == ExerciseCategory.STRENGTH) {
-                    log.copy(xp = (log.xp * strengthXpMultiplier).toInt().coerceAtLeast(1))
-                } else {
-                    log
-                }
-            }
-        }
-        val character = getCharacter()
+        val token = completionToken ?: "session_${startedAt}_${logs.size}"
 
-        val muscles = mutableSetOf<String>()
-        withXp.forEach { log ->
-            exerciseInfo?.find(log.exerciseName)?.let { info ->
-                muscles.addAll(info.primaryMuscles)
-                muscles.addAll(info.secondaryMuscles)
-            }
+        // Idempotency Check: return existing result if completion already succeeded
+        val existingSession = db.activeSessionDao().getSessionByCompletionToken(token)
+        if (existingSession != null) {
+            return restoreSessionResult(existingSession, getCharacter())
         }
 
-        val prs = mutableListOf<SessionPr>()
-        withXp
-            .asSequence()
-            .groupBy { it.exerciseName }
-            .forEach { (exercise, currentSets) ->
-                val history = db.sessionDao().logsForExercise(exercise)
-                if (history.isEmpty()) return@forEach // First time doing it is technically a record, but we only reward improvement or "first logged"? Let's say improvement.
+        val result = db.withTransaction {
+            val innerExisting = db.activeSessionDao().getSessionByCompletionToken(token)
+            if (innerExisting != null) {
+                return@withTransaction restoreSessionResult(innerExisting, getCharacter())
+            }
 
-                // 1. Strength Metrics
-                if (currentSets.any { it.weightKg > 0.0 }) {
-                    val currentMaxWeight = currentSets.maxOf { it.weightKg }
-                    val currentMaxVolume = currentSets.sumOf { it.weightKg * it.reps }
-                    val currentMax1RM = currentSets.maxOf { GameMath.calculate1RM(it.weightKg, it.reps) }
-
-                    val histMaxWeight = history.maxOfOrNull { it.weightKg } ?: 0.0
-                    val histMax1RM = history.maxOfOrNull { GameMath.calculate1RM(it.weightKg, it.reps) } ?: 0.0
-                    val histMaxVolume = history.groupBy { it.sessionId }.asSequence()
-                        .map { (_, s) -> s.sumOf { it.weightKg * it.reps } }
-                        .maxOfOrNull { it } ?: 0.0
-
-                    if (currentMaxWeight > histMaxWeight && histMaxWeight > 0.0) {
-                        val bestSet = currentSets.maxBy { it.weightKg }
-                        prs += SessionPr(exercise, PrKind.WEIGHT, currentMaxWeight, bestSet.reps)
-                    }
-                    if (currentMaxVolume > histMaxVolume && histMaxVolume > 0.0) {
-                        prs += SessionPr(exercise, PrKind.VOLUME, currentMaxVolume)
-                    }
-                    if (currentMax1RM > histMax1RM && histMax1RM > 0.0) {
-                        prs += SessionPr(exercise, PrKind.ONE_RM, currentMax1RM)
-                    }
-                }
-
-                // 2. Cardio/Distance Metrics
-                if (currentSets.any { it.distanceKm > 0.0 }) {
-                    val currentMaxDist = currentSets.maxOf { it.distanceKm }
-                    val histMaxDist = history.maxOfOrNull { it.distanceKm } ?: 0.0
-                    if (currentMaxDist > histMaxDist && histMaxDist > 0.0) {
-                        prs += SessionPr(exercise, PrKind.DISTANCE, currentMaxDist)
-                    }
-
-                    val currentBestPace = currentSets.filter { it.distanceKm > 0.0 && it.durationMin > 0.0 }
-                        .minOfOrNull { it.durationMin / it.distanceKm }
-                    val histBestPace = history.filter { it.distanceKm > 0.0 && it.durationMin > 0.0 }
-                        .minOfOrNull { it.durationMin / it.distanceKm }
-                    if (currentBestPace != null && histBestPace != null && currentBestPace < histBestPace) {
-                        prs += SessionPr(exercise, PrKind.PACE, currentBestPace)
-                    }
-                }
-
-                // 3. Duration Metrics
-                if (currentSets.any { it.durationMin > 0.0 }) {
-                    val currentMaxTime = currentSets.maxOf { it.durationMin }
-                    val histMaxTime = history.maxOfOrNull { it.durationMin } ?: 0.0
-                    if (currentMaxTime > histMaxTime && histMaxTime > 0.0) {
-                        prs += SessionPr(exercise, PrKind.TIME, currentMaxTime)
-                    }
-                }
-
-                // 4. Reps Metrics (Bodyweight/Calisthenics focus)
-                if (currentSets.any { it.weightKg <= 0.0 && it.reps > 0 }) {
-                    val currentMaxReps = currentSets.maxOf { it.reps }
-                    val histMaxReps = history.filter { it.weightKg <= 0.0 }.maxOfOrNull { it.reps } ?: 0
-                    if (currentMaxReps > histMaxReps && histMaxReps > 0) {
-                        prs += SessionPr(exercise, PrKind.REPS, currentMaxReps.toDouble())
-                    }
-                }
-
-                // 5. Machine Intensity
-                if (currentSets.any { it.speedKmh > 0.0 }) {
-                    val currentMaxSpeed = currentSets.maxOf { it.speedKmh }
-                    val histMaxSpeed = history.maxOfOrNull { it.speedKmh } ?: 0.0
-                    if (currentMaxSpeed > histMaxSpeed && histMaxSpeed > 0.0) {
-                        prs += SessionPr(exercise, PrKind.SPEED, currentMaxSpeed)
-                    }
-                }
-                if (currentSets.any { it.inclinePercent > 0.0 }) {
-                    val currentMaxIncline = currentSets.maxOf { it.inclinePercent }
-                    val histMaxIncline = history.maxOfOrNull { it.inclinePercent } ?: 0.0
-                    if (currentMaxIncline > histMaxIncline && histMaxIncline > 0.0) {
-                        prs += SessionPr(exercise, PrKind.INCLINE, currentMaxIncline)
+            val endedAt = System.currentTimeMillis()
+            val durationMs = endedAt - startedAt
+            var withXp = logs.map { it.copy(xp = GameMath.xpForSet(it)) }
+            if ((strengthXpMultiplier != 1f) && (strengthXpMultiplier > 0f)) {
+                withXp = withXp.map { log ->
+                    if (log.category == ExerciseCategory.STRENGTH) {
+                        log.copy(xp = (log.xp * strengthXpMultiplier).toInt().coerceAtLeast(1))
+                    } else {
+                        log
                     }
                 }
             }
+            val character = getCharacter()
 
-        val zone = ZoneId.systemDefault()
-        val nowLocal = LocalDate.now(zone)
-        val weekStart = nowLocal.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
-        val weekStartMillis = weekStart.atStartOfDay(zone).toInstant().toEpochMilli()
-        val weeklyDone = db.sessionDao().countSessionsSince(weekStartMillis) + 1
-        val weeklyGoal = prefs?.profile?.value?.daysPerWeek ?: 3
+            val muscles = mutableSetOf<String>()
+            withXp.forEach { log ->
+                exerciseInfo?.find(log.exerciseName)?.let { info ->
+                    muscles.addAll(info.primaryMuscles)
+                    muscles.addAll(info.secondaryMuscles)
+                }
+            }
 
-        val bonusXp = character.pendingXpBoost + (prs.count { it.isNew } * GameMath.PR_BONUS_XP)
-        val isWellRested = GameMath.isWellRested(character.lastWorkoutDay)
-        
-        var result = GameMath.applySession(
-            character = character,
-            logs = withXp,
-            durationMs = durationMs,
-            musclesWorked = muscles,
-            weeklyWorkoutsDone = weeklyDone,
-            weeklyWorkoutsGoal = weeklyGoal,
-            bonusXp = bonusXp,
-            isWellRested = isWellRested
-        )
-        
-        result = result.copy(xpBoostApplied = character.pendingXpBoost, prs = prs)
-        val sessionId = db.sessionDao().insertSession(
-            SessionEntity(
-                name = name,
-                startedAt = startedAt,
-                endedAt = endedAt,
-                xpEarned = result.xp,
-                goldEarned = result.gold,
-                energyEarned = result.energy,
-                setCount = withXp.size
+            val prs = mutableListOf<SessionPr>()
+            withXp
+                .asSequence()
+                .groupBy { it.exerciseName }
+                .forEach { (exercise, currentSets) ->
+                    val history = db.sessionDao().logsForExercise(exercise)
+                    if (history.isEmpty()) return@forEach
+
+                    if (currentSets.any { it.weightKg > 0.0 }) {
+                        val currentMaxWeight = currentSets.maxOf { it.weightKg }
+                        val currentMaxVolume = currentSets.sumOf { it.weightKg * it.reps }
+                        val currentMax1RM = currentSets.maxOf { GameMath.calculate1RM(it.weightKg, it.reps) }
+
+                        val histMaxWeight = history.maxOfOrNull { it.weightKg } ?: 0.0
+                        val histMax1RM = history.maxOfOrNull { GameMath.calculate1RM(it.weightKg, it.reps) } ?: 0.0
+                        val histMaxVolume = history.groupBy { it.sessionId }.asSequence()
+                            .map { (_, s) -> s.sumOf { it.weightKg * it.reps } }
+                            .maxOfOrNull { it } ?: 0.0
+
+                        if (currentMaxWeight > histMaxWeight && histMaxWeight > 0.0) {
+                            val bestSet = currentSets.maxBy { it.weightKg }
+                            prs += SessionPr(exercise, PrKind.WEIGHT, currentMaxWeight, bestSet.reps)
+                        }
+                        if (currentMaxVolume > histMaxVolume && histMaxVolume > 0.0) {
+                            prs += SessionPr(exercise, PrKind.VOLUME, currentMaxVolume)
+                        }
+                        if (currentMax1RM > histMax1RM && histMax1RM > 0.0) {
+                            prs += SessionPr(exercise, PrKind.ONE_RM, currentMax1RM)
+                        }
+                    }
+
+                    if (currentSets.any { it.distanceKm > 0.0 }) {
+                        val currentMaxDist = currentSets.maxOf { it.distanceKm }
+                        val histMaxDist = history.maxOfOrNull { it.distanceKm } ?: 0.0
+                        if (currentMaxDist > histMaxDist && histMaxDist > 0.0) {
+                            prs += SessionPr(exercise, PrKind.DISTANCE, currentMaxDist)
+                        }
+
+                        val currentBestPace = currentSets.filter { it.distanceKm > 0.0 && it.durationMin > 0.0 }
+                            .minOfOrNull { it.durationMin / it.distanceKm }
+                        val histBestPace = history.filter { it.distanceKm > 0.0 && it.durationMin > 0.0 }
+                            .minOfOrNull { it.durationMin / it.distanceKm }
+                        if (currentBestPace != null && histBestPace != null && currentBestPace < histBestPace) {
+                            prs += SessionPr(exercise, PrKind.PACE, currentBestPace)
+                        }
+                    }
+
+                    if (currentSets.any { it.durationMin > 0.0 }) {
+                        val currentMaxTime = currentSets.maxOf { it.durationMin }
+                        val histMaxTime = history.maxOfOrNull { it.durationMin } ?: 0.0
+                        if (currentMaxTime > histMaxTime && histMaxTime > 0.0) {
+                            prs += SessionPr(exercise, PrKind.TIME, currentMaxTime)
+                        }
+                    }
+
+                    if (currentSets.any { it.weightKg <= 0.0 && it.reps > 0 }) {
+                        val currentMaxReps = currentSets.maxOf { it.reps }
+                        val histMaxReps = history.filter { it.weightKg <= 0.0 }.maxOfOrNull { it.reps } ?: 0
+                        if (currentMaxReps > histMaxReps && histMaxReps > 0) {
+                            prs += SessionPr(exercise, PrKind.REPS, currentMaxReps.toDouble())
+                        }
+                    }
+
+                    if (currentSets.any { it.speedKmh > 0.0 }) {
+                        val currentMaxSpeed = currentSets.maxOf { it.speedKmh }
+                        val histMaxSpeed = history.maxOfOrNull { it.speedKmh } ?: 0.0
+                        if (currentMaxSpeed > histMaxSpeed && histMaxSpeed > 0.0) {
+                            prs += SessionPr(exercise, PrKind.SPEED, currentMaxSpeed)
+                        }
+                    }
+                    if (currentSets.any { it.inclinePercent > 0.0 }) {
+                        val currentMaxIncline = currentSets.maxOf { it.inclinePercent }
+                        val histMaxIncline = history.maxOfOrNull { it.inclinePercent } ?: 0.0
+                        if (currentMaxIncline > histMaxIncline && histMaxIncline > 0.0) {
+                            prs += SessionPr(exercise, PrKind.INCLINE, currentMaxIncline)
+                        }
+                    }
+                }
+
+            val zone = ZoneId.systemDefault()
+            val nowLocal = LocalDate.now(zone)
+            val weekStart = nowLocal.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+            val weekStartMillis = weekStart.atStartOfDay(zone).toInstant().toEpochMilli()
+            val weeklyDone = db.sessionDao().countSessionsSince(weekStartMillis) + 1
+            val weeklyGoal = prefs?.profile?.value?.daysPerWeek ?: 3
+
+            val bonusXp = character.pendingXpBoost + (prs.count { it.isNew } * GameMath.PR_BONUS_XP)
+            val isWellRested = GameMath.isWellRested(character.lastWorkoutDay)
+            
+            var res = GameMath.applySession(
+                character = character,
+                logs = withXp,
+                durationMs = durationMs,
+                musclesWorked = muscles,
+                weeklyWorkoutsDone = weeklyDone,
+                weeklyWorkoutsGoal = weeklyGoal,
+                bonusXp = bonusXp,
+                isWellRested = isWellRested
             )
-        )
-        db.sessionDao().insertSetLogs(withXp.map { it.copy(sessionId = sessionId) })
+            
+            res = res.copy(xpBoostApplied = character.pendingXpBoost, prs = prs)
 
-        val today = LocalDate.now().toEpochDay()
-        val lastDay = character.lastWorkoutDay
-        var streak = character.streak
-        var streakSaved = false
-        when {
-            lastDay == 0L -> streak = 1
-            today == lastDay -> streak = streak.coerceAtLeast(1)
-            today == (lastDay + 1) -> streak += 1
-            else -> {
-                val missed = (today - lastDay - 1).toInt()
-                val freeze = db.itemDao().get(Consumables.STREAK_FREEZE)
-                if ((freeze != null) && (freeze.quantity >= missed)) {
-                    db.itemDao().update(freeze.copy(quantity = freeze.quantity - missed))
-                    streak += 1
-                    streakSaved = true
-                } else {
-                    streak = 1
+            val today = LocalDate.now().toEpochDay()
+            val lastDay = character.lastWorkoutDay
+            var streak = character.streak
+            var streakSaved = false
+            when {
+                lastDay == 0L -> streak = 1
+                today == lastDay -> streak = streak.coerceAtLeast(1)
+                today == (lastDay + 1) -> streak += 1
+                else -> {
+                    val missed = (today - lastDay - 1).toInt()
+                    val freeze = db.itemDao().get(Consumables.STREAK_FREEZE)
+                    if ((freeze != null) && (freeze.quantity >= missed)) {
+                        db.itemDao().update(freeze.copy(quantity = freeze.quantity - missed))
+                        streak += 1
+                        streakSaved = true
+                    } else {
+                        streak = 1
+                    }
                 }
             }
-        }
 
-        var updated = result.updatedCharacter.copy(
-            streak = streak,
-            lastWorkoutDay = today,
-            pendingXpBoost = 0
-        )
-        result = result.copy(streak = streak, streakSaved = streakSaved)
+            var updated = res.updatedCharacter.copy(
+                streak = streak,
+                lastWorkoutDay = today,
+                pendingXpBoost = 0
+            )
+            res = res.copy(streak = streak, streakSaved = streakSaved)
 
-        val cardioKm = withXp.asSequence()
-            .filter { it.category == ExerciseCategory.CARDIO }
-            .sumOf { if (it.distanceKm > 0.0) it.distanceKm else it.durationMin / 10.0 }
-        if ((cardioKm > 0.0) && (updated.travelTarget != null)) {
-            val target = Biome.fromName(updated.travelTarget)
-            val progress = updated.travelProgress + cardioKm
-            updated = if (progress >= target.travelKm) {
-                result = result.copy(arrivedAt = target.label)
-                updated.copy(currentBiome = target.name, travelTarget = null, travelProgress = 0.0)
-            } else {
-                updated.copy(travelProgress = progress)
+            val cardioKm = withXp.asSequence()
+                .filter { it.category == ExerciseCategory.CARDIO }
+                .sumOf { if (it.distanceKm > 0.0) it.distanceKm else it.durationMin / 10.0 }
+            if ((cardioKm > 0.0) && (updated.travelTarget != null)) {
+                val target = Biome.fromName(updated.travelTarget)
+                val progress = updated.travelProgress + cardioKm
+                updated = if (progress >= target.travelKm) {
+                    res = res.copy(arrivedAt = target.label)
+                    updated.copy(currentBiome = target.name, travelTarget = null, travelProgress = 0.0)
+                } else {
+                    updated.copy(travelProgress = progress)
+                }
+                res = res.copy(travelKm = cardioKm)
             }
-            result = result.copy(travelKm = cardioKm)
+
+            val workoutTier = lootTierFor(
+                source = LootSource.WORKOUT,
+                character = updated,
+                contentTier = (updated.level / 3) + 1
+            )
+            val loot = LootTables.rollWorkoutLoot(
+                level = updated.level,
+                setCount = withXp.size,
+                prCount = prs.count { it.isNew },
+                gearPool = eligibleGearTemplates(updated, workoutTier),
+                stackPool = stackTemplates(),
+                maxTier = workoutTier
+            )
+            updated = applyLootToCharacter(updated, loot)
+            
+            val allRewards = mutableListOf<Reward>()
+            allRewards.add(Reward.Xp(res.xp))
+            if (res.gold > 0) allRewards.add(Reward.Gold(res.gold))
+            if (res.energy > 0) allRewards.add(Reward.Energy(res.energy))
+            if (res.levelsGained > 0) allRewards.add(Reward.LevelUp(updated.level))
+            prs.forEach { allRewards.add(Reward.NewPr(it)) }
+            if (res.arrivedAt != null) {
+                allRewards.add(Reward.BiomeUnlocked(updated.currentBiome, res.arrivedAt))
+            }
+            allRewards.addAll(loot.toRewards())
+
+            res = res.copy(
+                updatedCharacter = updated,
+                lootLabels = loot.labels(),
+                gold = res.gold + loot.goldBonus,
+                rewardBatch = RewardBatch(RewardSource.WORKOUT, allRewards)
+            )
+            val receipt = serializeSessionResult(res)
+            val sessionId = db.sessionDao().insertSession(
+                SessionEntity(
+                    name = name,
+                    startedAt = startedAt,
+                    endedAt = endedAt,
+                    xpEarned = res.xp,
+                    goldEarned = res.gold,
+                    energyEarned = res.energy,
+                    setCount = withXp.size,
+                    completionToken = token,
+                    completionReceiptJson = receipt
+                )
+            )
+            db.sessionDao().insertSetLogs(withXp.map { it.copy(sessionId = sessionId) })
+
+            // Durable outbox events for social sync (Party & Guild)
+            val partyId = updated.partyId
+            val guildId = updated.guildId
+            val uid = userId?.takeIf { it.isNotBlank() }
+
+            if (!partyId.isNullOrBlank() && uid != null) {
+                val partyPayload = "{\"xp\":${res.xp},\"partyId\":\"$partyId\",\"uid\":\"$uid\"}"
+                db.activeSessionDao().insertOutboxEvent(
+                    PendingSyncEntity(
+                        eventId = "${token}:PARTY",
+                        type = "PARTY_XP",
+                        payloadJson = partyPayload
+                    )
+                )
+            }
+
+            if (!guildId.isNullOrBlank() && uid != null) {
+                val guildPayload = "{\"xp\":${res.xp},\"guildId\":\"$guildId\",\"uid\":\"$uid\"}"
+                db.activeSessionDao().insertOutboxEvent(
+                    PendingSyncEntity(
+                        eventId = "${token}:GUILD",
+                        type = "GUILD_XP",
+                        payloadJson = guildPayload
+                    )
+                )
+            }
+
+            // Delete active workout draft (cascade deletes exercises and draft sets)
+            db.activeSessionDao().deleteActiveSession(1L)
+
+            res
         }
 
-        val workoutTier = lootTierFor(
-            source = LootSource.WORKOUT,
-            character = updated,
-            contentTier = (updated.level / 3) + 1
-        )
-        val loot = LootTables.rollWorkoutLoot(
-            level = updated.level,
-            setCount = withXp.size,
-            prCount = prs.count { it.isNew },
-            gearPool = eligibleGearTemplates(updated, workoutTier),
-            stackPool = stackTemplates(),
-            maxTier = workoutTier
-        )
-        updated = applyLootToCharacter(updated, loot)
-        
-        val allRewards = mutableListOf<Reward>()
-        allRewards.add(Reward.Xp(result.xp))
-        if (result.gold > 0) allRewards.add(Reward.Gold(result.gold))
-        if (result.energy > 0) allRewards.add(Reward.Energy(result.energy))
-        if (result.levelsGained > 0) allRewards.add(Reward.LevelUp(updated.level))
-        prs.forEach { allRewards.add(Reward.NewPr(it)) }
-        if (result.arrivedAt != null) {
-            allRewards.add(Reward.BiomeUnlocked(updated.currentBiome, result.arrivedAt))
-        }
-        allRewards.addAll(loot.toRewards())
-
-        result = result.copy(
-            updatedCharacter = updated,
-            lootLabels = loot.labels(),
-            gold = result.gold + loot.goldBonus,
-            rewardBatch = RewardBatch(RewardSource.WORKOUT, allRewards)
-        )
-        db.characterDao().upsert(updated)
         return result
+    }
+
+    private fun restoreSessionResult(existingSession: SessionEntity, character: CharacterEntity): SessionResult {
+        val jsonStr = existingSession.completionReceiptJson
+        if (!jsonStr.isNullOrEmpty()) {
+            try {
+                return SessionReceiptCodec.deserialize(jsonStr, character)
+            } catch (e: Exception) {
+                // Fallback to basic reconstruction below
+            }
+        }
+        return SessionResult(
+            updatedCharacter = character,
+            xp = existingSession.xpEarned,
+            gold = existingSession.goldEarned,
+            energy = existingSession.energyEarned,
+            levelsGained = 0,
+            statGains = com.fitnessquest.rpg.domain.StatGains(),
+            travelKm = 0.0,
+            arrivedAt = null,
+            streak = character.streak,
+            streakSaved = false,
+            xpBoostApplied = 0,
+            prs = emptyList(),
+            lootLabels = emptyList(),
+            rewardBatch = RewardBatch(RewardSource.WORKOUT, emptyList())
+        )
+    }
+
+    private fun serializeSessionResult(res: SessionResult): String {
+        return SessionReceiptCodec.serialize(res)
     }
 
     val allSetLogs: Flow<List<SetLogEntity>> = db.sessionDao().observeAllSetLogs()

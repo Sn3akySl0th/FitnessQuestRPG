@@ -72,7 +72,11 @@ class WorkoutNotificationController(private val context: Context) {
             .setCategory(NotificationCompat.CATEGORY_WORKOUT)
             .build()
 
-        manager.notify(NOTIFICATION_ID, notification)
+        try {
+            manager.notify(NOTIFICATION_ID, notification)
+        } catch (_: SecurityException) {
+            // Notification permission can be revoked between the check and this call.
+        }
     }
 
     fun cancel() {

@@ -5,9 +5,10 @@ import android.content.Context
 import com.fitnessquest.rpg.data.GameRepository
 import com.fitnessquest.rpg.data.auth.AuthService
 import com.fitnessquest.rpg.domain.RewardBatch
-import com.fitnessquest.rpg.domain.RewardSource
+import com.fitnessquest.rpg.data.sync.OutboxSyncResult
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.tasks.await
 import com.google.firebase.firestore.ListenerRegistration
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -233,19 +234,46 @@ class GuildService(
         setGuildId(null)
     }
 
-    fun reportSessionXp(xp: Int) {
-        if (xp <= 0) return
-        val guildId = _guildId.value ?: return
-        val uid = auth.state.value.uid ?: return
+    /**
+     * Called after every completed workout session: the XP earned is dealt to
+     * the guild's raid boss as damage. Transactionally checks eventId for remote idempotency.
+     */
+    suspend fun reportSessionXp(
+        xp: Int,
+        eventId: String,
+        targetGuildId: String? = null,
+        targetUid: String? = null
+    ): OutboxSyncResult {
+        if (xp <= 0) return OutboxSyncResult.NOT_APPLICABLE
+        val guildId = targetGuildId ?: _guildId.value ?: return OutboxSyncResult.NOT_APPLICABLE
+        val uid = targetUid ?: auth.state.value.uid ?: return OutboxSyncResult.NOT_APPLICABLE
         // Guild raids take scaled damage so large rosters still need teamwork.
         val damage = (xp * 1.25).toLong().coerceAtLeast(1L)
-        guildDoc(guildId).update(
-            mapOf(
-                "raidHp" to FieldValue.increment(-damage),
-                "raidDamage.$uid" to FieldValue.increment(damage)
-            )
-        )
-        scope.launch { refreshMemberCard() }
+        val doc = guildDoc(guildId)
+        val eventDoc = doc.collection("processedEvents").document(eventId)
+        
+        return try {
+            val result = firestore.runTransaction { transaction ->
+                val snapshot = transaction.get(eventDoc)
+                if (snapshot.exists()) {
+                    OutboxSyncResult.ALREADY_PROCESSED
+                } else {
+                    transaction.set(eventDoc, mapOf("processedAt" to FieldValue.serverTimestamp(), "xp" to xp, "uid" to uid))
+                    transaction.update(
+                        doc,
+                        mapOf(
+                            "raidHp" to FieldValue.increment(-damage),
+                            "raidDamage.$uid" to FieldValue.increment(damage)
+                        )
+                    )
+                    OutboxSyncResult.DELIVERED
+                }
+            }.await()
+            scope.launch { refreshMemberCard() }
+            result
+        } catch (e: Exception) {
+            OutboxSyncResult.RETRYABLE_FAILURE
+        }
     }
 
     /** Claim weekly raid spoils once the colossus falls. */

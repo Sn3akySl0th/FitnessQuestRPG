@@ -37,6 +37,24 @@ service cloud.firestore {
         && request.resource.data.payload is map;
     }
 
+    function isMemberOfParty(partyId) {
+      return isSignedIn() && exists(/databases/$(database)/documents/parties/$(partyId)/members/$(request.auth.uid));
+    }
+
+    function isMemberOfGuild(guildId) {
+      return isSignedIn() && exists(/databases/$(database)/documents/guilds/$(guildId)/members/$(request.auth.uid));
+    }
+
+    function processedEventCreateOk() {
+      return isSignedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.xp is int
+        && request.resource.data.xp > 0
+        && request.resource.data.processedAt == request.time
+        && request.resource.data.keys().hasAll(['processedAt', 'xp', 'uid'])
+        && request.resource.data.keys().size() == 3;
+    }
+
     /** Active username hold: a public pointer doc must exist for the claim. */
     function usernamePointerExists(username) {
       return exists(/databases/$(database)/documents/usernamePointers/$(username));
@@ -77,6 +95,11 @@ service cloud.firestore {
         allow delete: if isSignedIn()
           && resource.data.authorUid == request.auth.uid;
       }
+
+      match /processedEvents/{eventId} {
+        allow read: if isMemberOfParty(partyId);
+        allow create: if isMemberOfParty(partyId) && processedEventCreateOk();
+      }
     }
 
     match /guilds/{guildId} {
@@ -86,6 +109,11 @@ service cloud.firestore {
       match /members/{uid} {
         allow read: if isSignedIn();
         allow write: if isOwner(uid);
+      }
+
+      match /processedEvents/{eventId} {
+        allow read: if isMemberOfGuild(guildId);
+        allow create: if isMemberOfGuild(guildId) && processedEventCreateOk();
       }
     }
 

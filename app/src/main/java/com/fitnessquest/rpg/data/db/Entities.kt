@@ -1,6 +1,7 @@
 package com.fitnessquest.rpg.data.db
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.fitnessquest.rpg.domain.CharacterClass
 import com.fitnessquest.rpg.domain.SetType
@@ -207,7 +208,10 @@ data class WorkoutExerciseEntity(
 )
 
 
-@Entity(tableName = "sessions")
+@Entity(
+    tableName = "sessions",
+    indices = [Index(value = ["completionToken"], unique = true)]
+)
 data class SessionEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val name: String,
@@ -216,7 +220,9 @@ data class SessionEntity(
     val xpEarned: Int,
     val goldEarned: Int,
     val energyEarned: Int,
-    val setCount: Int
+    val setCount: Int,
+    val completionToken: String? = null,
+    val completionReceiptJson: String? = null
 )
 
 @Entity(tableName = "set_logs")

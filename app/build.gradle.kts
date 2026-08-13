@@ -36,11 +36,11 @@ android {
     compileSdk = 37
     assetPacks += listOf(":local_ai_model")
 
-
     defaultConfig {
         applicationId = "com.fitnessquest.rpg"
         minSdk = 26
         targetSdk = 36
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         versionCode = versionProps.get().getProperty("phoneVersionCode", "20").toInt()
         versionName = versionProps.get().getProperty("versionName", "1.0.3")
 
@@ -106,6 +106,11 @@ android {
             )
         }
     }
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+        unitTests.isReturnDefaultValues = true
+    }
+
 }
 
 androidComponents {
@@ -131,6 +136,10 @@ val embedWearApk by tasks.registering(Copy::class) {
 }
 
 tasks.named("preBuild").configure { dependsOn(embedWearApk) }
+
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
 
 dependencies {
     implementation(project(":shared"))
@@ -178,4 +187,14 @@ dependencies {
         exclude(group = "junit")
     }
     debugImplementation(libs.androidx.ui.tooling)
+
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("androidx.test.ext:junit:1.2.1")
+    testImplementation("androidx.test:core-ktx:1.6.1")
+    testImplementation("org.robolectric:robolectric:4.14.1")
+    testImplementation("org.json:json:20240303")
+    testImplementation("androidx.room:room-testing:2.8.4")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.room:room-testing:2.8.4")
 }

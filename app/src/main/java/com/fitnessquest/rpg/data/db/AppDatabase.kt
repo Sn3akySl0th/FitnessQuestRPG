@@ -48,10 +48,14 @@ class Converters {
         GearInstanceEntity::class,
         BiomeProgressEntity::class,
         ClassProgressEntity::class,
-        BodyMetricEntity::class
+        BodyMetricEntity::class,
+        ActiveSessionEntity::class,
+        ActiveExerciseEntity::class,
+        ActiveSetLogEntity::class,
+        PendingSyncEntity::class
     ],
-    version = 24,
-    exportSchema = false
+    version = 25,
+    exportSchema = true
 )
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
@@ -63,6 +67,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun biomeProgressDao(): BiomeProgressDao
     abstract fun classProgressDao(): ClassProgressDao
     abstract fun bodyMetricDao(): BodyMetricDao
+    abstract fun activeSessionDao(): ActiveSessionDao
 
     companion object {
         @Volatile
@@ -386,14 +391,97 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
-        private val MIGRATION_23_24 = object : Migration(23, 24) {
+        val MIGRATION_23_24 = object : Migration(23, 24) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                // Safe repair: check if columns exist before adding them.
-                // This handles cases where Android Auto-Restore brings back a database
-                // that Room thinks is V23 but is missing V22 columns.
-                
+                // "Repair" migration in case 21->22/22->23 was botched or skipped
                 db.addColumnIfNotExists("workout_exercises", "targetWeightKg", "REAL")
                 db.addColumnIfNotExists("set_logs", "setType", "TEXT NOT NULL DEFAULT 'NORMAL'")
+                db.addColumnIfNotExists("sessions", "completionToken", "TEXT")
+                db.addColumnIfNotExists("sessions", "completionReceiptJson", "TEXT")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_sessions_completion_token ON sessions(completionToken)")
+            }
+        }
+
+        val MIGRATION_24_25 = object : Migration(24, 25) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """CREATE TABLE IF NOT EXISTS active_sessions (
+                        id INTEGER PRIMARY KEY NOT NULL,
+                        title TEXT NOT NULL,
+                        workoutId INTEGER,
+                        startedAt INTEGER NOT NULL,
+                        pausedAt INTEGER,
+                        accumulatedPausedMs INTEGER NOT NULL DEFAULT 0,
+                        restEndsAt INTEGER,
+                        restDurationSec INTEGER NOT NULL DEFAULT 90,
+                        heatStreak INTEGER NOT NULL DEFAULT 0,
+                        lastLogAt INTEGER NOT NULL DEFAULT 0,
+                        currentExerciseIndex INTEGER NOT NULL DEFAULT 0,
+                        ambushOfferedThisSession INTEGER NOT NULL DEFAULT 0,
+                        ambushXpMult REAL NOT NULL DEFAULT 1.0,
+                        momentSpoilsUsed INTEGER NOT NULL DEFAULT 0,
+                        status TEXT NOT NULL DEFAULT 'ACTIVE',
+                        completionToken TEXT
+                    )"""
+                )
+                db.execSQL(
+                    """CREATE TABLE IF NOT EXISTS active_session_exercises (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        activeSessionId INTEGER NOT NULL DEFAULT 1,
+                        exerciseName TEXT NOT NULL,
+                        category TEXT NOT NULL,
+                        targetSets INTEGER NOT NULL DEFAULT 3,
+                        targetReps INTEGER NOT NULL DEFAULT 10,
+                        targetWeightKg REAL,
+                        trackingType TEXT NOT NULL DEFAULT 'WEIGHT_REPS',
+                        sortOrder INTEGER NOT NULL DEFAULT 0,
+                        notes TEXT NOT NULL DEFAULT '',
+                        FOREIGN KEY(activeSessionId) REFERENCES active_sessions(id) ON DELETE CASCADE
+                    )"""
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_active_session_exercises_activeSessionId ON active_session_exercises(activeSessionId)")
+
+                db.execSQL(
+                    """CREATE TABLE IF NOT EXISTS active_session_set_logs (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        activeSessionId INTEGER NOT NULL DEFAULT 1,
+                        exerciseId INTEGER NOT NULL,
+                        exerciseName TEXT NOT NULL,
+                        category TEXT NOT NULL,
+                        weightKg REAL NOT NULL DEFAULT 0.0,
+                        reps INTEGER NOT NULL DEFAULT 0,
+                        durationMin REAL NOT NULL DEFAULT 0.0,
+                        distanceKm REAL NOT NULL DEFAULT 0.0,
+                        xp INTEGER NOT NULL DEFAULT 0,
+                        rir INTEGER,
+                        avgHr INTEGER,
+                        maxHr INTEGER,
+                        speedKmh REAL NOT NULL DEFAULT 0.0,
+                        inclinePercent REAL NOT NULL DEFAULT 0.0,
+                        cardioProgram TEXT NOT NULL DEFAULT '',
+                        setType TEXT NOT NULL DEFAULT 'NORMAL',
+                        loggedAt INTEGER NOT NULL,
+                        FOREIGN KEY(activeSessionId) REFERENCES active_sessions(id) ON DELETE CASCADE,
+                        FOREIGN KEY(exerciseId) REFERENCES active_session_exercises(id) ON DELETE CASCADE
+                    )"""
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_active_session_set_logs_activeSessionId ON active_session_set_logs(activeSessionId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_active_session_set_logs_exerciseId ON active_session_set_logs(exerciseId)")
+
+                db.execSQL(
+                    """CREATE TABLE IF NOT EXISTS pending_sync_outbox (
+                        eventId TEXT PRIMARY KEY NOT NULL,
+                        type TEXT NOT NULL,
+                        payloadJson TEXT NOT NULL,
+                        createdAt INTEGER NOT NULL,
+                        status TEXT NOT NULL DEFAULT 'PENDING',
+                        retryCount INTEGER NOT NULL DEFAULT 0
+                    )"""
+                )
+
+                db.addColumnIfNotExists("sessions", "completionToken", "TEXT")
+                db.addColumnIfNotExists("sessions", "completionReceiptJson", "TEXT")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_sessions_completion_token ON sessions(completionToken)")
             }
         }
 
@@ -427,7 +515,7 @@ abstract class AppDatabase : RoomDatabase() {
                         MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10,
                         MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15,
                         MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20,
-                        MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24
+                        MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25
                     )
                     .build().also { instance = it }
             }

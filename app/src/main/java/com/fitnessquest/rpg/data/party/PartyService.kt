@@ -10,9 +10,11 @@ import com.fitnessquest.rpg.domain.CharacterClass
 import com.fitnessquest.rpg.domain.Reward
 import com.fitnessquest.rpg.domain.RewardBatch
 import com.fitnessquest.rpg.domain.RewardSource
+import com.fitnessquest.rpg.data.sync.OutboxSyncResult
 import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.tasks.await
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.CoroutineScope
@@ -279,20 +281,43 @@ class PartyService(
 
     /**
      * Called after every completed workout session: the XP earned is dealt to
-     * the party's raid boss as damage. Fire-and-forget; Firestore queues the
-     * write offline.
+     * the party's raid boss as damage. Transactionally checks eventId for remote idempotency.
      */
-    fun reportSessionXp(xp: Int) {
-        if (xp <= 0) return
-        val partyId = _partyId.value ?: return
-        val uid = auth.state.value.uid ?: return
-        partyDoc(partyId).update(
-            mapOf(
-                "bossHp" to FieldValue.increment(-xp.toLong()),
-                "bossDamage.$uid" to FieldValue.increment(xp.toLong())
-            )
-        )
-        scope.launch { refreshMemberCard() }
+    suspend fun reportSessionXp(
+        xp: Int,
+        eventId: String,
+        targetPartyId: String? = null,
+        targetUid: String? = null
+    ): OutboxSyncResult {
+        if (xp <= 0) return OutboxSyncResult.NOT_APPLICABLE
+        val partyId = targetPartyId ?: _partyId.value ?: return OutboxSyncResult.NOT_APPLICABLE
+        val uid = targetUid ?: auth.state.value.uid ?: return OutboxSyncResult.NOT_APPLICABLE
+        
+        val doc = partyDoc(partyId)
+        val eventDoc = doc.collection("processedEvents").document(eventId)
+        
+        return try {
+            val result = firestore.runTransaction { transaction ->
+                val snapshot = transaction.get(eventDoc)
+                if (snapshot.exists()) {
+                    OutboxSyncResult.ALREADY_PROCESSED
+                } else {
+                    transaction.set(eventDoc, mapOf("processedAt" to FieldValue.serverTimestamp(), "xp" to xp, "uid" to uid))
+                    transaction.update(
+                        doc,
+                        mapOf(
+                            "bossHp" to FieldValue.increment(-xp.toLong()),
+                            "bossDamage.$uid" to FieldValue.increment(xp.toLong())
+                        )
+                    )
+                    OutboxSyncResult.DELIVERED
+                }
+            }.await()
+            scope.launch { refreshMemberCard() }
+            result
+        } catch (e: Exception) {
+            OutboxSyncResult.RETRYABLE_FAILURE
+        }
     }
 
     /** Grants the boss reward locally and records the claim so it's once per hero. */
