@@ -82,7 +82,7 @@ interface WorkoutDao {
     @Transaction
     suspend fun replaceWorkout(
         workout: WorkoutEntity,
-        exercises: List<WorkoutExerciseEntity>
+        exercises: List<WorkoutExerciseEntity>,
     ) {
         updateWorkout(workout)
         deleteExercisesFor(workout.id)

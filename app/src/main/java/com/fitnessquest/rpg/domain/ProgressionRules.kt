@@ -44,7 +44,7 @@ object ProgressionRules {
      */
     fun canUnlockBoss(biomeProgress: BiomeProgressEntity): Boolean {
         val biome = Biome.fromName(biomeProgress.biomeName)
-        return biomeProgress.progressPoints >= bossUnlockPointsFor(biome) && !biomeProgress.bossUnlocked
+        return (biomeProgress.progressPoints >= bossUnlockPointsFor(biome)) && !biomeProgress.bossUnlocked
     }
 
     /**
@@ -98,14 +98,14 @@ object ProgressionRules {
                     return BiomeRequirement.Locked(
                         reason = "Fight the ${currentBiome.label} boss to advance.",
                         pointsNeeded = 0,
-                        bossDefeated = false
+                        bossDefeated = false,
                     )
                 }
                 val pointsNeeded = bossUnlockPointsFor(currentBiome) - currentProgress.progressPoints
                 BiomeRequirement.Locked(
                     reason = "Defeat the final boss to complete your journey.",
                     pointsNeeded = pointsNeeded.coerceAtLeast(0),
-                    bossDefeated = false
+                    bossDefeated = false,
                 )
             }
         }
@@ -118,14 +118,14 @@ object ProgressionRules {
                 return BiomeRequirement.Locked(
                     reason = "Fight the ${currentBiome.label} boss to advance.",
                     pointsNeeded = 0,
-                    bossDefeated = false
+                    bossDefeated = false,
                 )
             }
             val pointsNeeded = bossUnlockPointsFor(currentBiome) - currentProgress.progressPoints
             BiomeRequirement.Locked(
                 reason = lockedBiomeReason(nextBiome, allProgress) ?: "Defeat the ${currentBiome.label} boss to advance.",
                 pointsNeeded = pointsNeeded.coerceAtLeast(0),
-                bossDefeated = false
+                bossDefeated = false,
             )
         }
     }
@@ -144,7 +144,7 @@ object ProgressionRules {
         val currentBiome = Biome.fromName(character.currentBiome)
 
         var tier = 1
-        if (character.level >= 3 || currentBiome.ordinal >= Biome.DARKWOOD.ordinal) {
+        if (character.level >= 3 || (currentBiome.ordinal >= Biome.DARKWOOD.ordinal)) {
             tier = 2
         }
         if (defeated >= 1 || character.battlesWon >= 20) {

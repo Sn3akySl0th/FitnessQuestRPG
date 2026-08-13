@@ -169,21 +169,23 @@ class GameRepository(
         }
         db.characterDao().upsert(updated)
         // Also seed the first class progress
-        db.classProgressDao().upsert(ClassProgressEntity(
-            characterId = character.id,
-            clazz = cls,
-            level = updated.level,
-            xp = updated.xp,
-            strength = updated.strength,
-            endurance = updated.endurance,
-            agility = updated.agility,
-            willpower = updated.willpower,
-            strProgress = updated.strProgress,
-            endProgress = updated.endProgress,
-            agiProgress = updated.agiProgress,
-            wilProgress = updated.wilProgress,
-            freeStatPoints = updated.freeStatPoints
-        ))
+        db.classProgressDao().upsert(
+            ClassProgressEntity(
+                characterId = character.id,
+                clazz = cls,
+                level = updated.level,
+                xp = updated.xp,
+                strength = updated.strength,
+                endurance = updated.endurance,
+                agility = updated.agility,
+                willpower = updated.willpower,
+                strProgress = updated.strProgress,
+                endProgress = updated.endProgress,
+                agiProgress = updated.agiProgress,
+                wilProgress = updated.wilProgress,
+                freeStatPoints = updated.freeStatPoints,
+            )
+        )
     }
 
     suspend fun switchJob(newClass: CharacterClass) {
@@ -213,7 +215,7 @@ class GameRepository(
                 legsId = character.legsId,
                 feetId = character.feetId,
                 trinketId = character.trinketId,
-                freeStatPoints = character.freeStatPoints
+                freeStatPoints = character.freeStatPoints,
             )
             db.classProgressDao().upsert(currentProgress)
 
@@ -294,9 +296,11 @@ class GameRepository(
         renameTemplates: Boolean = false
     ): ImportPersistResult {
         val existingTemplateNames = db.workoutDao().getAllWorkouts()
+            .asSequence()
             .map { it.name.trim().lowercase() }
             .toMutableSet()
         val existingSessions = db.sessionDao().getAllSessions()
+            .asSequence()
             .map { sessionImportKey(it.name, it.startedAt, it.endedAt, it.setCount) }
             .toMutableSet()
         var templatesAdded = 0
@@ -411,7 +415,7 @@ class GameRepository(
         val candidates = db.workoutDao().getAllWorkouts()
             .filter { workout ->
                 val normalized = workout.name.trim().lowercase()
-                normalized in historyTitles || importedHistoryTemplateDateMillis(workout.name) != null
+                (normalized in historyTitles) || (importedHistoryTemplateDateMillis(workout.name) != null)
             }
 
         candidates.forEach { workout ->
@@ -667,9 +671,7 @@ class GameRepository(
 
         // Idempotency Check: return existing result if completion already succeeded
         val existingSession = db.activeSessionDao().getSessionByCompletionToken(token)
-        if (existingSession != null) {
-            return restoreSessionResult(existingSession, getCharacter())
-        }
+        if (existingSession != null) return restoreSessionResult(existingSession, getCharacter())
 
         val result = db.withTransaction {
             val innerExisting = db.activeSessionDao().getSessionByCompletionToken(token)
@@ -701,7 +703,6 @@ class GameRepository(
 
             val prs = mutableListOf<SessionPr>()
             withXp
-                .asSequence()
                 .groupBy { it.exerciseName }
                 .forEach { (exercise, currentSets) ->
                     val history = db.sessionDao().logsForExercise(exercise)
@@ -757,7 +758,7 @@ class GameRepository(
                     if (currentSets.any { it.weightKg <= 0.0 && it.reps > 0 }) {
                         val currentMaxReps = currentSets.maxOf { it.reps }
                         val histMaxReps = history.filter { it.weightKg <= 0.0 }.maxOfOrNull { it.reps } ?: 0
-                        if (currentMaxReps > histMaxReps && histMaxReps > 0) {
+                        if (histMaxReps in 1..<currentMaxReps) {
                             prs += SessionPr(exercise, PrKind.REPS, currentMaxReps.toDouble())
                         }
                     }
@@ -911,7 +912,7 @@ class GameRepository(
                 val partyPayload = "{\"xp\":${res.xp},\"partyId\":\"$partyId\",\"uid\":\"$uid\"}"
                 db.activeSessionDao().insertOutboxEvent(
                     PendingSyncEntity(
-                        eventId = "${token}:PARTY",
+                        eventId = "$token:PARTY",
                         type = "PARTY_XP",
                         payloadJson = partyPayload
                     )
@@ -922,7 +923,7 @@ class GameRepository(
                 val guildPayload = "{\"xp\":${res.xp},\"guildId\":\"$guildId\",\"uid\":\"$uid\"}"
                 db.activeSessionDao().insertOutboxEvent(
                     PendingSyncEntity(
-                        eventId = "${token}:GUILD",
+                        eventId = "$token:GUILD",
                         type = "GUILD_XP",
                         payloadJson = guildPayload
                     )

@@ -19,7 +19,7 @@ class BiomeProgressionTest {
     @Test
     fun `canEnterBiome - DARKWOOD is locked if MEADOWLANDS boss not defeated`() {
         val allProgress = listOf(
-            BiomeProgressEntity(Biome.MEADOWLANDS.name, bossDefeated = false)
+            BiomeProgressEntity(Biome.MEADOWLANDS.name, bossDefeated = false),
         )
         assertFalse(ProgressionRules.canEnterBiome(Biome.DARKWOOD, allProgress))
     }
@@ -27,7 +27,7 @@ class BiomeProgressionTest {
     @Test
     fun `canEnterBiome - DARKWOOD is accessible after MEADOWLANDS boss defeated`() {
         val allProgress = listOf(
-            BiomeProgressEntity(Biome.MEADOWLANDS.name, bossDefeated = true)
+            BiomeProgressEntity(Biome.MEADOWLANDS.name, bossDefeated = true),
         )
         assertTrue(ProgressionRules.canEnterBiome(Biome.DARKWOOD, allProgress))
     }
@@ -43,7 +43,7 @@ class BiomeProgressionTest {
         val progress = BiomeProgressEntity(
             biomeName = Biome.MEADOWLANDS.name,
             progressPoints = ProgressionRules.bossUnlockPointsFor(Biome.MEADOWLANDS) - 1,
-            bossUnlocked = false
+            bossUnlocked = false,
         )
         assertFalse(ProgressionRules.canUnlockBoss(progress))
     }
@@ -53,7 +53,7 @@ class BiomeProgressionTest {
         val progress = BiomeProgressEntity(
             biomeName = Biome.MEADOWLANDS.name,
             progressPoints = ProgressionRules.bossUnlockPointsFor(Biome.MEADOWLANDS),
-            bossUnlocked = false
+            bossUnlocked = false,
         )
         assertTrue(ProgressionRules.canUnlockBoss(progress))
     }
@@ -63,7 +63,7 @@ class BiomeProgressionTest {
         val progress = BiomeProgressEntity(
             biomeName = Biome.MEADOWLANDS.name,
             progressPoints = ProgressionRules.bossUnlockPointsFor(Biome.MEADOWLANDS),
-            bossUnlocked = true
+            bossUnlocked = true,
         )
         assertFalse(ProgressionRules.canUnlockBoss(progress))
     }
@@ -71,7 +71,7 @@ class BiomeProgressionTest {
     @Test
     fun `nextBiomeRequirement - returns Locked when boss not defeated`() {
         val allProgress = listOf(
-            BiomeProgressEntity(Biome.MEADOWLANDS.name, bossDefeated = false, progressPoints = 50)
+            BiomeProgressEntity(Biome.MEADOWLANDS.name, bossDefeated = false, progressPoints = 50),
         )
         val requirement = ProgressionRules.nextBiomeRequirement(Biome.MEADOWLANDS, allProgress)
         
@@ -84,7 +84,7 @@ class BiomeProgressionTest {
     @Test
     fun `nextBiomeRequirement - returns Unlocked when defeated`() {
         val allProgress = listOf(
-            BiomeProgressEntity(Biome.MEADOWLANDS.name, bossDefeated = true)
+            BiomeProgressEntity(Biome.MEADOWLANDS.name, bossDefeated = true),
         )
         val requirement = ProgressionRules.nextBiomeRequirement(Biome.MEADOWLANDS, allProgress)
         
@@ -95,7 +95,7 @@ class BiomeProgressionTest {
     @Test
     fun `nextBiomeRequirement - returns MaxBiome at SHADOWFEN after boss defeated`() {
         val allProgress = listOf(
-            BiomeProgressEntity(Biome.SHADOWFEN.name, bossDefeated = true)
+            BiomeProgressEntity(Biome.SHADOWFEN.name, bossDefeated = true),
         )
         val requirement = ProgressionRules.nextBiomeRequirement(Biome.SHADOWFEN, allProgress)
         
@@ -105,7 +105,7 @@ class BiomeProgressionTest {
     @Test
     fun `lockedBiomeReason - returns null for accessible biome`() {
         val allProgress = listOf(
-            BiomeProgressEntity(Biome.MEADOWLANDS.name, bossDefeated = true)
+            BiomeProgressEntity(Biome.MEADOWLANDS.name, bossDefeated = true),
         )
         assertNull(ProgressionRules.lockedBiomeReason(Biome.DARKWOOD, allProgress))
     }
@@ -113,7 +113,7 @@ class BiomeProgressionTest {
     @Test
     fun `lockedBiomeReason - returns non-null string for locked biome`() {
         val allProgress = listOf(
-            BiomeProgressEntity(Biome.MEADOWLANDS.name, bossDefeated = false)
+            BiomeProgressEntity(Biome.MEADOWLANDS.name, bossDefeated = false),
         )
         val reason = ProgressionRules.lockedBiomeReason(Biome.DARKWOOD, allProgress)
         assertTrue(reason!!.contains(Biome.MEADOWLANDS.label))
@@ -124,7 +124,7 @@ class BiomeProgressionTest {
     fun `maxUnlockedGearTier - regression check - returns tier 3 after 1 boss defeated`() {
         val character = CharacterEntity(level = 1, battlesWon = 0, currentBiome = Biome.MEADOWLANDS.name)
         val allProgress = listOf(
-            BiomeProgressEntity(Biome.MEADOWLANDS.name, bossDefeated = true)
+            BiomeProgressEntity(Biome.MEADOWLANDS.name, bossDefeated = true),
         )
         
         val tier = ProgressionRules.maxUnlockedGearTier(character, allProgress)

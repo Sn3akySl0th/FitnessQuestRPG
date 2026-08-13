@@ -88,9 +88,9 @@ fun InteractiveWorldMap(
         targetValue = 1.08f,
         animationSpec = infiniteRepeatable(
             animation = tween(800, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
+            repeatMode = RepeatMode.Reverse,
         ),
-        label = "pulse"
+        label = "pulse",
     )
 
     SectionCard {
@@ -124,19 +124,19 @@ fun InteractiveWorldMap(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    when (val req = biomeRequirement) {
+                    when (biomeRequirement) {
                         is ProgressionRules.BiomeRequirement.Locked -> {
                             Text("🔒", fontSize = 24.sp)
                             Column {
                                 Text(
-                                    req.reason,
+                                    biomeRequirement.reason,
                                     style = MaterialTheme.typography.bodySmall,
                                     fontWeight = FontWeight.Bold,
                                     color = Color.White
                                 )
-                                if (req.pointsNeeded > 0) {
+                                if (biomeRequirement.pointsNeeded > 0) {
                                     Text(
-                                        "Earn ${req.pointsNeeded} more points to unlock the boss.",
+                                        "Earn ${biomeRequirement.pointsNeeded} more points to unlock the boss.",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = Gold
                                     )
@@ -159,7 +159,7 @@ fun InteractiveWorldMap(
                                     color = Color(0xFF6BC96B)
                                 )
                                 Text(
-                                    "You can now travel to ${req.nextBiome.label}.",
+                                    "You can now travel to ${biomeRequirement.nextBiome.label}.",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = Color.White.copy(alpha = 0.8f)
                                 )
@@ -253,7 +253,7 @@ fun InteractiveWorldMap(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 biomes.forEachIndexed { index, b ->
-                    val isUnlocked = character.level >= b.levelRequired && ProgressionRules.canEnterBiome(b, allProgress)
+                    val isUnlocked = (character.level >= b.levelRequired) && ProgressionRules.canEnterBiome(b, allProgress)
                     val isCurrent = b == currentBiome
                     val isTarget = b == travelTarget
 

@@ -73,7 +73,7 @@ class BattleSelectViewModel(private val container: AppContainer) : ViewModel() {
         }.toMap()
         BattleSelectUiState(
             character = character,
-            combat = GameMath.combatStats(character, gear.values.toList())
+            combat = GameMath.combatStats(character, gear.values.toList()),
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), BattleSelectUiState())
 
@@ -134,7 +134,7 @@ class BattleSelectViewModel(private val container: AppContainer) : ViewModel() {
 
 data class BattleSelectUiState(
     val character: CharacterEntity? = null,
-    val combat: CombatStats? = null
+    val combat: CombatStats? = null,
 )
 
 @Composable
@@ -369,8 +369,8 @@ private fun battleEstimate(monster: Monster, playerLevel: Int, combat: CombatSta
     } else {
         playerLevel * 22.0
     }
-    val monsterPower = monster.hp * 0.42 + monster.atk * 5.0 + monster.def * 4.0 + monster.spd * 1.5 +
-        monster.level * 12.0 + (monster.trait?.let { 18.0 } ?: 0.0)
+    val monsterPower = (monster.hp * 0.42) + (monster.atk * 5.0) + (monster.def * 4.0) + (monster.spd * 1.5) +
+        (monster.level * 12.0) + (monster.trait?.let { 18.0 } ?: 0.0)
     val chance = (50 + ((power - monsterPower) / 4.0)).toInt().coerceIn(12, 92)
     val warning = when {
         monster.trait != null -> "${monster.trait.emoji} ${monster.trait.label}"
@@ -380,7 +380,7 @@ private fun battleEstimate(monster: Monster, playerLevel: Int, combat: CombatSta
     }
     val recommended = when {
         combat == null -> "balanced stats"
-        monster.atk > combat.def + 6 -> "DEF"
+        monster.atk > (combat.def + 6) -> "DEF"
         monster.hp > combat.maxHp -> "HP/END"
         monster.spd > combat.spd + 4 -> "SPD/AGI"
         monster.def > combat.atk / 2 -> "ATK/STR"
