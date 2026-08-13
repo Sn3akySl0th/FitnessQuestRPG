@@ -16,6 +16,8 @@ import com.fitnessquest.rpg.data.media.MediaControllerManager
 import com.fitnessquest.rpg.data.party.PartyService
 import com.fitnessquest.rpg.data.steps.StepTracker
 import com.fitnessquest.rpg.data.sync.SyncService
+import com.fitnessquest.rpg.data.update.InAppUpdateService
+import com.fitnessquest.rpg.data.update.PlayAppUpdateClient
 import com.fitnessquest.rpg.data.wear.WearPresence
 import com.fitnessquest.rpg.ui.effects.AudioEffects
 import com.fitnessquest.rpg.ui.effects.HapticEffects
@@ -43,6 +45,7 @@ class AppContainer(val app: Application) {
     val localAiModel: LocalModelDownloader = LocalModelDownloader(app)
     val playAssetModel: PlayAssetModelProvider = PlayAssetModelProvider(app)
     val music: MediaControllerManager = MediaControllerManager(app)
+    val inAppUpdate: InAppUpdateService = InAppUpdateService(PlayAppUpdateClient(app))
 
 
 

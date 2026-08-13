@@ -174,7 +174,8 @@ dependencies {
     implementation(libs.androidx.health.connect)
     implementation(libs.mediapipeGenai)
     implementation(libs.play.asset.delivery)
-
+    implementation(libs.play.app.update)
+    implementation(libs.play.app.update.ktx)
 
     implementation(libs.dadb) {
 
@@ -189,6 +190,7 @@ dependencies {
     debugImplementation(libs.androidx.ui.tooling)
 
     testImplementation("junit:junit:4.13.2")
+    testImplementation(libs.kotlinx.coroutines.test)
     testImplementation("androidx.test.ext:junit:1.2.1")
     testImplementation("androidx.test:core-ktx:1.6.1")
     testImplementation("org.robolectric:robolectric:4.14.1")

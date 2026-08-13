@@ -27,11 +27,14 @@ wearCompose = "1.4.1"
 wearOngoing = "1.0.0"
 mediapipeGenai = "0.10.35"
 playAssetDelivery = "2.3.0"
+playAppUpdate = "2.1.0"
 dadb = "1.2.9"
 
 [libraries]
 mediapipeGenai = { group = "com.google.mediapipe", name = "tasks-genai", version.ref = "mediapipeGenai" }
 play-asset-delivery = { group = "com.google.android.play", name = "asset-delivery", version.ref = "playAssetDelivery" }
+play-app-update = { group = "com.google.android.play", name = "app-update", version.ref = "playAppUpdate" }
+play-app-update-ktx = { group = "com.google.android.play", name = "app-update-ktx", version.ref = "playAppUpdate" }
 androidx-concurrent-futures = { module = "androidx.concurrent:concurrent-futures", version.ref = "concurrentFutures" }
 
 
@@ -54,6 +57,7 @@ androidx-room-compiler = { group = "androidx.room", name = "room-compiler", vers
 guava = { module = "com.google.guava:guava", version.ref = "guava" }
 okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
+kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutines" }
 firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBom" }
 firebase-auth = { group = "com.google.firebase", name = "firebase-auth" }
 firebase-firestore = { group = "com.google.firebase", name = "firebase-firestore" }

@@ -63,6 +63,8 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalDensity
 import androidx.core.content.ContextCompat
+import com.fitnessquest.rpg.data.update.InAppUpdateStatus
+import com.fitnessquest.rpg.ui.components.InAppUpdateBanner
 import com.fitnessquest.rpg.ui.onboarding.PermissionsConsolidator
 
 object Routes {
@@ -317,11 +319,21 @@ fun FitQuestNav() {
             val activeSessionDetails by container.repository.activeSession.collectAsState(initial = null)
             val scope = androidx.compose.runtime.rememberCoroutineScope()
 
+            val updateStatus by container.inAppUpdate.updateStatus.collectAsState()
+
             Column(
                 modifier = Modifier
                     .align(if (isLandscape) Alignment.BottomEnd else Alignment.BottomCenter)
                     .padding(bottom = if (showBottomBar && !isLandscape) 80.dp else 0.dp)
             ) {
+                if (updateStatus is InAppUpdateStatus.Downloaded) {
+                    InAppUpdateBanner(
+                        onRestartToUpdate = {
+                            container.inAppUpdate.completeUpdate()
+                        }
+                    )
+                }
+
                 activeSessionDetails?.let { details ->
                     if (currentRoute != Routes.SESSION) {
                         com.fitnessquest.rpg.ui.components.ActiveQuestBanner(
