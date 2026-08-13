@@ -391,8 +391,11 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
-        private val MIGRATION_23_24 = object : Migration(23, 24) {
+        val MIGRATION_23_24 = object : Migration(23, 24) {
             override fun migrate(db: SupportSQLiteDatabase) {
+                // "Repair" migration in case 21->22/22->23 was botched or skipped
+                db.addColumnIfNotExists("workout_exercises", "targetWeightKg", "REAL")
+                db.addColumnIfNotExists("set_logs", "setType", "TEXT NOT NULL DEFAULT 'NORMAL'")
                 db.addColumnIfNotExists("sessions", "completionToken", "TEXT")
                 db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_sessions_completion_token ON sessions(completionToken)")
             }

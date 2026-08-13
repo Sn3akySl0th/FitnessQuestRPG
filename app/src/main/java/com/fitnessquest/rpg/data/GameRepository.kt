@@ -488,12 +488,14 @@ class GameRepository(
         exercises: List<com.fitnessquest.rpg.ui.screens.SessionExercise>
     ): ActiveSessionWithDetails {
         return db.withTransaction {
+            val token = java.util.UUID.randomUUID().toString()
             val session = ActiveSessionEntity(
                 id = 1L,
                 title = title,
                 workoutId = workoutId,
                 startedAt = System.currentTimeMillis(),
-                status = "ACTIVE"
+                status = "ACTIVE",
+                completionToken = token
             )
             db.activeSessionDao().upsertActiveSession(session)
 

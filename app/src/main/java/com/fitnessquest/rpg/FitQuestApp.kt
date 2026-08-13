@@ -72,6 +72,7 @@ class FitQuestApp : Application() {
             log("FitQuest startup begin")
         }
         container = AppContainer(this)
+        com.fitnessquest.rpg.data.sync.OutboxWorker.enqueue(this)
         AudioEffects.soundEnabled = container.prefs.sound.value
         HapticEffects.hapticsEnabled = container.prefs.haptics.value
         appScope.launchStartup("repository.ensureSeeded", crashlytics) { container.repository.ensureSeeded() }

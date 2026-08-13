@@ -1,6 +1,7 @@
 package com.fitnessquest.rpg.data.sync
 
 import android.content.Context
+import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingWorkPolicy
@@ -10,6 +11,7 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.fitnessquest.rpg.FitQuestApp
 import org.json.JSONObject
+import java.util.concurrent.TimeUnit
 
 class OutboxWorker(
     appContext: Context,
@@ -27,31 +29,38 @@ class OutboxWorker(
         var hasFailures = false
 
         for (event in pending) {
-            try {
+            val syncResult = try {
                 when (event.type) {
                     "PARTY_XP" -> {
                         val json = JSONObject(event.payloadJson)
                         val xp = json.optInt("xp", 0)
                         if (xp > 0) {
-                            container.party.reportSessionXp(xp)
-                        }
-                        dao.markOutboxEventSent(event.eventId)
+                            container.party.reportSessionXp(xp, event.eventId)
+                        } else OutboxSyncResult.NOT_APPLICABLE
                     }
                     "GUILD_XP" -> {
                         val json = JSONObject(event.payloadJson)
                         val xp = json.optInt("xp", 0)
                         if (xp > 0) {
-                            container.guild.reportSessionXp(xp)
-                        }
-                        dao.markOutboxEventSent(event.eventId)
+                            container.guild.reportSessionXp(xp, event.eventId)
+                        } else OutboxSyncResult.NOT_APPLICABLE
                     }
-                    else -> {
-                        // Unknown event type, mark sent to prevent infinite loop
-                        dao.markOutboxEventSent(event.eventId)
-                    }
+                    else -> OutboxSyncResult.NOT_APPLICABLE
                 }
             } catch (e: Exception) {
-                hasFailures = true
+                OutboxSyncResult.RETRYABLE_FAILURE
+            }
+
+            when (syncResult) {
+                OutboxSyncResult.DELIVERED,
+                OutboxSyncResult.ALREADY_PROCESSED,
+                OutboxSyncResult.NOT_APPLICABLE -> {
+                    dao.markOutboxEventSent(event.eventId)
+                }
+                OutboxSyncResult.RETRYABLE_FAILURE -> {
+                    dao.incrementOutboxEventRetry(event.eventId)
+                    hasFailures = true
+                }
             }
         }
 
@@ -68,6 +77,10 @@ class OutboxWorker(
 
             val request = OneTimeWorkRequestBuilder<OutboxWorker>()
                 .setConstraints(constraints)
+                .setBackoffCriteria(
+                    BackoffPolicy.EXPONENTIAL,
+                    15, TimeUnit.SECONDS
+                )
                 .build()
 
             WorkManager.getInstance(context).enqueueUniqueWork(

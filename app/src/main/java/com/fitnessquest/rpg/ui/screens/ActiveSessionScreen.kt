@@ -292,7 +292,8 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
     /** Exercises the coach has already reviewed, so completion only triggers one check each. */
     private val coachedExercises = mutableSetOf<String>()
 
-    private val startedAt = System.currentTimeMillis()
+    private var startedAt: Long = System.currentTimeMillis()
+    private var activeCompletionToken: String? = null
     private var loadedFor: Long? = null
     private var demoMode: Boolean = false
 
@@ -364,6 +365,8 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
         container.repository.activeSession.onEach { details ->
             if (demoMode || details == null) return@onEach
             val session = details.session
+            startedAt = session.startedAt
+            activeCompletionToken = session.completionToken ?: activeCompletionToken
             val exercises = details.sortedExercises.map { exWithSets ->
                 val ex = exWithSets.exercise
                 val trackingType = try {
@@ -1116,7 +1119,7 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
             }
 
             val strMult = if (container.prefs.consumeEncounterStrBoost()) 1.15f else 1f
-            val token = "session_${startedAt}_${logs.size}"
+            val token = activeCompletionToken ?: "session_${startedAt}_${logs.size}"
             val result = container.repository.completeSession(
                 state.title,
                 startedAt,

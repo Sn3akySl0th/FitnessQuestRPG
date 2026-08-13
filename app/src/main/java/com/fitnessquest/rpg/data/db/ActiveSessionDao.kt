@@ -66,4 +66,7 @@ interface ActiveSessionDao {
 
     @Query("UPDATE pending_sync_outbox SET status = 'SENT' WHERE eventId = :eventId")
     suspend fun markOutboxEventSent(eventId: String)
+
+    @Query("UPDATE pending_sync_outbox SET retryCount = retryCount + 1 WHERE eventId = :eventId")
+    suspend fun incrementOutboxEventRetry(eventId: String)
 }
