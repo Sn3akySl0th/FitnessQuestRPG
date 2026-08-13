@@ -54,6 +54,12 @@ class AppContainer(val app: Application) {
         prefs.setRepository(repository)
         // Free guest username before Firebase abandons that uid on Google collision.
         auth.beforeAbandonAnonymous = { usernames.releaseClaim() }
+
+        // Migrate any pre-existing Play Asset Delivery model to local filesDir storage
+        val padFile = playAssetModel.getModelFile()
+        if (padFile != null && padFile.exists()) {
+            localAiModel.migrateFromPlayAsset(padFile)
+        }
     }
 
     /** Set by FightScreen when an ambush battle ends; consumed by ActiveSession. */

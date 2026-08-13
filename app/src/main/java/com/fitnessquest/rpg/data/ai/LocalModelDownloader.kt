@@ -8,12 +8,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
 import java.io.FileOutputStream
 import java.security.MessageDigest
 import java.util.Locale
+import java.util.concurrent.TimeUnit
 
 data class LocalModelSpec(
     val id: String,
@@ -101,7 +103,9 @@ sealed class DownloadState {
 class LocalModelDownloader(private val context: Context) {
 
     private val httpClient = OkHttpClient.Builder()
-        .followRedirects(false) // Handle manually to strip auth on cross-domain redirect
+        .followRedirects(false)
+        .followSslRedirects(false)
+        .callTimeout(60, TimeUnit.MINUTES)
         .build()
     private val _downloadState = MutableStateFlow<DownloadState>(DownloadState.Idle)
     val downloadState: StateFlow<DownloadState> = _downloadState
@@ -140,6 +144,19 @@ class LocalModelDownloader(private val context: Context) {
         return file.exists() && file.length() >= minSizeBytes
     }
 
+    fun migrateFromPlayAsset(playAssetFile: File?): Boolean {
+        if (playAssetFile == null || !playAssetFile.exists() || playAssetFile.length() < 100_000_000L) return false
+        val target = getModelFile("gemma_2b_it")
+        if (target.exists() && target.length() >= playAssetFile.length() * 0.95f) return true
+        return try {
+            val temp = File(target.parentFile, "${target.name}.tmp_migrated")
+            playAssetFile.copyTo(temp, overwrite = true)
+            temp.renameTo(target)
+        } catch (e: Exception) {
+            Log.e("FitQuest", "PAD migration failed: ${e.message}", e)
+            false
+        }
+    }
 
     suspend fun startDownload(spec: LocalModelSpec, hfToken: String = "") {
         startDownloadUrl(spec.id, spec.downloadUrl, spec.approxSizeMb, hfToken, spec)
@@ -188,28 +205,37 @@ class LocalModelDownloader(private val context: Context) {
             Log.d("FitQuest", "Starting download from $downloadUrl")
             var response = call.execute()
 
-            // Handle redirect manually to strip Authorization header when moving to CDN
-            if (response.isRedirect) {
-                val newUrl = response.header("Location") ?: ""
+            // Handle multi-hop redirects (e.g. HuggingFace -> CDN -> Pre-signed S3/Cloudflare)
+            var currentUrl = downloadUrl
+            var redirectCount = 0
+            val maxRedirects = 10
+
+            while (response.isRedirect && redirectCount < maxRedirects) {
+                redirectCount++
+                val location = response.header("Location") ?: break
+                val newHttpUrl = currentUrl.toHttpUrlOrNull()?.resolve(location) ?: break
+                val newUrl = newHttpUrl.toString()
                 response.close()
-                if (newUrl.isNotBlank()) {
-                    val redirectRequest = Request.Builder()
-                        .url(newUrl)
-                        .header("User-Agent", "FitQuest-Android-Downloader")
-                        .apply {
-                            if (existingBytes > 0) header("Range", "bytes=$existingBytes-")
-                            // Strip Auth token if redirecting to a different host (likely CDN)
-                            val originalHost = Request.Builder().url(downloadUrl).build().url.host
-                            val newHost = Request.Builder().url(newUrl).build().url.host
-                            if (originalHost == newHost && hfToken.isNotBlank()) {
-                                header("Authorization", "Bearer ${hfToken.trim()}")
-                            }
-                        }
-                        .build()
-                    val newCall = httpClient.newCall(redirectRequest)
-                    activeCall = newCall
-                    response = newCall.execute()
+
+                val originalHost = currentUrl.toHttpUrlOrNull()?.host
+                val newHost = newHttpUrl.host
+                val isSameHost = originalHost.equals(newHost, ignoreCase = true)
+
+                val redirectRequestBuilder = Request.Builder()
+                    .url(newUrl)
+                    .header("User-Agent", "FitQuest-Android-Downloader")
+
+                if (existingBytes > 0) {
+                    redirectRequestBuilder.header("Range", "bytes=$existingBytes-")
                 }
+                if (isSameHost && hfToken.isNotBlank()) {
+                    redirectRequestBuilder.header("Authorization", "Bearer ${hfToken.trim()}")
+                }
+
+                currentUrl = newUrl
+                val nextCall = httpClient.newCall(redirectRequestBuilder.build())
+                activeCall = nextCall
+                response = nextCall.execute()
             }
 
             if (!response.isSuccessful && response.code != 416) {

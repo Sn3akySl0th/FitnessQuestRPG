@@ -113,9 +113,10 @@ class PlayAssetModelProvider(private val context: Context) {
         return result
     }
 
-    suspend fun showCellularConfirmation(): Boolean {
+    suspend fun showCellularConfirmation(activity: Activity): Boolean {
         return runCatching {
-            manager.showCellularDataConfirmation(context as? Activity ?: return false).await()
+            manager.showCellularDataConfirmation(activity).await()
+            refreshState()
             true
         }.getOrDefault(false)
     }
@@ -147,26 +148,29 @@ class PlayAssetModelProvider(private val context: Context) {
     }
 
     private suspend fun pollUntilSettled(activity: Activity?): PlayAssetModelState {
-        var confirmationRequested = false
+        var lastStatus = AssetPackStatus.UNKNOWN
         repeat(120) {
             var queried = queryPackState()
             if (queried != null) {
-                if (!confirmationRequested && activity != null) {
+                if (activity != null) {
                     when (queried.statusCode) {
                         AssetPackStatus.REQUIRES_USER_CONFIRMATION -> {
-                            confirmationRequested = true
-                            Log.d("FitQuest", "Requesting PAD Confirmation Dialog")
-                            manager.showConfirmationDialog(activity).await()
-                            queried = queryPackState() ?: queried
+                            if (lastStatus != AssetPackStatus.REQUIRES_USER_CONFIRMATION) {
+                                Log.d("FitQuest", "Requesting PAD Confirmation Dialog")
+                                runCatching { manager.showConfirmationDialog(activity).await() }
+                                queried = queryPackState() ?: queried
+                            }
                         }
                         AssetPackStatus.WAITING_FOR_WIFI -> {
-                            confirmationRequested = true
-                            Log.d("FitQuest", "Requesting PAD Cellular Confirmation")
-                            manager.showCellularDataConfirmation(activity).await()
-                            queried = queryPackState() ?: queried
+                            if (lastStatus != AssetPackStatus.WAITING_FOR_WIFI) {
+                                Log.d("FitQuest", "Requesting PAD Cellular Confirmation")
+                                runCatching { manager.showCellularDataConfirmation(activity).await() }
+                                queried = queryPackState() ?: queried
+                            }
                         }
                     }
                 }
+                lastStatus = queried.statusCode
 
                 _state.value = queried
                 if (!queried.downloading) return queried

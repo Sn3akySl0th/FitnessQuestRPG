@@ -1206,8 +1206,11 @@ fun LocalAiModelSection(
                     playAssetState.statusCode == AssetPackStatus.REQUIRES_USER_CONFIRMATION) {
                     Button(
                         onClick = {
-                            scope.launch {
-                                viewModel.playAssetProvider.showCellularConfirmation()
+                            val act = context as? Activity
+                            if (act != null) {
+                                scope.launch {
+                                    viewModel.playAssetProvider.showCellularConfirmation(act)
+                                }
                             }
                         },
                         modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
