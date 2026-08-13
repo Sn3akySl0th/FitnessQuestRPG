@@ -426,8 +426,24 @@ class ActiveSessionTest {
         )
         val startMs = System.currentTimeMillis()
 
+        // Seed history for PR check
+        db.savedSetLogs.add(SetLogEntity(
+            sessionId = 999,
+            exerciseName = "Bench Press",
+            category = ExerciseCategory.STRENGTH,
+            weightKg = 90.0,
+            reps = 10,
+            xp = 50
+        ))
+
         // First completion call
-        val result1 = repository.completeSession("Chest Day", startMs, logs, completionToken = token)
+        val result1 = repository.completeSession(
+            "Chest Day",
+            startMs,
+            logs,
+            completionToken = token,
+            userId = "firebase_uid_123"
+        )
         val char1 = db.characterDao().get()
 
         // Verify outbox payload contains destination partyId, guildId, and uid
@@ -439,16 +455,28 @@ class ActiveSessionTest {
         assertTrue(partyEvent.payloadJson.contains("1"))
 
         // Second completion call (idempotent retry)
-        val result2 = repository.completeSession("Chest Day", startMs, logs, completionToken = token)
+        val result2 = repository.completeSession(
+            "Chest Day",
+            startMs,
+            logs,
+            completionToken = token,
+            userId = "firebase_uid_123"
+        )
         val char2 = db.characterDao().get()
 
         // Verify full SessionResult restoration
         assertEquals(result1.xp, result2.xp)
         assertEquals(result1.gold, result2.gold)
         assertEquals(result1.energy, result2.energy)
+        assertEquals(result1.statGains, result2.statGains)
+        assertEquals(result1.volumeKg, result2.volumeKg, 0.001)
+        assertEquals(result1.durationMs, result2.durationMs)
+        assertEquals(result1.musclesWorked, result2.musclesWorked)
         assertEquals(result1.prs.size, result2.prs.size)
+        assertTrue("Restored PRs should not be empty", result2.prs.isNotEmpty())
         assertEquals(result1.lootLabels, result2.lootLabels)
-        assertNotNull(result2.rewardBatch)
+
+        assertEquals(result1.rewardBatch, result2.rewardBatch)
 
         // Verify character state was NOT mutated a second time
         assertEquals(char1?.xp, char2?.xp)

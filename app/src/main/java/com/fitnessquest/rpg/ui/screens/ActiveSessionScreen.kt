@@ -153,7 +153,9 @@ import com.fitnessquest.shared.wear.WearSessionState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import com.fitnessquest.rpg.data.media.MediaState
+import com.fitnessquest.rpg.data.sync.OutboxWorker
 import com.fitnessquest.rpg.domain.SetType
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
@@ -227,6 +229,8 @@ data class ActiveSessionUiState(
     val coach: CoachAdvice? = null,
     val coachLoading: Boolean = false,
     val coachError: String? = null,
+    /** Error message when completing/saving the session fails. */
+    val finishError: String? = null,
     /** Index of the exercise currently being swapped by the AI, if any. */
     val aiSwapIndex: Int? = null,
     /** Transient confirmation after an AI swap ("Swapped X for Y: reason"). */
@@ -894,6 +898,8 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
 
     fun dismissCoachError() = _uiState.update { it.copy(coachError = null) }
 
+    fun dismissFinishError() = _uiState.update { it.copy(finishError = null) }
+
     fun applyCoachChanges() {
         val advice = _uiState.value.coach ?: return
         viewModelScope.launch {
@@ -1082,98 +1088,110 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
         val logs = state.exercises.flatMap { it.loggedSets }
         if (logs.isEmpty()) return
         isFinishing = true
+        _uiState.update { it.copy(finishError = null) }
         viewModelScope.launch {
-            if (demoMode) {
-                val character = container.repository.getCharacter()
-                val withXp = logs.map { log ->
-                    if (log.xp > 0) log else log.copy(xp = GameMath.xpForSet(log))
+            try {
+                if (demoMode) {
+                    val character = container.repository.getCharacter()
+                    val withXp = logs.map { log ->
+                        if (log.xp > 0) log else log.copy(xp = GameMath.xpForSet(log))
+                    }
+                    val preview = GameMath.applySession(
+                        character = character,
+                        logs = withXp,
+                        durationMs = System.currentTimeMillis() - startedAt,
+                        musclesWorked = emptySet(),
+                        weeklyWorkoutsDone = 1,
+                        weeklyWorkoutsGoal = 3
+                    )
+                    // Preview only — do not persist character, session, party, or guild.
+                    _uiState.update {
+                        it.copy(
+                            finish = SessionFinish(
+                                result = preview.copy(
+                                    updatedCharacter = character,
+                                    levelsGained = 0,
+                                    statGains = StatGains(),
+                                    travelKm = 0.0,
+                                    arrivedAt = null,
+                                    streak = character.streak,
+                                    streakSaved = false,
+                                    xpBoostApplied = 0,
+                                    prs = emptyList(),
+                                    lootLabels = emptyList()
+                                ),
+                                isDemo = true
+                            )
+                        )
+                    }
+                    wearBridge.unbind()
+                    workoutNotification.cancel()
+                    return@launch
                 }
-                val preview = GameMath.applySession(
-                    character = character,
-                    logs = withXp,
-                    durationMs = System.currentTimeMillis() - startedAt,
-                    musclesWorked = emptySet(),
-                    weeklyWorkoutsDone = 1,
-                    weeklyWorkoutsGoal = 3
+
+                val strMult = if (container.prefs.consumeEncounterStrBoost()) 1.15f else 1f
+                val token = activeCompletionToken ?: "session_${startedAt}_${logs.size}"
+                val result = container.repository.completeSession(
+                    state.title,
+                    startedAt,
+                    logs,
+                    strengthXpMultiplier = strMult,
+                    completionToken = token,
+                    userId = container.auth.currentUid()
                 )
-                // Preview only — do not persist character, session, party, or guild.
+                // OutboxWorker drains party and guild XP sync reliably
+                OutboxWorker.enqueue(container.app)
+
+                val summaryItems = state.exercises.map { ex ->
+                    val exPrs = result.prs.filter { it.exerciseName == ex.name }
+                    val icon = container.exerciseInfo.find(ex.name)?.imageUrls?.firstOrNull()
+                    WorkoutSummaryItem(
+                        name = ex.name,
+                        isIncreasedWeight = exPrs.any { it.kind == PrKind.WEIGHT },
+                        isIncreasedVolume = exPrs.any { it.kind == PrKind.VOLUME },
+                        isIncreased1RM = exPrs.any { it.kind == PrKind.ONE_RM },
+                        prs = exPrs.filter { it.isNew }.map { it.kind }.toSet(),
+                        iconUrl = icon
+                    )
+                }
+
+                val wantPraise = container.gemini.hasKey
                 _uiState.update {
                     it.copy(
                         finish = SessionFinish(
-                            result = preview.copy(
-                                updatedCharacter = character,
-                                levelsGained = 0,
-                                statGains = StatGains(),
-                                travelKm = 0.0,
-                                arrivedAt = null,
-                                streak = character.streak,
-                                streakSaved = false,
-                                xpBoostApplied = 0,
-                                prs = emptyList(),
-                                lootLabels = emptyList()
-                            ),
-                            isDemo = true
+                            result = result,
+                            praisePending = wantPraise,
+                            caloriesKcal = state.wearCaloriesKcal?.toInt(),
+                            activeDurationMs = state.wearActiveDurationMs,
+                            zoneWorkSec = state.wearZoneWorkSec,
+                            zoneHighSec = state.wearZoneHighSec,
+                            steps = state.wearSteps,
+                            distanceMeters = state.wearDistanceMeters,
+                            summaryItems = summaryItems
                         )
                     )
                 }
                 wearBridge.unbind()
                 workoutNotification.cancel()
-                return@launch
-            }
 
-            val strMult = if (container.prefs.consumeEncounterStrBoost()) 1.15f else 1f
-            val token = activeCompletionToken ?: "session_${startedAt}_${logs.size}"
-            val result = container.repository.completeSession(
-                state.title,
-                startedAt,
-                logs,
-                strengthXpMultiplier = strMult,
-                completionToken = token
-            )
-            // OutboxWorker drains party and guild XP sync reliably
-            com.fitnessquest.rpg.data.sync.OutboxWorker.enqueue(container.app)
-            
-            val summaryItems = state.exercises.map { ex ->
-                val exPrs = result.prs.filter { it.exerciseName == ex.name }
-                val icon = container.exerciseInfo.find(ex.name)?.imageUrls?.firstOrNull()
-                WorkoutSummaryItem(
-                    name = ex.name,
-                    isIncreasedWeight = exPrs.any { it.kind == PrKind.WEIGHT },
-                    isIncreasedVolume = exPrs.any { it.kind == PrKind.VOLUME },
-                    isIncreased1RM = exPrs.any { it.kind == PrKind.ONE_RM },
-                    prs = exPrs.filter { it.isNew }.map { it.kind }.toSet(),
-                    iconUrl = icon
-                )
-            }
-
-            val wantPraise = container.gemini.hasKey
-            _uiState.update {
-                it.copy(
-                    finish = SessionFinish(
-                        result = result,
-                        praisePending = wantPraise,
-                        caloriesKcal = state.wearCaloriesKcal?.toInt(),
-                        activeDurationMs = state.wearActiveDurationMs,
-                        zoneWorkSec = state.wearZoneWorkSec,
-                        zoneHighSec = state.wearZoneHighSec,
-                        steps = state.wearSteps,
-                        distanceMeters = state.wearDistanceMeters,
-                        summaryItems = summaryItems
-                    )
-                )
-            }
-            wearBridge.unbind()
-            workoutNotification.cancel()
-
-            if (wantPraise) {
-                val summary = state.exercises
-                    .filter { it.loggedSets.isNotEmpty() }
-                    .joinToString(", ") { "${it.name} (${it.loggedSets.size} sets)" }
-                val praise = container.gemini
-                    .sessionPraise(summary, result.updatedCharacter.name)
-                    .getOrNull()
-                _uiState.update { s ->
-                    s.finish?.let { f -> s.copy(finish = f.copy(praise = praise, praisePending = false)) } ?: s
+                if (wantPraise) {
+                    val summary = state.exercises
+                        .filter { it.loggedSets.isNotEmpty() }
+                        .joinToString(", ") { "${it.name} (${it.loggedSets.size} sets)" }
+                    val praise = container.gemini
+                        .sessionPraise(summary, result.updatedCharacter.name)
+                        .getOrNull()
+                    _uiState.update { s ->
+                        s.finish?.let { f -> s.copy(finish = f.copy(praise = praise, praisePending = false)) } ?: s
+                    }
+                }
+            } catch (error: CancellationException) {
+                isFinishing = false
+                throw error
+            } catch (error: Exception) {
+                isFinishing = false
+                _uiState.update {
+                    it.copy(finishError = "Workout couldn't be saved. Your progress is still here.")
                 }
             }
         }
@@ -1365,6 +1383,22 @@ fun ActiveSessionScreen(
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             TextButton(onClick = viewModel::askCoach) { Text("Try again") }
                             TextButton(onClick = viewModel::dismissCoachError) { Text("Dismiss") }
+                        }
+                    }
+                }
+            }
+
+            state.finishError?.let { error ->
+                item {
+                    SectionCard {
+                        Text(
+                            error,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            TextButton(onClick = viewModel::finish) { Text("Try again") }
+                            TextButton(onClick = viewModel::dismissFinishError) { Text("Dismiss") }
                         }
                     }
                 }

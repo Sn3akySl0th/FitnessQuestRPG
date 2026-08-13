@@ -55,7 +55,7 @@ class Converters {
         PendingSyncEntity::class
     ],
     version = 25,
-    exportSchema = false
+    exportSchema = true
 )
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
@@ -480,6 +480,7 @@ abstract class AppDatabase : RoomDatabase() {
                 )
 
                 db.addColumnIfNotExists("sessions", "completionToken", "TEXT")
+                db.addColumnIfNotExists("sessions", "completionReceiptJson", "TEXT")
                 db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_sessions_completion_token ON sessions(completionToken)")
             }
         }
