@@ -74,18 +74,31 @@ object ExerciseCategories {
     }
 
     private fun looksLikeCardio(name: String, equipment: String): Boolean {
+        val strengthCues = listOf(
+            "iso-lateral", "isolateral", "seated row", "cable row", "chest supported",
+            "t-bar", "t bar", "smith", "lever row", "dumbbell row", "barbell row",
+            "machine row", "lat pulldown", "pulldown", "incline", "decline",
+            "press", "curl", "extension", "squat", "deadlift", "shrug",
+            "fly", "flye", "raise", "lunge"
+        ).any { name.contains(it) }
+
+        if (strengthCues) return false
+
         val machineCue = listOf(
             "treadmill", "elliptical", "stairmaster", "step mill", "stepmill",
             "recumbent bike", "bicycling", "rope jumping", "jump rope",
             "prowler", "trail running", "skating", "stair", "cycling",
             "swimming", "swim", "hiking", "hike", "air bike", "assault bike",
-            "ski erg", "skierg", "rower", "rowing machine"
+            "ski erg", "skierg"
         ).any { name.contains(it) }
 
-        val rowErg = name.contains("row") && (
-            name.contains("station") || name.contains("erg") ||
-                name.contains("machine") || name == "rowing"
-            )
+        val rowErg = (name == "rowing" || 
+            name.contains("rowing machine") || 
+            name.contains("rower") || 
+            name.contains("row erg") || 
+            name.contains("indoor rower") || 
+            name.contains("water rower") ||
+            (name.contains("row") && name.contains("erg"))) && !name.contains("machine row")
 
         val bike = name.contains("bike") && !name.contains("ab ")
 

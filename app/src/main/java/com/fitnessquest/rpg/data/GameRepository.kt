@@ -334,6 +334,11 @@ class GameRepository(
                 if (logs.isEmpty()) return@forEach
 
                 val session = WorkoutImportService.toSessionEntity(imported.copy(title = cleanTitle, logs = logs))
+                val token = session.completionToken
+                if (!token.isNullOrBlank()) {
+                    val existingByToken = db.activeSessionDao().getSessionByCompletionToken(token)
+                    if (existingByToken != null) return@forEach
+                }
                 val importKey = sessionImportKey(session.name, session.startedAt, session.endedAt, session.setCount)
                 if (importKey in existingSessions) return@forEach
 

@@ -49,7 +49,8 @@ data class ImportedWorkout(
     val kind: ImportedWorkoutKind = ImportedWorkoutKind.TEMPLATE,
     val startedAt: Long? = null,
     val endedAt: Long? = null,
-    val logs: List<SetLogEntity> = emptyList()
+    val logs: List<SetLogEntity> = emptyList(),
+    val externalId: String? = null
 )
 
 data class ImportPersistResult(
@@ -358,6 +359,9 @@ object WorkoutImportService {
             val seenTitles = HashSet<String>()
 
             fun parseWorkoutHistoryObject(workoutObj: JSONObject, index: Int) {
+                val externalId = workoutObj.optString("id").ifBlank {
+                    workoutObj.optString("workout_id")
+                }.ifBlank { null }
                 val startTime = workoutObj.optString("start_time").ifBlank {
                     workoutObj.optString("created_at")
                 }
@@ -397,6 +401,10 @@ object WorkoutImportService {
                                 "distance_km",
                                 setObj.optDouble("distance_meters", 0.0) / 1000.0
                             ).coerceAtLeast(0.0)
+                            val rpe = setObj.optDouble("rpe", Double.NaN).takeIf { !it.isNaN() }
+                            val rir = rpe?.let { (10.0 - it).toInt().coerceIn(0, 10) }
+                                ?: setObj.optInt("rir", -1).takeIf { it >= 0 }
+
                             if (firstReps == 0 && reps > 0) firstReps = reps
                             if (firstWeight == 0.0 && weight > 0.0) firstWeight = weight
                             logs.add(
@@ -407,7 +415,8 @@ object WorkoutImportService {
                                     weightKg = weight,
                                     reps = reps,
                                     durationMin = durationMin.coerceAtLeast(0.0),
-                                    distanceKm = distanceKm
+                                    distanceKm = distanceKm,
+                                    rir = rir
                                 )
                             )
                         }
@@ -440,7 +449,8 @@ object WorkoutImportService {
                         kind = ImportedWorkoutKind.HISTORY,
                         startedAt = parseTimeMillis(startTime),
                         endedAt = parseTimeMillis(endTime),
-                        logs = logs
+                        logs = logs,
+                        externalId = externalId
                     )
                 )
             }
@@ -772,6 +782,8 @@ object WorkoutImportService {
         val startedAt = imported.startedAt ?: imported.endedAt ?: now
         val endedAt = imported.endedAt ?: imported.startedAt ?: now
         val logsWithXp = imported.logs.map { log -> log.copy(xp = if (log.xp > 0) log.xp else GameMath.xpForSet(log)) }
+        val token = imported.externalId?.let { "hevy_api_$it" }
+            ?: "import_${startedAt}_${imported.title.hashCode()}_${logsWithXp.size}"
         return SessionEntity(
             name = imported.title,
             startedAt = startedAt,
@@ -779,7 +791,8 @@ object WorkoutImportService {
             xpEarned = logsWithXp.sumOf { it.xp },
             goldEarned = 0,
             energyEarned = 0,
-            setCount = logsWithXp.size
+            setCount = logsWithXp.size,
+            completionToken = token
         )
     }
 
