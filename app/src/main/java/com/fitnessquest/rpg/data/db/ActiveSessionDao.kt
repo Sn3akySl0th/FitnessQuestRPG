@@ -50,6 +50,12 @@ interface ActiveSessionDao {
     @Query("DELETE FROM active_session_set_logs WHERE id = :setLogId")
     suspend fun deleteSetLog(setLogId: Long)
 
+    @Query("DELETE FROM active_session_exercises WHERE activeSessionId = :activeSessionId")
+    suspend fun deleteActiveExercises(activeSessionId: Long = 1L)
+
+    @Query("DELETE FROM active_session_set_logs WHERE activeSessionId = :activeSessionId")
+    suspend fun deleteActiveSetLogs(activeSessionId: Long = 1L)
+
     @Query("DELETE FROM active_sessions WHERE id = :id")
     suspend fun deleteActiveSession(id: Long = 1L)
 

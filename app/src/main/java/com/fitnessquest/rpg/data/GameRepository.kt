@@ -507,6 +507,11 @@ class GameRepository(
         exercises: List<com.fitnessquest.rpg.ui.screens.SessionExercise>
     ): ActiveSessionWithDetails {
         return db.withTransaction {
+            // Explicitly wipe any leftover draft session data to prevent exercise duplication
+            db.activeSessionDao().deleteActiveSetLogs(1L)
+            db.activeSessionDao().deleteActiveExercises(1L)
+            db.activeSessionDao().deleteActiveSession(1L)
+
             val token = java.util.UUID.randomUUID().toString()
             val session = ActiveSessionEntity(
                 id = 1L,
@@ -664,7 +669,11 @@ class GameRepository(
     }
 
     suspend fun discardActiveSession() {
-        db.activeSessionDao().deleteActiveSession(1L)
+        db.withTransaction {
+            db.activeSessionDao().deleteActiveSetLogs(1L)
+            db.activeSessionDao().deleteActiveExercises(1L)
+            db.activeSessionDao().deleteActiveSession(1L)
+        }
     }
 
     suspend fun completeSession(
@@ -1009,7 +1018,9 @@ class GameRepository(
                 )
             }
 
-            // Delete active workout draft (cascade deletes exercises and draft sets)
+            // Delete active workout draft (explicitly clear exercises and draft sets)
+            db.activeSessionDao().deleteActiveSetLogs(1L)
+            db.activeSessionDao().deleteActiveExercises(1L)
             db.activeSessionDao().deleteActiveSession(1L)
 
             res
