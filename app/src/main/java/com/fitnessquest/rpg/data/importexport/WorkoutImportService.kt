@@ -265,7 +265,16 @@ object WorkoutImportService {
                                     
                                 if (nestedRoutines != null) {
                                     for (j in 0 until nestedRoutines.length()) {
-                                        parseWorkoutObject(nestedRoutines.getJSONObject(j), "Trainer Routine", isCompletedSession = false)
+                                        val nestedObj = nestedRoutines.getJSONObject(j)
+                                        // Ensure this object actually looks like a routine (has an exercises array)
+                                        // and is not just a flat list of exercises being mistaken for a workout list.
+                                        val hasExercises = nestedObj.has("exercises") || 
+                                                          nestedObj.has("routine_exercises") || 
+                                                          nestedObj.has("workout_exercises")
+                                        
+                                        if (hasExercises) {
+                                            parseWorkoutObject(nestedObj, "Trainer Routine", isCompletedSession = false)
+                                        }
                                     }
                                 }
                             }

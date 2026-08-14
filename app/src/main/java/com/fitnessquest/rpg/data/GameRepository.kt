@@ -271,19 +271,28 @@ class GameRepository(
 
     // ---- Workouts ----
 
-    suspend fun saveWorkout(name: String, exercises: List<WorkoutExerciseEntity>, aiGenerated: Boolean = false): Long =
-        db.workoutDao().saveWorkout(
+    suspend fun saveWorkout(name: String, exercises: List<WorkoutExerciseEntity>, aiGenerated: Boolean = false): Long {
+        // Safety deduplication: ensure the same exercise name isn't added multiple times in a single save
+        // unless they have different target weights (e.g. drop sets).
+        val distinctExercises = exercises
+            .distinctBy { "${it.exerciseName}|${it.targetSets}|${it.targetReps}|${it.targetWeightKg}" }
+
+        return db.workoutDao().saveWorkout(
             WorkoutEntity(name = name, aiGenerated = aiGenerated),
-            exercises.map { e ->
+            distinctExercises.map { e ->
                 e.copy(category = ExerciseCategories.resolveStored(e.exerciseName, e.category))
             }
         )
+    }
 
     suspend fun updateWorkout(id: Long, name: String, exercises: List<WorkoutExerciseEntity>) {
         val existing = db.workoutDao().get(id) ?: return
+        val distinctExercises = exercises
+            .distinctBy { "${it.exerciseName}|${it.targetSets}|${it.targetReps}|${it.targetWeightKg}" }
+
         db.workoutDao().replaceWorkout(
             existing.copy(name = name),
-            exercises.map { e ->
+            distinctExercises.map { e ->
                 e.copy(category = ExerciseCategories.resolveStored(e.exerciseName, e.category))
             }
         )
