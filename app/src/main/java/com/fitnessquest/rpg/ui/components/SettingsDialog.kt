@@ -1132,28 +1132,21 @@ private fun BodyMetricsSection(viewModel: SettingsViewModel, imperial: Boolean) 
 }
 
 @Composable
-fun LocalAiModelSection(
+private fun LocalAiModelSection(
     viewModel: SettingsViewModel,
     useLocalAi: Boolean,
     onUseLocalAiChange: (Boolean) -> Unit
 ) {
-    val downloader = viewModel.downloader
     val playAssetProvider = viewModel.playAssetProvider
-
-    val state by downloader.downloadState.collectAsState()
+    val downloader = viewModel.downloader
     val playAssetState by playAssetProvider.state.collectAsState()
     val scope = rememberCoroutineScope()
-    var selectedSpec by remember { mutableStateOf(ModelCatalog.BUILTIN_MODELS.first()) }
-    var customUrl by remember { mutableStateOf("") }
-    var showCustomUrl by remember { mutableStateOf(false) }
-    var hfToken by remember { mutableStateOf("") }
-    val isReady = remember(state, selectedSpec) { downloader.isModelReady(selectedSpec) }
-    val anyLocalModelReady = playAssetState.installed || isReady || ModelCatalog.BUILTIN_MODELS.any { downloader.isModelReady(it) }
-
     val context = LocalContext.current
-    DisposableEffect(state, playAssetState.downloading) {
+    val isReady = playAssetState.installed || downloader.getModelFile("gemma_2b_it").exists()
+
+    DisposableEffect(playAssetState.downloading) {
         val activity = context as? Activity
-        if (state is DownloadState.Downloading || playAssetState.downloading) {
+        if (playAssetState.downloading) {
             activity?.window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
         onDispose {
@@ -1164,7 +1157,7 @@ fun LocalAiModelSection(
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text("🤖 On-Device Local AI Engine", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
         Text(
-            "Download a compatible local LLM so FitQuest can generate names, workouts, coaching, and battle text without cloud quotas.",
+            "Use Google's Gemma 2B model for 100% offline workout names, coaching, and battle narration with zero quotas or keys.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -1172,11 +1165,12 @@ fun LocalAiModelSection(
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("Google Play Offline AI Model", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
             Text(
-                if (playAssetState.installed) "Official Play Store model is installed and will be used first."
-                else "Install the official model from Google Play when this app is downloaded from the Play Store.",
+                if (playAssetState.installed) "✅ Official Play Store model is installed and active (~1.34 GB)."
+                else "Install the official Gemma 2B model with 1 tap from Google Play. No tokens or account required.",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = if (playAssetState.installed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
             )
+
             if (playAssetState.downloading) {
                 LinearProgressIndicator(
                     progress = { playAssetState.progressPercent / 100f },
@@ -1220,38 +1214,41 @@ fun LocalAiModelSection(
                     }
                 }
 
-            } else if (playAssetState.message.isNotBlank()) {
-
+            } else if (playAssetState.message.isNotBlank() && !playAssetState.installed) {
                 Text(
                     playAssetState.message,
                     style = MaterialTheme.typography.bodySmall,
-                    color = if (playAssetState.installed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary
+                    color = MaterialTheme.colorScheme.tertiary
                 )
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(
-                    onClick = {
-                        scope.launch {
-                            runCatching { playAssetProvider.requestModel(context as? android.app.Activity) }
-                        }
-                    },
-                    enabled = !playAssetState.installed && !playAssetState.downloading,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text("Install From Play")
-                }
-                OutlinedButton(
-                    onClick = {
-                        scope.launch {
-                            runCatching { playAssetProvider.refreshState() }
-                        }
-                    },
-                    enabled = !playAssetState.downloading,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text("Refresh")
+
+            if (!playAssetState.installed) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = {
+                            scope.launch {
+                                runCatching { playAssetProvider.requestModel(context as? android.app.Activity) }
+                            }
+                        },
+                        enabled = !playAssetState.downloading,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Install From Play")
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            scope.launch {
+                                runCatching { playAssetProvider.refreshState() }
+                            }
+                        },
+                        enabled = !playAssetState.downloading,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Refresh")
+                    }
                 }
             }
+
             if (playAssetState.statusCode != com.google.android.play.core.assetpacks.model.AssetPackStatus.UNKNOWN ||
                 playAssetState.errorCode != com.google.android.play.core.assetpacks.model.AssetPackErrorCode.NO_ERROR
             ) {
@@ -1261,6 +1258,7 @@ fun LocalAiModelSection(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+
             if (playAssetState.installed) {
                 OutlinedButton(
                     onClick = {
@@ -1275,18 +1273,15 @@ fun LocalAiModelSection(
             }
         }
 
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = Gold.copy(alpha = 0.2f))
-
         Row(
             modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-
             Column(modifier = Modifier.weight(1f)) {
                 Text("Use Local AI by default", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                 Text(
-                    "Uses the downloaded model for text tasks first. Image import still uses cloud AI when needed.",
+                    "Uses the downloaded offline model for text tasks first. Image import uses cloud AI.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -1295,175 +1290,11 @@ fun LocalAiModelSection(
             Switch(
                 checked = useLocalAi,
                 onCheckedChange = onUseLocalAiChange,
-                enabled = anyLocalModelReady
+                enabled = isReady
             )
-        }
-
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-
-            ModelCatalog.BUILTIN_MODELS.forEach { spec ->
-                FilterChip(
-                    selected = !showCustomUrl && selectedSpec.id == spec.id,
-                    onClick = {
-                        showCustomUrl = false
-                        selectedSpec = spec
-                    },
-                    label = {
-                        Text(
-                            buildString {
-                                if (spec.recommended) append("Recommended: ")
-                                append("${spec.displayName} (${spec.version} \u00B7 ~${spec.approxSizeMb} MB)")
-                            }
-                        )
-                    }
-                )
-            }
-            FilterChip(
-                selected = showCustomUrl,
-                onClick = { showCustomUrl = true },
-                label = { Text("🔗 Custom Model URL / GGUF Link...") }
-            )
-        }
-
-
-        if (!showCustomUrl) {
-            Text(
-                "${selectedSpec.description} Format: ${selectedSpec.format}.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-
-        if (showCustomUrl) {
-            OutlinedTextField(
-                value = customUrl,
-                onValueChange = { customUrl = it },
-                singleLine = true,
-                label = { Text("Custom Model .bin URL") },
-                placeholder = { Text("https://your-cdn.example.com/model.bin") },
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
-
-        val isGatedError = (state as? DownloadState.Error)?.message?.contains("401") == true
-        if (showCustomUrl || isGatedError || selectedSpec.requiresAuthToken) {
-            OutlinedTextField(
-                value = hfToken,
-                onValueChange = { hfToken = it },
-                singleLine = true,
-                label = { Text("Hugging Face Access Token (hf_...)") },
-                placeholder = { Text("Optional if installing from Google Play above") },
-                modifier = Modifier.fillMaxWidth()
-            )
-            if (isGatedError || selectedSpec.requiresAuthToken) {
-                Text(
-                    "Hugging Face models require a free Hugging Face token (huggingface.co/settings/tokens). Or tap 'Install From Play' above for 1-tap download with no token.",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-
-
-
-        val downloadedMb = remember(state, selectedSpec) { downloader.getDownloadedSizeMb(selectedSpec) }
-
-        when (val s = state) {
-            is DownloadState.Idle -> {
-                if (!showCustomUrl && isReady) {
-                    Column {
-                        Text(
-                            "✅ ${selectedSpec.displayName} installed ($downloadedMb MB) and ready for 100% offline generation!",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Bold
-                        )
-                        TextButton(onClick = { downloader.deleteModel(selectedSpec.id) }) {
-                            Text("Delete Model ($downloadedMb MB)", color = MaterialTheme.colorScheme.error)
-                        }
-                    }
-                } else {
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        if (downloadedMb > 0) {
-                            Text(
-                                "⚠️ Partial download found ($downloadedMb MB / ~${selectedSpec.approxSizeMb} MB). Tap below to resume!",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.tertiary
-                            )
-                        }
-                        Button(
-                            onClick = {
-                                scope.launch {
-                                    if (showCustomUrl && customUrl.isNotBlank()) {
-                                        downloader.startDownloadUrl("custom_model", customUrl, 500, hfToken)
-                                    } else {
-                                        downloader.startDownload(selectedSpec, hfToken)
-                                    }
-                                }
-                            },
-                            enabled = !showCustomUrl || customUrl.isNotBlank(),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(
-                                if (showCustomUrl) "Download Custom Model"
-                                else if (selectedSpec.recommended) "Download Recommended Model"
-                                else if (downloadedMb > 0) "Resume Downloading ${selectedSpec.displayName}"
-                                else "Download ${selectedSpec.displayName}"
-                            )
-                        }
-                    }
-                }
-            }
-            is DownloadState.Downloading -> {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(
-                        "Downloading model: ${s.progressPercent}% (${s.bytesDownloaded / (1024 * 1024)} MB)",
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                    LinearProgressIndicator(
-                        progress = { s.progressPercent / 100f },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    OutlinedButton(
-                        onClick = { downloader.cancelDownload() },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Cancel Download")
-                    }
-                }
-            }
-            is DownloadState.Ready -> {
-                Text(
-                    "✅ Model download complete! Local AI is active.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-            is DownloadState.Error -> {
-                Text(
-                    "⚠️ Download issue: ${s.message}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error
-                )
-                Button(
-                    onClick = {
-                        scope.launch {
-                            if (showCustomUrl && customUrl.isNotBlank()) {
-                                downloader.startDownloadUrl("custom_model", customUrl, 500, hfToken)
-                            } else {
-                                downloader.startDownload(selectedSpec, hfToken)
-                            }
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Retry Download")
-                }
-            }
         }
     }
 }
-
 
 @Composable
 private fun HevySyncSection(

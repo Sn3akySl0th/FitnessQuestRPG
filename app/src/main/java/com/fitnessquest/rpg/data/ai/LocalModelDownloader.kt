@@ -54,33 +54,10 @@ object ModelCatalog {
         enabled = BuildConfig.FITQUEST_LLM_MODEL_URL.isNotBlank() && BuildConfig.FITQUEST_LLM_MODEL_SIZE_MB > 0
     )
 
-    val CURATED_MODELS = listOf(
-        LocalModelSpec(
-            id = "gemma_2b_it",
-            displayName = "Gemma 1.1 2B (Optimized)",
-            version = "v1.1",
-            approxSizeMb = 1350,
-            downloadUrl = "https://huggingface.co/bartowski/gemma-1.1-2b-it-GenAI/resolve/main/gemma-1.1-2b-it-cpu-int4.bin",
-            description = "Google Gemma 2B. Requires accepting Hugging Face license and entering free token (or install 1-tap from Google Play above).",
-            requiresAuthToken = true
-        ),
-        LocalModelSpec(
-            id = "llama_3_2_1b",
-            displayName = "Llama 3.2 1B (Fast)",
-            version = "v3.2",
-            approxSizeMb = 850,
-            downloadUrl = "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GenAI/resolve/main/Llama-3.2-1B-Instruct-cpu-int4.bin",
-            description = "Meta Llama 3.2 1B. Requires accepting Meta license on Hugging Face and entering free token.",
-            requiresAuthToken = true
-        )
-    )
-
-
-
+    val CURATED_MODELS = emptyList<LocalModelSpec>()
 
     val BUILTIN_MODELS = buildList {
         if (HOSTED_MODEL.enabled) add(HOSTED_MODEL)
-        addAll(CURATED_MODELS)
     }
 
     val hasHostedModel: Boolean get() = HOSTED_MODEL.enabled
