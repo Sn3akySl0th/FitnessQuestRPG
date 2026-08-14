@@ -61,8 +61,8 @@ object ModelCatalog {
             version = "v1.1",
             approxSizeMb = 1350,
             downloadUrl = "https://huggingface.co/bartowski/gemma-1.1-2b-it-GenAI/resolve/main/gemma-1.1-2b-it-cpu-int4.bin",
-            description = "Public mirror — no token required. Optimized for mobile.",
-            requiresAuthToken = false
+            description = "Google Gemma 2B. Requires accepting Hugging Face license and entering free token (or install 1-tap from Google Play above).",
+            requiresAuthToken = true
         ),
         LocalModelSpec(
             id = "llama_3_2_1b",
@@ -70,8 +70,8 @@ object ModelCatalog {
             version = "v3.2",
             approxSizeMb = 850,
             downloadUrl = "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GenAI/resolve/main/Llama-3.2-1B-Instruct-cpu-int4.bin",
-            description = "Public mirror — no token required. Meta's latest small model.",
-            requiresAuthToken = false
+            description = "Meta Llama 3.2 1B. Requires accepting Meta license on Hugging Face and entering free token.",
+            requiresAuthToken = true
         )
     )
 

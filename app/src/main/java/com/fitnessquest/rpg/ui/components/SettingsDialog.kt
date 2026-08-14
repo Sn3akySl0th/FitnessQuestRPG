@@ -1346,20 +1346,20 @@ fun LocalAiModelSection(
         }
 
         val isGatedError = (state as? DownloadState.Error)?.message?.contains("401") == true
-        if (showCustomUrl || isGatedError) {
+        if (showCustomUrl || isGatedError || selectedSpec.requiresAuthToken) {
             OutlinedTextField(
                 value = hfToken,
                 onValueChange = { hfToken = it },
                 singleLine = true,
                 label = { Text("Hugging Face Access Token (hf_...)") },
-                placeholder = { Text("Required for gated models") },
+                placeholder = { Text("Optional if installing from Google Play above") },
                 modifier = Modifier.fillMaxWidth()
             )
-            if (isGatedError) {
+            if (isGatedError || selectedSpec.requiresAuthToken) {
                 Text(
-                    "This model requires a free Hugging Face token. Create one at huggingface.co/settings/tokens and paste it above.",
+                    "Hugging Face models require a free Hugging Face token (huggingface.co/settings/tokens). Or tap 'Install From Play' above for 1-tap download with no token.",
                     style = MaterialTheme.typography.labelSmall,
-                    color = Gold
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }

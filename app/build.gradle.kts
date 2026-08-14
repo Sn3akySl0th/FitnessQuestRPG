@@ -34,6 +34,7 @@ val generatedWearAssetsDir = layout.projectDirectory.dir("src/main/assets/wear")
 android {
     namespace = "com.fitnessquest.rpg"
     compileSdk = 37
+    assetPacks += listOf(":local_ai_model")
 
     defaultConfig {
         applicationId = "com.fitnessquest.rpg"

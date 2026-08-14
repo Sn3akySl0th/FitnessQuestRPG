@@ -24,4 +24,5 @@ rootProject.name = "FitnessRPG"
 include(":app")
 include(":shared")
 include(":wear")
+include(":local_ai_model")
 
