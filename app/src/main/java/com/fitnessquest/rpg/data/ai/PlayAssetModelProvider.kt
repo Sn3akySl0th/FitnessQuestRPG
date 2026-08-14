@@ -113,13 +113,27 @@ class PlayAssetModelProvider(private val context: Context) {
         return result
     }
 
-    suspend fun showCellularConfirmation(activity: Activity): Boolean {
+    suspend fun showConsentDialog(activity: Activity): Boolean {
         return runCatching {
-            manager.showCellularDataConfirmation(activity).await()
+            Log.d("FitQuest", "Triggering Play Store consent dialog on activity $activity")
+            val status = queryPackState()?.statusCode ?: _state.value.statusCode
+            if (status == AssetPackStatus.REQUIRES_USER_CONFIRMATION) {
+                manager.showConfirmationDialog(activity).await()
+            } else {
+                manager.showCellularDataConfirmation(activity).await()
+            }
             refreshState()
             true
+        }.onFailure { e ->
+            Log.e("FitQuest", "Consent dialog primary call failed", e)
+            runCatching {
+                manager.showConfirmationDialog(activity).await()
+                refreshState()
+            }
         }.getOrDefault(false)
     }
+
+    suspend fun showCellularConfirmation(activity: Activity): Boolean = showConsentDialog(activity)
 
     suspend fun refreshState(): PlayAssetModelState {
 

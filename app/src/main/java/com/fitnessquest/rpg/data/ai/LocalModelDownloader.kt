@@ -65,11 +65,6 @@ object ModelCatalog {
 
 
 
-enum class LocalModelType(val displayName: String, val approxSizeMb: Int, val downloadUrl: String) {
-    LITE("Lite Model (Qwen 0.5B)", 350, "https://huggingface.co/Qwen/Qwen1.5-0.5B-Chat-GGUF/resolve/main/qwen1_5-0_5b-chat-q4_k_m.gguf"),
-    STANDARD("Standard Model (Qwen 1.5B)", 980, "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf")
-}
-
 sealed class DownloadState {
     object Idle : DownloadState()
     data class Downloading(val bytesDownloaded: Long, val totalBytes: Long, val progressPercent: Int) : DownloadState()
@@ -96,8 +91,6 @@ class LocalModelDownloader(private val context: Context) {
         return File(modelsDir, "local_llm_${cleanId}.bin")
     }
 
-    fun getModelFile(modelType: LocalModelType): File = getModelFile(modelType.name)
-
     fun getDownloadedSizeMb(spec: LocalModelSpec): Int {
         val file = getModelFile(spec.id)
         return if (file.exists()) (file.length() / (1024 * 1024L)).toInt() else 0
@@ -115,12 +108,6 @@ class LocalModelDownloader(private val context: Context) {
         return file.length() >= minSizeBytes
     }
 
-    fun isModelReady(modelType: LocalModelType): Boolean {
-        val file = getModelFile(modelType)
-        val minSizeBytes = (modelType.approxSizeMb * 0.99f * 1024 * 1024L).toLong()
-        return file.exists() && file.length() >= minSizeBytes
-    }
-
     fun migrateFromPlayAsset(playAssetFile: File?): Boolean {
         if (playAssetFile == null || !playAssetFile.exists() || playAssetFile.length() < 100_000_000L) return false
         val target = getModelFile("gemma_2b_it")
@@ -135,17 +122,15 @@ class LocalModelDownloader(private val context: Context) {
         }
     }
 
-    suspend fun startDownload(spec: LocalModelSpec, hfToken: String = "") {
-        startDownloadUrl(spec.id, spec.downloadUrl, spec.approxSizeMb, hfToken, spec)
+    suspend fun startDownload(spec: LocalModelSpec, authToken: String = "") {
+        startDownloadUrl(spec.id, spec.downloadUrl, spec.approxSizeMb, authToken, spec)
     }
-
-    suspend fun startDownload(modelType: LocalModelType, hfToken: String = "") { startDownloadUrl(modelType.name, modelType.downloadUrl, modelType.approxSizeMb, hfToken) }
 
     suspend fun startDownloadUrl(
         modelId: String,
         downloadUrl: String,
         approxSizeMb: Int,
-        hfToken: String = "",
+        authToken: String = "",
         spec: LocalModelSpec? = null
     ): Unit = withContext(Dispatchers.IO) {
 
@@ -173,8 +158,8 @@ class LocalModelDownloader(private val context: Context) {
                 requestBuilder.header("Range", "bytes=$existingBytes-")
             }
 
-            if (hfToken.isNotBlank()) {
-                requestBuilder.header("Authorization", "Bearer ${hfToken.trim()}")
+            if (authToken.isNotBlank()) {
+                requestBuilder.header("Authorization", "Bearer ${authToken.trim()}")
             }
 
             val call = httpClient.newCall(requestBuilder.build())
@@ -182,7 +167,7 @@ class LocalModelDownloader(private val context: Context) {
             Log.d("FitQuest", "Starting download from $downloadUrl")
             var response = call.execute()
 
-            // Handle multi-hop redirects (e.g. HuggingFace -> CDN -> Pre-signed S3/Cloudflare)
+            // Handle multi-hop redirects (e.g. Host -> CDN -> Pre-signed S3/Cloudflare)
             var currentUrl = downloadUrl
             var redirectCount = 0
             val maxRedirects = 10
@@ -205,8 +190,8 @@ class LocalModelDownloader(private val context: Context) {
                 if (existingBytes > 0) {
                     redirectRequestBuilder.header("Range", "bytes=$existingBytes-")
                 }
-                if (isSameHost && hfToken.isNotBlank()) {
-                    redirectRequestBuilder.header("Authorization", "Bearer ${hfToken.trim()}")
+                if (isSameHost && authToken.isNotBlank()) {
+                    redirectRequestBuilder.header("Authorization", "Bearer ${authToken.trim()}")
                 }
 
                 currentUrl = newUrl
@@ -218,8 +203,8 @@ class LocalModelDownloader(private val context: Context) {
             if (!response.isSuccessful && response.code != 416) {
 
                 val errorMsg = when (response.code) {
-                    401 -> "HTTP 401: Gated model — enter your free Hugging Face token (hf_...) below to download."
-                    403 -> "HTTP 403: Access forbidden — check Hugging Face model terms."
+                    401 -> "HTTP 401: Unauthorized access to model URL."
+                    403 -> "HTTP 403: Access forbidden to model URL."
                     404 -> "HTTP 404: Model file not found at URL."
                     else -> "HTTP ${response.code}: Could not download model weights."
                 }
@@ -295,8 +280,6 @@ class LocalModelDownloader(private val context: Context) {
         _downloadState.value = DownloadState.Idle
         return deleted
     }
-
-    fun deleteModel(modelType: LocalModelType): Boolean = deleteModel(modelType.name)
 
     private fun LocalModelSpec.validateDownloadedFile(file: File): String? {
         if (!file.exists()) return "Downloaded model file was not created."

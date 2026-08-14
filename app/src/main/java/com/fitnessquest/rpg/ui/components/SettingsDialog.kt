@@ -1142,10 +1142,10 @@ private fun LocalAiModelSection(
     val playAssetState by playAssetProvider.state.collectAsState()
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val activity = LocalActivity.current ?: context.findActivity()
     val isReady = playAssetState.installed || downloader.getModelFile("gemma_2b_it").exists()
 
     DisposableEffect(playAssetState.downloading) {
-        val activity = context as? Activity
         if (playAssetState.downloading) {
             activity?.window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
@@ -1200,17 +1200,20 @@ private fun LocalAiModelSection(
                     playAssetState.statusCode == AssetPackStatus.REQUIRES_USER_CONFIRMATION) {
                     Button(
                         onClick = {
-                            val act = context as? Activity
+                            val act = activity ?: context.findActivity()
                             if (act != null) {
                                 scope.launch {
-                                    viewModel.playAssetProvider.showCellularConfirmation(act)
+                                    viewModel.playAssetProvider.showConsentDialog(act)
                                 }
                             }
                         },
                         modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary)
                     ) {
-                        Text("Approve Cellular Download")
+                        Text(
+                            if (playAssetState.statusCode == AssetPackStatus.REQUIRES_USER_CONFIRMATION) "Confirm Download with Google Play"
+                            else "Approve Cellular Download"
+                        )
                     }
                 }
 
@@ -1226,8 +1229,9 @@ private fun LocalAiModelSection(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
                         onClick = {
+                            val act = activity ?: context.findActivity()
                             scope.launch {
-                                runCatching { playAssetProvider.requestModel(context as? android.app.Activity) }
+                                runCatching { playAssetProvider.requestModel(act) }
                             }
                         },
                         enabled = !playAssetState.downloading,
@@ -1447,4 +1451,13 @@ private fun HevySyncSection(
             Text(if (isRepairing) "Cleaning..." else "🧹 Clean Up Fragmented CSV Routines")
         }
     }
+}
+
+private fun Context.findActivity(): Activity? {
+    var ctx = this
+    while (ctx is android.content.ContextWrapper) {
+        if (ctx is Activity) return ctx
+        ctx = ctx.baseContext
+    }
+    return null
 }
