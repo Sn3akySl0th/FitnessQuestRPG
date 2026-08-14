@@ -170,9 +170,9 @@ class HeroViewModel(private val container: AppContainer) : ViewModel() {
             ))
             add(Bounty(
                 id = "b_steps",
-                title = "👟 Walk 3,000 Steps",
+                title = "👟 Walk ${"%,d".format(3000)} Steps",
                 rewardText = "40💰 +25🧪",
-                progressText = "${"%,d".format(steps)} / 3,000",
+                progressText = "${"%,d".format(steps)} / ${"%,d".format(3000)}",
                 isCompleted = steps >= 3000,
                 isClaimed = "b_steps" in claimed
             ))
@@ -184,17 +184,17 @@ class HeroViewModel(private val container: AppContainer) : ViewModel() {
                 isCompleted = weightDone,
                 isClaimed = "b_weight" in claimed,
                 canLogProgress = !weightDone,
-                logLabel = "Log Weight"
+                logLabel = "I weighed in"
             ))
             add(Bounty(
                 id = "b_water",
-                title = "💧 Hydrate (8 glasses)",
+                title = "💧 Drink 8 Glasses of Water",
                 rewardText = "15💰 5⚡",
                 progressText = "$water / 8",
                 isCompleted = water >= 8,
                 isClaimed = "b_water" in claimed,
                 canLogProgress = true,
-                logLabel = "+1 glass"
+                logLabel = "+1 Glass"
             ))
             add(Bounty(
                 id = "b_stretch",
@@ -211,10 +211,13 @@ class HeroViewModel(private val container: AppContainer) : ViewModel() {
 
     val weeklyCampaigns: StateFlow<List<WeeklyCampaign>> = combine(
         uiState.map { it.character }.filterNotNull(),
-        container.repository.character.map { it.sessionsCompleted }
-    ) { c, totalSessions ->
-        val weekStartDay = weekStart(LocalDate.now()).toEpochDay()
+        container.repository.sessions
+    ) { c, sessions ->
+        val weekStart = weekStart(LocalDate.now())
+        val weekStartDay = weekStart.toEpochDay()
+        val weekStartMillis = weekStart.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
         val won = c.battlesWon - container.prefs.campaignBattlesStart(weekStartDay, c.battlesWon)
+        val workoutsThisWeek = sessions.count { it.startedAt >= weekStartMillis }
         val claimed = c.claimedCampaigns.split(",").toSet()
         
         listOf(
@@ -233,9 +236,9 @@ class HeroViewModel(private val container: AppContainer) : ViewModel() {
                 title = "🏋️ Legendary Discipline",
                 flavor = "Complete 4 workouts this week.",
                 rewardText = "200💰 +150🧪",
-                progressText = "${c.sessionsCompleted % 5} / 4",
-                progress = ((c.sessionsCompleted % 5) / 4f).coerceIn(0f, 1f),
-                isCompleted = (c.sessionsCompleted % 5) >= 4,
+                progressText = "$workoutsThisWeek / 4",
+                progress = (workoutsThisWeek / 4f).coerceIn(0f, 1f),
+                isCompleted = workoutsThisWeek >= 4,
                 isClaimed = "c_train" in claimed
             )
         )
@@ -606,7 +609,7 @@ private fun HeroHeaderBanner(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(280.dp)
+            .heightIn(min = 240.dp, max = 280.dp)
             .background(brush)
             .statusBarsPadding()
     ) {
@@ -638,9 +641,8 @@ private fun HeroHeaderBanner(
             
             Column(Modifier.weight(0.55f)) {
                 val nameFontSize = when {
-                    character.name.length > 14 -> 15.sp
-                    character.name.length > 10 -> 18.sp
-                    character.name.length > 7 -> 21.sp
+                    character.name.length > 14 -> 18.sp
+                    character.name.length > 9 -> 21.sp
                     else -> 26.sp
                 }
                 Text(
@@ -820,9 +822,11 @@ private fun HeroCurrencyBar(character: CharacterEntity, viewModel: HeroViewModel
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp)
+            .heightIn(min = 48.dp)
+            .padding(horizontal = 16.dp, vertical = 10.dp)
             .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
         FantasyToken(emoji = "💰", text = character.gold.toString())
         FantasyToken(

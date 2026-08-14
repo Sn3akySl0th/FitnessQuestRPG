@@ -21,9 +21,13 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -258,6 +262,8 @@ fun FightScreen(
     Column(
         Modifier
             .fillMaxSize()
+            .statusBarsPadding()
+            .navigationBarsPadding()
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
@@ -277,18 +283,27 @@ fun FightScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                "${battle.monster.name}  \u00B7  Lv ${battle.monster.level}",
+                "${battle.monster.name}  ·  Lv ${battle.monster.level}",
                 style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false)
             )
             battle.monster.trait?.let { trait ->
                 Spacer(Modifier.width(8.dp))
-                Text(
-                    "${trait.emoji} ${trait.label}",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.tertiary
-                )
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f)
+                ) {
+                    Text(
+                        "${trait.emoji} ${trait.label}",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.tertiary,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
             }
         }
 
@@ -329,17 +344,21 @@ fun FightScreen(
             ) { showMiniGame = false }
         }
 
+        // Primary Attack Button (prominent thumb-zone placement)
+        Button(
+            onClick = { showMiniGame = true },
+            enabled = fighting,
+            modifier = Modifier.fillMaxWidth().height(48.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+        ) { 
+            Text("⚔️ Attack", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center) 
+        }
+
+        // Skills (3-skill row)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(
-                onClick = { showMiniGame = true },
-                enabled = fighting,
-                modifier = Modifier.weight(1f)
-            ) { Text("\u2694\uFE0F Attack", textAlign = TextAlign.Center) }
             SkillButton(battle, index = 0, enabled = fighting, modifier = Modifier.weight(1f)) {
                 viewModel.act(BattleAction.SKILL, 0)
             }
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             SkillButton(battle, index = 1, enabled = fighting, modifier = Modifier.weight(1f)) {
                 viewModel.act(BattleAction.SKILL, 1)
             }
@@ -347,17 +366,19 @@ fun FightScreen(
                 viewModel.act(BattleAction.SKILL, 2)
             }
         }
+
+        // Utility: Defend & Flee
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(
                 onClick = { viewModel.act(BattleAction.DEFEND) },
                 enabled = fighting,
                 modifier = Modifier.weight(1f)
-            ) { Text("\uD83D\uDEE1\uFE0F Defend") }
+            ) { Text("🛡️ Defend") }
             OutlinedButton(
                 onClick = { viewModel.act(BattleAction.FLEE) },
                 enabled = fighting,
                 modifier = Modifier.weight(1f)
-            ) { Text("\uD83C\uDFC3 Flee") }
+            ) { Text("🏃 Flee") }
         }
     }
 
@@ -413,7 +434,7 @@ private fun VictoryOverlay(state: FightUiState, onDismiss: () -> Unit) {
             ) {
                 Text(battle.monster.emoji, style = MaterialTheme.typography.displayLarge)
                 Text(
-                    "\uD83C\uDFC6 VICTORY!",
+                    "🏆 VICTORY!",
                     style = MaterialTheme.typography.headlineLarge,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary,
@@ -427,7 +448,7 @@ private fun VictoryOverlay(state: FightUiState, onDismiss: () -> Unit) {
                 )
                 Spacer(Modifier.height(16.dp))
                 Text(
-                    "+${countUp(battle.monster.goldReward)} \uD83D\uDCB0   +${countUp(battle.monster.xpReward)} XP",
+                    "+${countUp(battle.monster.goldReward)} 💰   +${countUp(battle.monster.xpReward)} XP",
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
@@ -436,7 +457,7 @@ private fun VictoryOverlay(state: FightUiState, onDismiss: () -> Unit) {
                     Spacer(Modifier.height(12.dp))
                     state.lootLabels.forEach { label ->
                         Text(
-                            "\uD83C\uDF81 $label",
+                            "🎁 $label",
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.tertiary,
@@ -448,7 +469,7 @@ private fun VictoryOverlay(state: FightUiState, onDismiss: () -> Unit) {
                     state.narration != null -> {
                         Spacer(Modifier.height(12.dp))
                         Text(
-                            "\u201C${state.narration}\u201D",
+                            "“${state.narration}”",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center
@@ -465,6 +486,7 @@ private fun VictoryOverlay(state: FightUiState, onDismiss: () -> Unit) {
                 }
 
                 Spacer(Modifier.height(24.dp))
+                val isRewardLoading = state.rewardBatch == null
                 Button(
                     onClick = {
                         if (state.rewardBatch != null) {
@@ -473,15 +495,25 @@ private fun VictoryOverlay(state: FightUiState, onDismiss: () -> Unit) {
                             onDismiss()
                         }
                     },
+                    enabled = !isRewardLoading,
                     modifier = Modifier.fillMaxWidth().height(56.dp),
                     shape = RoundedCornerShape(28.dp),
-                    colors = if (state.rewardBatch != null) ButtonDefaults.buttonColors(containerColor = Gold) else ButtonDefaults.buttonColors()
+                    colors = ButtonDefaults.buttonColors(containerColor = Gold)
                 ) {
-                    Text(
-                        if (state.rewardBatch != null) "Claim Rewards" else "Finish",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = if (state.rewardBatch != null) NightBg else Color.White
-                    )
+                    if (isRewardLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            color = NightBg,
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Text(
+                            "✨ Claim Rewards",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = NightBg
+                        )
+                    }
                 }
             }
 
@@ -498,11 +530,11 @@ private fun VictoryOverlay(state: FightUiState, onDismiss: () -> Unit) {
 private fun BattleEndDialog(state: FightUiState, onDismiss: () -> Unit) {
     val battle = state.battle ?: return
     val (title, message) = when (battle.outcome) {
-        BattleOutcome.VICTORY -> "\uD83C\uDFC6 Victory!" to
-            "You defeated the ${battle.monster.name}!\n+${battle.monster.goldReward} gold \u00B7 +${battle.monster.xpReward} XP"
-        BattleOutcome.DEFEAT -> "\uD83D\uDC80 Defeated" to
+        BattleOutcome.VICTORY -> "🏆 Victory!" to
+            "You defeated the ${battle.monster.name}!\n+${battle.monster.goldReward} gold · +${battle.monster.xpReward} XP"
+        BattleOutcome.DEFEAT -> "💀 Defeated" to
             "The ${battle.monster.name} was too strong. Train in the real world and return mightier!"
-        BattleOutcome.FLED -> "\uD83C\uDFC3 Escaped" to
+        BattleOutcome.FLED -> "🏃 Escaped" to
             "You live to fight another day. The energy was still spent."
         BattleOutcome.ONGOING -> return
     }
@@ -516,7 +548,7 @@ private fun BattleEndDialog(state: FightUiState, onDismiss: () -> Unit) {
                 if (state.lootLabels.isNotEmpty()) {
                     state.lootLabels.forEach { label ->
                         Text(
-                            "\uD83C\uDF81 $label",
+                            "🎁 $label",
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.primary
                         )
@@ -524,7 +556,7 @@ private fun BattleEndDialog(state: FightUiState, onDismiss: () -> Unit) {
                 }
                 when {
                     state.narration != null -> Text(
-                        "\u201C${state.narration}\u201D",
+                        "“${state.narration}”",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -556,7 +588,7 @@ private fun SkillButton(
     ) {
         Text(
             when {
-                !unlocked -> "\uD83D\uDD12 ${skill.name} \u00B7 Lv ${skill.unlockLevel}"
+                !unlocked -> "🔒 ${skill.name} · Lv ${skill.unlockLevel}"
                 cooldown > 0 -> "${skill.emoji} ${skill.name} ($cooldown)"
                 else -> "${skill.emoji} ${skill.name}"
             },
@@ -598,7 +630,7 @@ private fun PrecisionAttackDialog(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Text("\u2694\uFE0F PRECISION STRIKE!", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text("⚔️ PRECISION STRIKE!", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Text("Tap STRIKE when the indicator lands in the Gold PERFECT zone!", style = MaterialTheme.typography.bodySmall)
 
                 BoxWithConstraints(
@@ -629,9 +661,10 @@ private fun PrecisionAttackDialog(
                     )
                 }
                 Text(
-                    "Gold zone: ${(perfectStart * 100).toInt()}-${(perfectEnd * 100).toInt()}%",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    "🎯 Hit the center Gold bar for a Critical 1.5x Multiplier!",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Gold
                 )
                 preview?.let {
                     Text(
