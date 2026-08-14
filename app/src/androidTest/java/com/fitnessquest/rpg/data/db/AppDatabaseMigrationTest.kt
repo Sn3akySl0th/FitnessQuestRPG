@@ -50,31 +50,31 @@ class AppDatabaseMigrationTest {
     }
 
     /**
-     * Test clean database creation at the current schema (Version 25).
-     * Validates that all 14 entities and expected indexes are created without error.
+     * Test clean database creation at the current schema (Version 26).
+     * Validates that all 15 entities and expected indexes are created without error.
      */
     @Test
-    fun cleanDatabaseCreationAtVersion25_validatesSchemaAndEntities() {
-        val name = "clean-v25-${System.nanoTime()}"
+    fun cleanDatabaseCreationAtVersion26_validatesSchemaAndEntities() {
+        val name = "clean-v26-${System.nanoTime()}"
         databaseNames += name
         val db = buildDatabase(name)
         val sql = db.openHelper.writableDatabase
-        assertVersion25TablesExist(sql, startVersion = 25)
+        assertVersion26TablesExist(sql, startVersion = 26)
         db.close()
     }
 
     /**
-     * Test every migration path that the app officially supports from V1 through V24 to V25.
-     * Starts at inferred V1 schema derived by working backward from V25 entities and migrations.
-     * Sequentially applies production migrations to build checkpoints V1..V24.
-     * Collects failures across all starting versions so a failure in V1 does not block testing V2..V24.
+     * Test every migration path that the app officially supports from V1 through V25 to V26.
+     * Starts at inferred V1 schema derived by working backward from V26 entities and migrations.
+     * Sequentially applies production migrations to build checkpoints V1..V25.
+     * Collects failures across all starting versions so a failure in V1 does not block testing V2..V25.
      */
     @Test
-    fun migrateAllSupportedVersions_V1ThroughV24_toVersion25() {
+    fun migrateAllSupportedVersions_V1ThroughV25_toVersion26() {
         val failures = mutableListOf<String>()
 
-        for (startVersion in 1..24) {
-            val name = "migration-v${startVersion}-to-v25-${System.nanoTime()}"
+        for (startVersion in 1..25) {
+            val name = "migration-v${startVersion}-to-v26-${System.nanoTime()}"
             databaseNames += name
 
             try {
@@ -86,7 +86,7 @@ class AppDatabaseMigrationTest {
                 // Open with Room using full ALL_MIGRATIONS array
                 withMigratedDatabase(name) { migratedDb ->
                     val sql = migratedDb.openHelper.writableDatabase
-                    assertVersion25TablesExist(sql, startVersion)
+                    assertVersion26TablesExist(sql, startVersion)
                     verifySeededDataSurvived(sql, startVersion)
                 }
             } catch (e: Throwable) {
@@ -123,7 +123,7 @@ class AppDatabaseMigrationTest {
                 "[Restored V23 Malformed] workout_exercises.targetWeightKg missing after repair migration",
                 columnExists(sql, "workout_exercises", "targetWeightKg")
             )
-            assertVersion25TablesExist(sql, startVersion = 23)
+            assertVersion26TablesExist(sql, startVersion = 23)
             sql.query("SELECT exerciseName FROM workout_exercises WHERE id = 999").use { cursor ->
                 assertTrue("[Restored V23 Malformed] workout_exercises row missing after repair", cursor.moveToFirst())
                 assertEquals("Malformed Bench", cursor.getString(0))
@@ -155,7 +155,7 @@ class AppDatabaseMigrationTest {
                 "[Restored V23 Malformed] set_logs.setType missing after repair migration",
                 columnExists(sql, "set_logs", "setType")
             )
-            assertVersion25TablesExist(sql, startVersion = 23)
+            assertVersion26TablesExist(sql, startVersion = 23)
             sql.query("SELECT exerciseName, setType FROM set_logs WHERE id = 999").use { cursor ->
                 assertTrue("[Restored V23 Malformed] set_logs row missing after repair", cursor.moveToFirst())
                 assertEquals("Legacy Press", cursor.getString(0))
@@ -196,7 +196,7 @@ class AppDatabaseMigrationTest {
                 "[Restored V24 Malformed] index_sessions_completion_token missing after repair migration",
                 indexExists(sql, "index_sessions_completion_token")
             )
-            assertVersion25TablesExist(sql, startVersion = 24)
+            assertVersion26TablesExist(sql, startVersion = 24)
             sql.query("SELECT name FROM sessions WHERE id = 999").use { cursor ->
                 assertTrue("[Restored V24 Malformed] sessions row missing after repair", cursor.moveToFirst())
                 assertEquals("Restored V24 Session", cursor.getString(0))
@@ -228,7 +228,7 @@ class AppDatabaseMigrationTest {
                 assertEquals("token-v24", cursor.getString(0))
                 assertEquals(receipt, cursor.getString(1))
             }
-            assertVersion25TablesExist(sql, startVersion = 24)
+            assertVersion26TablesExist(sql, startVersion = 24)
         }
     }
 
@@ -544,20 +544,29 @@ class AppDatabaseMigrationTest {
             it.moveToFirst()
         }
 
-    private fun assertVersion25TablesExist(db: SupportSQLiteDatabase, startVersion: Int) {
+    private fun assertVersion26TablesExist(db: SupportSQLiteDatabase, startVersion: Int) {
         val requiredTables = listOf(
             "character", "workouts", "workout_exercises", "sessions", "set_logs",
             "items", "gear_instances", "biome_progress", "class_progress", "body_metrics",
-            "active_sessions", "active_session_exercises", "active_session_set_logs", "pending_sync_outbox"
+            "active_sessions", "active_session_exercises", "active_session_set_logs", "pending_sync_outbox",
+            "movement_mastery"
         )
         for (table in requiredTables) {
             assertTrue(
-                "[Migration V$startVersion->V25] Expected V25 table '$table' does not exist",
+                "[Migration V$startVersion->V26] Expected V26 table '$table' does not exist",
                 tableExists(db, table)
             )
         }
+        assertTrue(
+            "[Migration V$startVersion->V26] Expected unique index 'index_movement_mastery_characterId_canonicalKey' missing",
+            indexExists(db, "index_movement_mastery_characterId_canonicalKey")
+        )
+        assertTrue(
+            "[Migration V$startVersion->V26] Expected index 'index_movement_mastery_category' missing",
+            indexExists(db, "index_movement_mastery_category")
+        )
         assertFalse(
-            "[Migration V$startVersion->V25] Unexpected temp table 'sessions_current' was left in database",
+            "[Migration V$startVersion->V26] Unexpected temp table 'sessions_current' was left in database",
             tableExists(db, "sessions_current")
         )
     }

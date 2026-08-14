@@ -19,6 +19,8 @@ import com.fitnessquest.rpg.data.db.ClassProgressDao
 import com.fitnessquest.rpg.data.db.ExerciseCategory
 import com.fitnessquest.rpg.data.db.GearInstanceDao
 import com.fitnessquest.rpg.data.db.ItemDao
+import com.fitnessquest.rpg.data.db.MovementMasteryDao
+import com.fitnessquest.rpg.data.db.MovementMasteryEntity
 import com.fitnessquest.rpg.data.db.PendingSyncEntity
 import com.fitnessquest.rpg.data.db.SessionDao
 import com.fitnessquest.rpg.data.db.SessionEntity
@@ -248,9 +250,38 @@ class ActiveSessionTest {
             }
         } as CharacterDao
 
+        val movementMasteries = mutableMapOf<String, MovementMasteryEntity>()
+        val movementMasteryFlow = MutableStateFlow<List<MovementMasteryEntity>>(emptyList())
+
+        val movementMasteryDaoProxy = Proxy.newProxyInstance(
+            MovementMasteryDao::class.java.classLoader,
+            arrayOf(MovementMasteryDao::class.java)
+        ) { _, method, args ->
+            when (method.name) {
+                "getByCanonicalKey" -> movementMasteries[args[0] as String]
+                "getAll" -> movementMasteries.values.toList()
+                "observeAll" -> movementMasteryFlow
+                "upsert" -> {
+                    val entity = args[0] as MovementMasteryEntity
+                    movementMasteries[entity.canonicalKey] = entity
+                    movementMasteryFlow.value = movementMasteries.values.toList()
+                    1L
+                }
+                "upsertAll" -> {
+                    @Suppress("UNCHECKED_CAST")
+                    val list = args[0] as List<MovementMasteryEntity>
+                    list.forEach { movementMasteries[it.canonicalKey] = it }
+                    movementMasteryFlow.value = movementMasteries.values.toList()
+                    null
+                }
+                else -> null
+            }
+        } as MovementMasteryDao
+
         override fun activeSessionDao(): ActiveSessionDao = activeSessionDaoProxy
         override fun sessionDao(): SessionDao = sessionDaoProxy
         override fun characterDao(): CharacterDao = characterDaoProxy
+        override fun movementMasteryDao(): MovementMasteryDao = movementMasteryDaoProxy
         override fun workoutDao(): WorkoutDao = createDummyProxy()
         override fun itemDao(): ItemDao = createDummyProxy()
         override fun gearInstanceDao(): GearInstanceDao = createDummyProxy()

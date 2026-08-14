@@ -15,6 +15,7 @@ import com.fitnessquest.rpg.data.db.GearInstanceEntity
 import com.fitnessquest.rpg.data.db.ItemDao
 import com.fitnessquest.rpg.data.db.ItemEntity
 import com.fitnessquest.rpg.data.db.ItemSlot
+import com.fitnessquest.rpg.data.db.MovementMasteryDao
 import com.fitnessquest.rpg.data.db.SessionDao
 import com.fitnessquest.rpg.data.db.WorkoutDao
 import com.fitnessquest.rpg.data.db.isEquippable
@@ -170,6 +171,7 @@ class BossVictoryTest {
         override fun workoutDao(): WorkoutDao = createDummyDao()
         override fun classProgressDao(): ClassProgressDao = createDummyDao()
         override fun bodyMetricDao(): BodyMetricDao = createDummyDao()
+        override fun movementMasteryDao(): MovementMasteryDao = createDummyDao()
 
         private val directExecutor = Executor { it.run() }
         override val transactionExecutor: Executor = directExecutor

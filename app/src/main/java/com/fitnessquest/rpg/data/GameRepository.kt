@@ -15,11 +15,14 @@ import com.fitnessquest.rpg.data.db.ExerciseCategory
 import com.fitnessquest.rpg.data.db.GearInstanceEntity
 import com.fitnessquest.rpg.data.db.ItemEntity
 import com.fitnessquest.rpg.data.db.ItemSlot
+import com.fitnessquest.rpg.data.db.MovementMasteryEntity
 import com.fitnessquest.rpg.data.db.PendingSyncEntity
 import com.fitnessquest.rpg.data.db.SessionEntity
 import com.fitnessquest.rpg.data.db.SessionReceiptCodec
 import com.fitnessquest.rpg.data.db.SetLogEntity
 import com.fitnessquest.rpg.domain.SetType
+import com.fitnessquest.rpg.domain.mastery.MovementMasteryCatalog
+import com.fitnessquest.rpg.domain.mastery.MasteryProgression
 import com.fitnessquest.rpg.data.db.WorkoutEntity
 import com.fitnessquest.rpg.data.db.WorkoutExerciseEntity
 import com.fitnessquest.rpg.data.db.isEquippable
@@ -902,6 +905,77 @@ class GameRepository(
                 )
             )
             db.sessionDao().insertSetLogs(withXp.map { it.copy(sessionId = sessionId) })
+
+            // -------------------------------------------------------------
+            // Movement Mastery Progression Award
+            // -------------------------------------------------------------
+            if (withXp.isNotEmpty()) {
+                val groupedByMovement = withXp.groupBy {
+                    MovementMasteryCatalog.resolve(it.exerciseName, it.category)
+                }
+
+                val userWeight = character.bodyWeightKg
+
+                for ((movement, sets) in groupedByMovement) {
+                    val rawXp = sets.sumOf { set ->
+                        MasteryProgression.calculateSetXp(set, userWeight)
+                    }
+                    val maxXpCap = if (movement.category == ExerciseCategory.CARDIO) {
+                        MasteryProgression.MAX_CARDIO_XP_PER_SESSION
+                    } else {
+                        MasteryProgression.MAX_STRENGTH_XP_PER_SESSION
+                    }
+                    val sessionMasteryXp = rawXp.coerceIn(0, maxXpCap).toLong()
+
+                    if (sessionMasteryXp > 0L) {
+                        val current = db.movementMasteryDao().getByCanonicalKey(movement.canonicalKey, character.id)
+                            ?: MovementMasteryEntity(
+                                characterId = character.id,
+                                canonicalKey = movement.canonicalKey,
+                                displayName = movement.displayName,
+                                category = movement.category
+                            )
+
+                        val newTotalXp = current.currentXp + sessionMasteryXp
+                        val newLevel = MasteryProgression.levelForXp(newTotalXp)
+                        val sessionVolume = sets.filter { it.weightKg > 0.0 }.sumOf { it.weightKg * it.reps }
+                        val sessionReps = sets.sumOf { it.reps }
+                        val sessionDist = sets.sumOf { it.distanceKm }
+                        val sessionDuration = sets.sumOf { (it.durationMin * 60.0).toLong() }
+
+                        val sessionMax1Rm = sets.filter { it.weightKg > 0.0 }
+                            .maxOfOrNull { GameMath.calculate1RM(it.weightKg, it.reps) } ?: 0.0
+                        val sessionMaxWeight = sets.maxOfOrNull { it.weightKg } ?: 0.0
+                        val sessionMaxDist = sets.maxOfOrNull { it.distanceKm } ?: 0.0
+
+                        val sessionBestPaceSec = sets.filter { it.distanceKm > 0.0 && it.durationMin > 0.0 }
+                            .minOfOrNull { ((it.durationMin * 60.0) / it.distanceKm).toLong() } ?: 0L
+
+                        val bestPace = if (sessionBestPaceSec > 0L) {
+                            if (current.bestPaceSecPerKm == 0L) sessionBestPaceSec
+                            else minOf(current.bestPaceSecPerKm, sessionBestPaceSec)
+                        } else {
+                            current.bestPaceSecPerKm
+                        }
+
+                        val updatedMastery = current.copy(
+                            level = newLevel,
+                            currentXp = newTotalXp,
+                            lifetimeVolumeKg = current.lifetimeVolumeKg + sessionVolume,
+                            lifetimeReps = current.lifetimeReps + sessionReps,
+                            lifetimeDistanceKm = current.lifetimeDistanceKm + sessionDist,
+                            lifetimeDurationSec = current.lifetimeDurationSec + sessionDuration,
+                            totalSessionsLogged = current.totalSessionsLogged + 1,
+                            highest1RmKg = maxOf(current.highest1RmKg, sessionMax1Rm),
+                            highestWeightKg = maxOf(current.highestWeightKg, sessionMaxWeight),
+                            bestDistanceKm = maxOf(current.bestDistanceKm, sessionMaxDist),
+                            bestPaceSecPerKm = bestPace,
+                            lastTrainedEpochMs = endedAt
+                        )
+                        db.movementMasteryDao().upsert(updatedMastery)
+                    }
+                }
+            }
 
             // Durable outbox events for social sync (Party & Guild)
             val partyId = updated.partyId
@@ -2002,4 +2076,15 @@ class GameRepository(
     val bodyMetricHistory: Flow<List<BodyMetricEntity>> = db.bodyMetricDao().observeAll()
 
     suspend fun latestWeightKg(): Double? = db.bodyMetricDao().getLatest()?.weightKg
+
+    // ---- Movement Mastery ----
+
+    fun observeMovementMastery(characterId: Long = 1L): Flow<List<MovementMasteryEntity>> =
+        db.movementMasteryDao().observeAll(characterId)
+
+    suspend fun getAllMovementMastery(characterId: Long = 1L): List<MovementMasteryEntity> =
+        db.movementMasteryDao().getAll(characterId)
+
+    suspend fun getMasteryByCanonicalKey(key: String, characterId: Long = 1L): MovementMasteryEntity? =
+        db.movementMasteryDao().getByCanonicalKey(key, characterId)
 }
