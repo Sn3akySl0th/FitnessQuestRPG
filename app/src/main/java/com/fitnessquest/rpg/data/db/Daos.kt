@@ -104,6 +104,9 @@ interface SessionDao {
     @Query("SELECT * FROM sessions")
     suspend fun getAllSessions(): List<SessionEntity>
 
+    @Query("SELECT * FROM sessions WHERE completionToken = :token LIMIT 1")
+    suspend fun getByCompletionToken(token: String): SessionEntity?
+
     @Query("SELECT * FROM sessions ORDER BY endedAt DESC LIMIT :limit")
     fun observeRecent(limit: Int): Flow<List<SessionEntity>>
 

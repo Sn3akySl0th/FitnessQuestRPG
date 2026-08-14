@@ -77,7 +77,7 @@ object ExerciseCategories {
         val strengthCues = listOf(
             "iso-lateral", "isolateral", "seated row", "cable row", "chest supported",
             "t-bar", "t bar", "smith", "lever row", "dumbbell row", "barbell row",
-            "machine row", "lat pulldown", "pulldown", "incline", "decline",
+            "machine row", "lat pulldown", "pulldown", "bench",
             "press", "curl", "extension", "squat", "deadlift", "shrug",
             "fly", "flye", "raise", "lunge"
         ).any { name.contains(it) }

@@ -54,6 +54,31 @@ class WorkoutImportServiceTest {
     }
 
     @Test
+    fun inclineTreadmillWalking_infersAsCardio() {
+        val category = ExerciseCategories.infer("Incline Treadmill Walking")
+        assertEquals(
+            "Incline Treadmill Walking must be classified as CARDIO",
+            ExerciseCategory.CARDIO,
+            category
+        )
+    }
+
+    @Test
+    fun inclineStrengthExercises_inferAsStrength() {
+        val strengthList = listOf(
+            "Incline Dumbbell Press",
+            "Incline Bench Press",
+            "Incline Dumbbell Curl",
+            "Decline Bench Press",
+            "Incline Dumbbell Row"
+        )
+        for (name in strengthList) {
+            val category = ExerciseCategories.infer(name)
+            assertEquals("$name should be STRENGTH", ExerciseCategory.STRENGTH, category)
+        }
+    }
+
+    @Test
     fun toSessionEntity_generatesStableHevyCompletionToken() {
         val imported = ImportedWorkout(
             title = "Upper 1",
