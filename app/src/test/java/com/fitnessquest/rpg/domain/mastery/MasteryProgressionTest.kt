@@ -118,4 +118,71 @@ class MasteryProgressionTest {
         val clampedXp = MasteryProgression.calculateSetXp(crazySet)
         assertEquals(50, clampedXp)
     }
+
+    @Test
+    fun `combatStats applies masteryStatBonus and respects crit cap`() {
+        val character = com.fitnessquest.rpg.data.db.CharacterEntity(
+            id = 1L,
+            name = "Hero",
+            characterClass = com.fitnessquest.rpg.domain.CharacterClass.WARRIOR,
+            strength = 20,
+            endurance = 20,
+            agility = 50,
+            level = 10
+        )
+        val baseStats = com.fitnessquest.rpg.domain.GameMath.combatStats(character, emptyList())
+        val bonus = com.fitnessquest.rpg.domain.MasteryStatBonus(
+            flatAtk = 10,
+            flatDef = 15,
+            flatMaxHp = 25,
+            flatSpd = 5,
+            flatCritPercent = 50
+        )
+        val boostedStats = com.fitnessquest.rpg.domain.GameMath.combatStats(
+            character = character,
+            equipped = emptyList(),
+            masteryBonus = bonus
+        )
+
+        assertEquals(baseStats.atk + 10, boostedStats.atk)
+        assertEquals(baseStats.def + 15, boostedStats.def)
+        assertEquals(baseStats.maxHp + 25, boostedStats.maxHp)
+        assertEquals(baseStats.spd + 5, boostedStats.spd)
+        assertEquals(70, boostedStats.critPercent) // Capped at 70
+    }
+
+    @Test
+    fun `applySession applies xpMultiplierBonus and maxEnergy`() {
+        val character = com.fitnessquest.rpg.data.db.CharacterEntity(
+            id = 1L,
+            name = "Hero",
+            energy = 50
+        )
+        val logs = listOf(
+            SetLogEntity(
+                sessionId = 1L,
+                exerciseName = "Squat",
+                category = ExerciseCategory.STRENGTH,
+                weightKg = 100.0,
+                reps = 10,
+                xp = 100
+            )
+        )
+        val bonus = com.fitnessquest.rpg.domain.MasteryStatBonus(
+            xpMultiplierBonus = 0.10f
+        )
+        val result = com.fitnessquest.rpg.domain.GameMath.applySession(
+            character = character,
+            logs = logs,
+            durationMs = 60000L,
+            musclesWorked = setOf("legs"),
+            weeklyWorkoutsDone = 1,
+            weeklyWorkoutsGoal = 3,
+            maxEnergy = 120,
+            masteryBonus = bonus
+        )
+
+        assertEquals(110, result.xp)
+        assertTrue(result.updatedCharacter.energy <= 120)
+    }
 }

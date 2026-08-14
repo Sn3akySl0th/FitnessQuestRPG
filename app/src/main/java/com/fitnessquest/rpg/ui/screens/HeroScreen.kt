@@ -51,6 +51,10 @@ import com.fitnessquest.rpg.ui.LocalSnackbarHostState
 import com.fitnessquest.rpg.ui.appContainer
 import com.fitnessquest.rpg.ui.components.*
 import com.fitnessquest.rpg.ui.theme.*
+import androidx.compose.material.icons.outlined.FitnessCenter
+import com.fitnessquest.rpg.domain.mastery.CanonicalMovement
+import com.fitnessquest.rpg.domain.mastery.MasteryProgression
+import kotlin.math.roundToInt
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
@@ -71,7 +75,8 @@ data class HeroUiState(
     val recentSessions: List<SessionEntity> = emptyList(),
     val ownedGear: List<OwnedGear> = emptyList(),
     val runes: List<ItemEntity> = emptyList(),
-    val allClassProgress: List<ClassProgressEntity> = emptyList()
+    val allClassProgress: List<ClassProgressEntity> = emptyList(),
+    val movementMastery: List<MovementMasteryEntity> = emptyList()
 )
 
 class HeroViewModel(private val container: AppContainer) : ViewModel() {
@@ -81,11 +86,24 @@ class HeroViewModel(private val container: AppContainer) : ViewModel() {
         container.repository.ownedGear,
         container.repository.items.map { list -> list.filter { it.slot == ItemSlot.RUNE } },
         container.repository.sessions.map { it.take(10) },
-        container.repository.allClassProgress
-    ) { character, owned, runes, recent, allProgress ->
-        val gearMap = container.repository.equippedGear(character)
-        val combat = container.repository.combatStatsFor(character)
-        val setPieces = GameMath.setPieceCount(character, gearMap.values.toList())
+        container.repository.allClassProgress,
+        container.repository.observeMovementMastery()
+    ) { args: Array<Any?> ->
+        val character = args[0] as? CharacterEntity
+        @Suppress("UNCHECKED_CAST")
+        val owned = args[1] as List<OwnedGear>
+        @Suppress("UNCHECKED_CAST")
+        val runes = args[2] as List<ItemEntity>
+        @Suppress("UNCHECKED_CAST")
+        val recent = args[3] as List<SessionEntity>
+        @Suppress("UNCHECKED_CAST")
+        val allProgress = args[4] as List<ClassProgressEntity>
+        @Suppress("UNCHECKED_CAST")
+        val masteryList = args[5] as List<MovementMasteryEntity>
+
+        val gearMap = if (character != null) container.repository.equippedGear(character) else emptyMap()
+        val combat = if (character != null) container.repository.combatStatsFor(character) else null
+        val setPieces = if (character != null) GameMath.setPieceCount(character, gearMap.values.toList()) else 0
         HeroUiState(
             character = character,
             gear = gearMap,
@@ -94,7 +112,8 @@ class HeroViewModel(private val container: AppContainer) : ViewModel() {
             recentSessions = recent,
             ownedGear = owned,
             runes = runes,
-            allClassProgress = allProgress
+            allClassProgress = allProgress,
+            movementMastery = masteryList
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), HeroUiState())
 
@@ -388,6 +407,7 @@ fun HeroScreen(viewModel: HeroViewModel = viewModel(factory = HeroViewModel.Fact
     val character = state.character ?: return
     val usernameSet by viewModel.usernameSet.collectAsState()
     val isPremium by viewModel.isPremium.collectAsState()
+    val imperial by viewModel.imperial.collectAsState()
 
     var selectedTab by remember { mutableIntStateOf(0) }
     var pickerSlot by remember { mutableStateOf<ItemSlot?>(null) }
@@ -411,7 +431,7 @@ fun HeroScreen(viewModel: HeroViewModel = viewModel(factory = HeroViewModel.Fact
     if (showWeightDialog) {
         WeightLogDialog(
             currentWeightKg = character.bodyWeightKg ?: 75.0,
-            imperial = viewModel.imperial.collectAsState().value,
+            imperial = imperial,
             onDismiss = { showWeightDialog = false },
             onSave = { weight: Double ->
                 viewModel.logWeight(weight)
@@ -487,6 +507,9 @@ fun HeroScreen(viewModel: HeroViewModel = viewModel(factory = HeroViewModel.Fact
                         Tab(selected = selectedTab == 2, onClick = { selectedTab = 2 }) {
                             Text("📜 Saga", modifier = Modifier.padding(10.dp))
                         }
+                        Tab(selected = selectedTab == 3, onClick = { selectedTab = 3 }) {
+                            Text("🥋 Mastery", modifier = Modifier.padding(10.dp))
+                        }
                     }
 
                     LazyColumn(
@@ -498,6 +521,7 @@ fun HeroScreen(viewModel: HeroViewModel = viewModel(factory = HeroViewModel.Fact
                             0 -> statsTab(this, character, cls, state, viewModel, isPremium, snackbar, scope)
                             1 -> gearTab(this, state, cls, onEquipClick = { pickerSlot = it })
                             2 -> sagaTab(this, viewModel, onLogWeight = { showWeightDialog = true })
+                            3 -> masteryTab(this, state.movementMastery, imperial)
                         }
                         
                         item { Spacer(Modifier.height(24.dp)) }
@@ -534,6 +558,9 @@ fun HeroScreen(viewModel: HeroViewModel = viewModel(factory = HeroViewModel.Fact
                     Tab(selected = selectedTab == 2, onClick = { selectedTab = 2 }) {
                         Text("📜 Saga", modifier = Modifier.padding(12.dp))
                     }
+                    Tab(selected = selectedTab == 3, onClick = { selectedTab = 3 }) {
+                        Text("🥋 Mastery", modifier = Modifier.padding(12.dp))
+                    }
                 }
 
                 // Scrollable Content per Tab
@@ -546,6 +573,7 @@ fun HeroScreen(viewModel: HeroViewModel = viewModel(factory = HeroViewModel.Fact
                         0 -> statsTab(this, character, cls, state, viewModel, isPremium, snackbar, scope)
                         1 -> gearTab(this, state, cls, onEquipClick = { pickerSlot = it })
                         2 -> sagaTab(this, viewModel, onLogWeight = { showWeightDialog = true })
+                        3 -> masteryTab(this, state.movementMastery, imperial)
                     }
                     
                     item { Spacer(Modifier.height(80.dp)) } // Dock clearance
@@ -1298,5 +1326,142 @@ private fun HeroGearPill(text: String) {
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
+    }
+}
+
+private fun masteryTab(
+    scope: LazyListScope,
+    masteryList: List<MovementMasteryEntity>,
+    imperial: Boolean
+) {
+    if (masteryList.isEmpty()) {
+        scope.item {
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.FitnessCenter,
+                        contentDescription = null,
+                        modifier = Modifier.size(48.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                    )
+                    Text(
+                        text = "No mastery tracked yet",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "Log a workout to start building movement mastery",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    } else {
+        scope.item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceAround,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("Total Levels", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("${masteryList.sumOf { it.level }}", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Gold)
+                    }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("Trees Trained", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("${masteryList.size}", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Color.White)
+                    }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("Sessions", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("${masteryList.sumOf { it.totalSessionsLogged }}", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Color(0xFF60A5FA))
+                    }
+                }
+            }
+        }
+
+        scope.items(masteryList.size) { index ->
+            val entity = masteryList[index]
+            val canonical = runCatching { CanonicalMovement.valueOf(entity.canonicalKey) }.getOrNull()
+            val movementName = canonical?.displayName ?: entity.canonicalKey.replace("_", " ").lowercase().replaceFirstChar { it.uppercase() }
+            val currentLevelBase = MasteryProgression.cumulativeXpForLevel(entity.level)
+            val nextLevelBase = MasteryProgression.cumulativeXpForLevel(entity.level + 1)
+            val neededForLevel = (nextLevelBase - currentLevelBase).coerceAtLeast(1L)
+            val progress = if (entity.level >= MasteryProgression.MAX_LEVEL) 1f
+                else ((entity.currentXp - currentLevelBase).toFloat() / neededForLevel.toFloat()).coerceIn(0f, 1f)
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)),
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
+            ) {
+                Column(modifier = Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(canonical?.icon ?: "🥋", fontSize = 20.sp)
+                            Text(movementName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color.White)
+                        }
+                        Surface(
+                            color = Gold.copy(alpha = 0.15f),
+                            shape = RoundedCornerShape(8.dp),
+                            border = BorderStroke(1.dp, Gold.copy(alpha = 0.3f))
+                        ) {
+                            Text(
+                                text = "Lv ${entity.level}",
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Black,
+                                color = Gold
+                            )
+                        }
+                    }
+
+                    LinearProgressIndicator(
+                        progress = { progress },
+                        modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
+                        color = Gold,
+                        trackColor = Color.White.copy(alpha = 0.1f)
+                    )
+
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("${entity.currentXp} XP", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.5f))
+                        Text(if (entity.level >= MasteryProgression.MAX_LEVEL) "MAX" else "Next: $nextLevelBase XP", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.5f))
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        if (entity.lifetimeVolumeKg > 0.0) {
+                            HeroGearPill("${Units.toDisplay(entity.lifetimeVolumeKg, imperial).roundToInt()} ${if (imperial) "lbs" else "kg"} vol")
+                        }
+                        if (entity.lifetimeReps > 0) {
+                            HeroGearPill("${entity.lifetimeReps} reps")
+                        }
+                        if (entity.lifetimeDistanceKm > 0.0) {
+                            HeroGearPill("${"%.1f".format(Units.kmToDisplay(entity.lifetimeDistanceKm, imperial))} ${if (imperial) "mi" else "km"}")
+                        }
+                        if (entity.highest1RmKg > 0.0) {
+                            HeroGearPill("1RM: ${Units.toDisplay(entity.highest1RmKg, imperial).roundToInt()} ${if (imperial) "lbs" else "kg"}")
+                        }
+                    }
+                }
+            }
+        }
     }
 }

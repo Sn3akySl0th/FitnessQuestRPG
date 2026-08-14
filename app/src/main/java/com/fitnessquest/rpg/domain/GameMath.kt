@@ -20,6 +20,26 @@ data class StatGains(
     val any: Boolean get() = (strength + endurance + agility + willpower) > 0
 }
 
+data class MasteryStatBonus(
+    val flatAtk: Int = 0,
+    val flatDef: Int = 0,
+    val flatMaxHp: Int = 0,
+    val flatSpd: Int = 0,
+    val flatCritPercent: Int = 0,
+    val mitigationPercent: Float = 0f,
+    val siphonBonusPercent: Float = 0f,
+    val xpMultiplierBonus: Float = 0f,
+    val flatMaxEnergy: Int = 0
+) {
+    companion object { val NONE = MasteryStatBonus() }
+}
+
+data class MasteryPerkUnlock(
+    val canonicalKey: String,
+    val perkName: String,
+    val perkDescription: String
+)
+
 data class SessionResult(
     val xp: Int,
     val gold: Int,
@@ -52,7 +72,9 @@ data class SessionResult(
     /** Unified rewards for the reveal flow. */
     val rewardBatch: RewardBatch? = null,
     /** End-of-workout loot grants (labels for UI). */
-    val lootLabels: List<String> = emptyList()
+    val lootLabels: List<String> = emptyList(),
+    /** Unlocked Movement Mastery perks earned in this session. */
+    val masteryPerkUnlocks: List<MasteryPerkUnlock> = emptyList()
 )
 
 /** A personal record set during a session. */
@@ -197,9 +219,14 @@ object GameMath {
         weeklyWorkoutsDone: Int,
         weeklyWorkoutsGoal: Int,
         bonusXp: Int = 0,
-        isWellRested: Boolean = false
+        isWellRested: Boolean = false,
+        maxEnergy: Int = MAX_ENERGY,
+        masteryBonus: MasteryStatBonus = MasteryStatBonus.NONE
     ): SessionResult {
         var totalXp = logs.sumOf { it.xp } + bonusXp
+        if (masteryBonus.xpMultiplierBonus > 0f) {
+            totalXp = (totalXp * (1f + masteryBonus.xpMultiplierBonus)).toInt()
+        }
         val volumeKg = logs.asSequence().filter { it.category == ExerciseCategory.STRENGTH }.sumOf { it.weightKg * it.reps }
         
         var gold = max(1, totalXp / 2)
@@ -243,7 +270,7 @@ object GameMath {
             level = level,
             xp = xp,
             gold = character.gold + gold,
-            energy = min(character.energy + energyGain, MAX_ENERGY),
+            energy = min(character.energy + energyGain, maxEnergy),
             lastEnergyUpdate = now,
             strength = str, endurance = end, agility = agi, willpower = wil,
             strProgress = strP, endProgress = endP, agiProgress = agiP, wilProgress = wilP,
@@ -303,7 +330,8 @@ object GameMath {
         equipped: List<ItemEntity>,
         runeSpd: Int = 0,
         runeCrit: Int = 0,
-        siphonHeal: Int = 0
+        siphonHeal: Int = 0,
+        masteryBonus: MasteryStatBonus = MasteryStatBonus.NONE
     ): CombatStats {
         val cls = character.characterClass ?: CharacterClass.WARRIOR
         val baseHp = 40 + character.endurance * 8 + character.level * 5 + equipped.sumOf { it.hp }
@@ -370,6 +398,11 @@ object GameMath {
             def += 3
         }
 
+        // Mastery stat bonuses
+        atk += masteryBonus.flatAtk
+        def += masteryBonus.flatDef
+        maxHp += masteryBonus.flatMaxHp
+
         val baseCrit = when (cls) {
             CharacterClass.THIEF -> min(10 + character.agility, 50)
             CharacterClass.DRUID -> if (character.druidForm == "PANTHER") min(35 + character.agility, 70) else min(5 + character.agility / 2, 35)
@@ -382,8 +415,8 @@ object GameMath {
             maxHp = maxHp,
             atk = atk,
             def = def,
-            spd = (character.agility * 2 + character.level + runeSpd + (if (cls == CharacterClass.DRUID && character.druidForm == "PANTHER") 20 else 0) + (if (cls == CharacterClass.SUMMONER && character.druidForm == "SHIVA") 40 else 0)),
-            critPercent = min(baseCrit + runeCrit, 70),
+            spd = (character.agility * 2 + character.level + runeSpd + masteryBonus.flatSpd + (if (cls == CharacterClass.DRUID && character.druidForm == "PANTHER") 20 else 0) + (if (cls == CharacterClass.SUMMONER && character.druidForm == "SHIVA") 40 else 0)),
+            critPercent = min(baseCrit + runeCrit + masteryBonus.flatCritPercent, 70),
             siphonHeal = siphonHeal
         )
     }
@@ -409,13 +442,17 @@ object GameMath {
     }
 
     /** Passive energy recoup logic for "Resting gives energy". */
-    fun recoupEnergy(character: CharacterEntity, now: Long = System.currentTimeMillis()): CharacterEntity {
-        if (character.energy >= MAX_ENERGY) return character.copy(lastEnergyUpdate = now)
+    fun recoupEnergy(
+        character: CharacterEntity,
+        now: Long = System.currentTimeMillis(),
+        maxEnergy: Int = MAX_ENERGY
+    ): CharacterEntity {
+        if (character.energy >= maxEnergy) return character.copy(lastEnergyUpdate = now)
         val elapsed = now - character.lastEnergyUpdate
         if (elapsed < ENERGY_TICK_MILLIS) return character
         
         val points = (elapsed / ENERGY_TICK_MILLIS).toInt()
-        val newEnergy = min(MAX_ENERGY, character.energy + points)
+        val newEnergy = min(maxEnergy, character.energy + points)
         // Preserve fractional progress towards the next point.
         val remainder = elapsed % ENERGY_TICK_MILLIS
         return character.copy(

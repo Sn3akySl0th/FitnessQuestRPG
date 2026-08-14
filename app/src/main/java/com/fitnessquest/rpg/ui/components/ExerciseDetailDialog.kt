@@ -52,6 +52,8 @@ import com.fitnessquest.rpg.data.db.SessionEntity
 import com.fitnessquest.rpg.data.db.SetLogEntity
 import com.fitnessquest.rpg.data.exercises.ExerciseInfo
 import com.fitnessquest.rpg.domain.*
+import com.fitnessquest.rpg.domain.mastery.MasteryProgression
+import com.fitnessquest.rpg.domain.mastery.MovementMasteryCatalog
 import com.fitnessquest.rpg.ui.theme.Gold
 import com.fitnessquest.rpg.ui.theme.NightBg
 import com.fitnessquest.rpg.ui.theme.Parchment
@@ -176,7 +178,7 @@ fun ExerciseDetailDialog(
                             .verticalScroll(rememberScrollState())
                     ) {
                         when (selectedTab) {
-                            0 -> SummaryTab(info, character, history, imperial)
+                            0 -> SummaryTab(name, info, character, history, imperial)
                             1 -> HistoryTab(history, imperial)
                             2 -> HowToTab(info)
                         }
@@ -297,6 +299,7 @@ private fun TypeChip(label: String, color: Color) {
 
 @Composable
 private fun SummaryTab(
+    name: String,
     guide: ExerciseInfo?,
     p: CharacterEntity?,
     history: List<Pair<SessionEntity, List<SetLogEntity>>>,
@@ -325,7 +328,7 @@ private fun SummaryTab(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // Mastery Header & Art
-        MasteryHeader(guide, history)
+        MasteryHeader(name, guide, history)
 
         // Progress Section
         if (history.isNotEmpty()) {
@@ -433,56 +436,81 @@ private fun SummaryTab(
 }
 
 @Composable
-private fun MasteryHeader(guide: ExerciseInfo?, history: List<Pair<SessionEntity, List<SetLogEntity>>>) {
+private fun MasteryHeader(name: String, guide: ExerciseInfo?, history: List<Pair<SessionEntity, List<SetLogEntity>>>) {
+    val container = (LocalContext.current.applicationContext as FitQuestApp).container
+    val masteryList by container.repository.observeMovementMastery().collectAsState(initial = null)
     val category = guide?.let { ExerciseCategories.infer(it.name, it.equipment, it.dbCategory) } ?: ExerciseCategory.STRENGTH
-    val totalXp = history.sumOf { it.second.sumOf { s -> s.xp } }
-    val masteryLevel = sqrt(totalXp.toDouble() / 100.0).toInt().coerceAtLeast(1)
-    val nextLevelXp = (masteryLevel + 1).let { it * it * 100 }
-    val currentLevelXp = masteryLevel.let { it * it * 100 }
-    val progress = ((totalXp - currentLevelXp).toFloat() / (nextLevelXp - currentLevelXp).toFloat()).coerceIn(0f, 1f)
+    val canonical = remember(name, guide) { MovementMasteryCatalog.resolve(name, category) }
+    val masteryEntity = masteryList?.find { it.canonicalKey == canonical.name }
 
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        // Immersive Art
-        Box(
-            modifier = Modifier
-                .size(100.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .background(Color.White.copy(alpha = 0.05f))
-                .border(1.dp, Gold.copy(alpha = 0.2f), RoundedCornerShape(16.dp)),
-            contentAlignment = Alignment.Center
-        ) {
-            MasteryArt(category, guide?.equipment.orEmpty())
+    when {
+        masteryList == null -> {
+            Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Gold, strokeWidth = 2.dp)
+            }
         }
-
-        Column(Modifier.weight(1f)) {
-            Text(
-                "Mastery Level $masteryLevel",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Black,
-                color = Gold
-            )
-            Text(
-                "${totalXp} Total XP earned",
-                style = MaterialTheme.typography.labelSmall,
-                color = Color.White.copy(alpha = 0.5f)
-            )
-            Spacer(Modifier.height(8.dp))
-            
-            // Mastery XP Bar
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                LinearProgressIndicator(
-                    progress = { progress },
-                    modifier = Modifier.fillMaxWidth().height(6.dp).clip(CircleShape),
-                    color = Gold,
-                    trackColor = Color.White.copy(alpha = 0.1f),
+        masteryEntity == null -> {
+            Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                Text(
+                    "Start training to unlock mastery",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Lvl $masteryLevel", style = MaterialTheme.typography.labelSmall, color = Gold)
-                    Text("Lvl ${masteryLevel + 1}", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.3f))
+            }
+        }
+        else -> {
+            val totalXp = masteryEntity.currentXp
+            val masteryLevel = masteryEntity.level
+            val currentLevelBase = MasteryProgression.cumulativeXpForLevel(masteryLevel)
+            val nextLevelBase = MasteryProgression.cumulativeXpForLevel(masteryLevel + 1)
+            val neededForLevel = (nextLevelBase - currentLevelBase).coerceAtLeast(1L)
+            val progress = if (masteryLevel >= MasteryProgression.MAX_LEVEL) 1f
+                else ((totalXp - currentLevelBase).toFloat() / neededForLevel.toFloat()).coerceIn(0f, 1f)
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Immersive Art
+                Box(
+                    modifier = Modifier
+                        .size(100.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Color.White.copy(alpha = 0.05f))
+                        .border(1.dp, Gold.copy(alpha = 0.2f), RoundedCornerShape(16.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    MasteryArt(category, guide?.equipment.orEmpty())
+                }
+
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        "${canonical.displayName} Mastery Lv $masteryLevel",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Black,
+                        color = Gold
+                    )
+                    Text(
+                        "${totalXp} Total XP earned",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White.copy(alpha = 0.5f)
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    
+                    // Mastery XP Bar
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        LinearProgressIndicator(
+                            progress = { progress },
+                            modifier = Modifier.fillMaxWidth().height(6.dp).clip(CircleShape),
+                            color = Gold,
+                            trackColor = Color.White.copy(alpha = 0.1f),
+                        )
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("Lvl $masteryLevel", style = MaterialTheme.typography.labelSmall, color = Gold)
+                            Text(if (masteryLevel >= MasteryProgression.MAX_LEVEL) "MAX" else "Lvl ${masteryLevel + 1}", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.3f))
+                        }
+                    }
                 }
             }
         }
