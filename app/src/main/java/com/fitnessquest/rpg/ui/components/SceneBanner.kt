@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -285,7 +286,7 @@ fun SceneBanner(
         modifier = modifier
             .fillMaxWidth()
             .statusBarsPadding()
-            .height(132.dp)
+            .heightIn(min = 132.dp)
             .clip(RoundedCornerShape(bottomStart = 20.dp, bottomEnd = 20.dp))
             .background(brush)
     ) {
@@ -307,13 +308,20 @@ fun SceneBanner(
             verticalAlignment = Alignment.Bottom
         ) {
             Column(modifier = Modifier.weight(1f)) {
+                val titleFontSize = when {
+                    title.length > 18 -> 20.sp
+                    title.length > 14 -> 23.sp
+                    title.length > 10 -> 25.sp
+                    else -> 28.sp
+                }
+                val letterSpacing = if (title.length > 14) 0.6.sp else 1.0.sp
                 Text(
                     title,
                     color = Parchment.copy(alpha = alpha),
                     fontWeight = FontWeight.Black,
-                    fontSize = 28.sp,
-                    letterSpacing = 1.2.sp,
-                    lineHeight = 30.sp,
+                    fontSize = titleFontSize,
+                    letterSpacing = letterSpacing,
+                    lineHeight = (titleFontSize.value + 3).sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -322,7 +330,8 @@ fun SceneBanner(
                     color = Gold.copy(alpha = 0.9f * alpha),
                     style = MaterialTheme.typography.bodySmall,
                     fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
+                    maxLines = 2,
+                    softWrap = true,
                     overflow = TextOverflow.Ellipsis
                 )
             }

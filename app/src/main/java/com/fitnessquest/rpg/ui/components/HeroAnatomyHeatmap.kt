@@ -138,6 +138,23 @@ fun HeroAnatomyHeatmap(
                     .background(Color.Black.copy(alpha = 0.2f)),
                 contentAlignment = Alignment.Center
             ) {
+                val highlightedMuscles = remember(soreMuscles, freshnessMap) {
+                    val set = mutableSetOf<String>()
+                    set.addAll(soreMuscles)
+                    (FrontMuscles + BackMuscles).forEach { region ->
+                        val isSore = isMuscleRegionSore(region, soreMuscles)
+                        val freshness = getMuscleFreshness(region, freshnessMap)
+                        if (isSore || freshness < 85) {
+                            set.add(region.id.lowercase())
+                            set.add(region.displayName.lowercase())
+                            region.displayName.split("/").forEach { sub ->
+                                set.add(sub.trim().lowercase())
+                            }
+                        }
+                    }
+                    set
+                }
+
                 // Background Hero Avatar (No armor, focusing on muscle regions)
                 character?.let { hero ->
                     CharacterAvatar(
@@ -148,7 +165,7 @@ fun HeroAnatomyHeatmap(
                         facingBack = activeView == AnatomyView.BACK,
                         expression = AvatarExpression.BATTLE_READY,
                         detail = AvatarDetail.FULL,
-                        highlightMuscles = soreMuscles,
+                        highlightMuscles = highlightedMuscles,
                         focus = AvatarFocus.FULL_BODY
                     )
                 }
@@ -181,11 +198,8 @@ fun HeroAnatomyHeatmap(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         rowMuscles.forEach { region ->
-                            val normalizedSore = soreMuscles.map { it.uppercase().replace("_", " ") }.toSet()
-                            val isSore = region.id.uppercase().replace("_", " ") in normalizedSore || 
-                                         region.displayName.uppercase() in normalizedSore
-                            
-                            val freshness = freshnessMap[region.displayName] ?: freshnessMap[region.id] ?: 95
+                            val isSore = isMuscleRegionSore(region, soreMuscles)
+                            val freshness = getMuscleFreshness(region, freshnessMap)
                             val chipColor = when {
                                 isSore -> Color(0xFFE53935)
                                 freshness >= 85 -> Color(0xFF4CAF50)
@@ -238,12 +252,13 @@ fun HeroAnatomyHeatmap(
             Box(Modifier.fillMaxWidth().heightIn(min = 64.dp)) {
 
                 selectedMuscle?.let { region ->
-                    val isSore = soreMuscles.contains(region.id) || soreMuscles.contains(region.displayName.uppercase())
-                    val freshness = freshnessMap[region.displayName] ?: freshnessMap[region.id] ?: 95
+                    val isSore = isMuscleRegionSore(region, soreMuscles)
+                    val freshness = getMuscleFreshness(region, freshnessMap)
                     val statusText = when {
                         isSore -> "🔴 Flagged Sore — Exercise loads will auto-adjust for safety."
                         freshness >= 85 -> "🟢 100% Primed & Recovered — Maximum growth potential!"
-                        else -> "🟡 Rebuilding (${freshness}% rested) — Train lightly or allow rest."
+                        freshness >= 45 -> "🟡 Rebuilding (${freshness}% rested) — Train lightly or allow rest."
+                        else -> "🔴 Fatigued (${freshness}% rested) — Needs rest for optimal recovery."
                     }
 
                     Surface(
@@ -269,6 +284,31 @@ fun HeroAnatomyHeatmap(
 
         }
     }
+}
+
+private fun isMuscleRegionSore(region: MuscleRegion, soreMuscles: Set<String>): Boolean {
+    val normalizedSore = soreMuscles.map { it.uppercase().replace("_", " ").trim() }.toSet()
+    val candidates = listOf(
+        region.id.uppercase().replace("_", " ").trim(),
+        region.displayName.uppercase().trim(),
+        region.displayName.split("/").first().uppercase().trim(),
+        region.displayName.split(" ").first().uppercase().trim()
+    )
+    return candidates.any { it in normalizedSore }
+}
+
+private fun getMuscleFreshness(region: MuscleRegion, freshnessMap: Map<String, Int>): Int {
+    val normalizedMap = freshnessMap.mapKeys { it.key.uppercase().replace("_", " ").replace(" ", "").trim() }
+    val candidates = listOf(
+        region.id.uppercase().replace("_", " ").replace(" ", "").trim(),
+        region.displayName.uppercase().replace("_", " ").replace(" ", "").trim(),
+        region.displayName.split("/").first().uppercase().replace(" ", "").trim(),
+        region.displayName.split(" ").first().uppercase().trim()
+    )
+    for (cand in candidates) {
+        normalizedMap[cand]?.let { return it }
+    }
+    return 100
 }
 
 @Composable

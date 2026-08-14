@@ -38,7 +38,11 @@ object WorkoutRecommendationEngine {
             }
         }
 
-        val allMuscles = listOf("Chest", "Back", "Shoulders", "Biceps", "Triceps", "Quads", "Hamstrings", "Glutes", "Calves", "Abs")
+        val allMuscles = listOf(
+            "Chest", "Back", "Shoulders", "Biceps", "Triceps", "Quads", 
+            "Hamstrings", "Glutes", "Calves", "Abs", "Traps", "Lats", 
+            "Lower Back", "Forearms"
+        )
         val result = mutableMapOf<String, Int>()
 
         for (m in allMuscles) {
@@ -50,7 +54,10 @@ object WorkoutRecommendationEngine {
                 ((diffHours / FULL_RECOVERY_HOURS) * 100.0).toInt().coerceIn(15, 100)
             }
 
-            val finalFreshness = if (soreMuscles.contains(m.uppercase()) || soreMuscles.contains(m)) {
+            val isSore = soreMuscles.contains(m.uppercase()) || 
+                         soreMuscles.contains(m) || 
+                         soreMuscles.contains(m.uppercase().replace(" ", "_"))
+            val finalFreshness = if (isSore) {
                 (baseFreshness - 30).coerceAtLeast(15)
             } else {
                 baseFreshness
@@ -95,7 +102,11 @@ object WorkoutRecommendationEngine {
                 routineMuscles.map { freshnessMap[it] ?: 100 }.average().toInt()
             } else 90
 
-            val hasSoreConflict = routineMuscles.any { soreMuscles.contains(it) || soreMuscles.contains(it.uppercase()) }
+            val hasSoreConflict = routineMuscles.any { 
+                soreMuscles.contains(it) || 
+                soreMuscles.contains(it.uppercase()) ||
+                soreMuscles.contains(it.uppercase().replace(" ", "_"))
+            }
 
             var score = avgFreshness
             if (hasSoreConflict) score -= 40
@@ -128,7 +139,7 @@ object WorkoutRecommendationEngine {
                 readinessPercent = overallFreshness,
                 title = "🛡️ Active Recovery Rest Day",
                 reason = "Your muscles are actively rebuilding (Overall Freshness: $overallFreshness%). Complete a light side quest for a boost!",
-                bonusXpPercent = 15,
+                bonusXpPercent = 0,
                 sideQuestTitle = randomQuest.first,
                 sideQuestReps = randomQuest.second
             )
@@ -139,7 +150,11 @@ object WorkoutRecommendationEngine {
             recMuscles.map { freshnessMap[it] ?: 100 }.average().toInt().coerceIn(50, 100)
         } else 90
 
-        val soreWarning = if (recMuscles.any { soreMuscles.contains(it) || soreMuscles.contains(it.uppercase()) }) {
+        val soreWarning = if (recMuscles.any { 
+            soreMuscles.contains(it) || 
+            soreMuscles.contains(it.uppercase()) ||
+            soreMuscles.contains(it.uppercase().replace(" ", "_"))
+        }) {
             "⚠️ Soreness reported in target muscles. Adjust load as needed."
         } else null
 
@@ -162,15 +177,15 @@ object WorkoutRecommendationEngine {
     }
 
     private fun inferMusclesFromText(text: String): List<String> = when {
-        "upper" in text -> listOf("Chest", "Back", "Shoulders", "Biceps", "Triceps")
+        "upper" in text -> listOf("Chest", "Back", "Shoulders", "Biceps", "Triceps", "Traps", "Forearms")
         "lower" in text || "leg" in text -> listOf("Quads", "Hamstrings", "Glutes", "Calves")
         "push" in text -> listOf("Chest", "Shoulders", "Triceps")
-        "pull" in text -> listOf("Back", "Biceps")
-        "chest" in text -> listOf("Chest", "Triceps")
-        "back" in text -> listOf("Back", "Biceps")
-        "shoulder" in text || "delt" in text -> listOf("Shoulders", "Triceps")
-        "arm" in text -> listOf("Biceps", "Triceps")
-        "core" in text || "abs" in text -> listOf("Abs")
+        "pull" in text -> listOf("Back", "Lats", "Biceps", "Traps", "Forearms")
+        "chest" in text -> listOf("Chest", "Triceps", "Shoulders")
+        "back" in text -> listOf("Back", "Lats", "Lower Back", "Traps", "Biceps")
+        "shoulder" in text || "delt" in text -> listOf("Shoulders", "Triceps", "Traps")
+        "arm" in text -> listOf("Biceps", "Triceps", "Forearms")
+        "core" in text || "abs" in text -> listOf("Abs", "Lower Back")
         else -> listOf("Chest", "Back", "Quads", "Hamstrings")
     }
 }

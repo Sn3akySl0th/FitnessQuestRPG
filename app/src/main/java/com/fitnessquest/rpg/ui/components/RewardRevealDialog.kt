@@ -16,12 +16,16 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -129,10 +133,13 @@ fun RewardRevealDialog(
                         contentAlignment = Alignment.Center
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(
-                                "🧰",
-                                fontSize = 72.sp,
-                                modifier = Modifier.scale(chestScale.value)
+                            Icon(
+                                Icons.Filled.CardGiftcard,
+                                contentDescription = "Locked Treasure Chest",
+                                tint = Gold,
+                                modifier = Modifier
+                                    .size(72.dp)
+                                    .scale(chestScale.value)
                             )
                             Spacer(Modifier.height(12.dp))
                             Text(
