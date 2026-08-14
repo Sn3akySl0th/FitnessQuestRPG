@@ -130,17 +130,20 @@ class MasteryProgressionTest {
             agility = 50,
             level = 10
         )
-        val baseStats = com.fitnessquest.rpg.domain.GameMath.combatStats(character, emptyList())
+        val baseStats = com.fitnessquest.rpg.domain.GameMath.combatStats(character, emptyList(), siphonHeal = 10)
         val bonus = com.fitnessquest.rpg.domain.MasteryStatBonus(
             flatAtk = 10,
             flatDef = 15,
             flatMaxHp = 25,
             flatSpd = 5,
-            flatCritPercent = 50
+            flatCritPercent = 50,
+            siphonBonusPercent = 0.50f,
+            mitigationPercent = 0.10f
         )
         val boostedStats = com.fitnessquest.rpg.domain.GameMath.combatStats(
             character = character,
             equipped = emptyList(),
+            siphonHeal = 10,
             masteryBonus = bonus
         )
 
@@ -149,6 +152,8 @@ class MasteryProgressionTest {
         assertEquals(baseStats.maxHp + 25, boostedStats.maxHp)
         assertEquals(baseStats.spd + 5, boostedStats.spd)
         assertEquals(70, boostedStats.critPercent) // Capped at 70
+        assertEquals(15, boostedStats.siphonHeal) // 10 * (1 + 0.5) = 15
+        assertEquals(0.10f, boostedStats.mitigationPercent, 0.001f)
     }
 
     @Test
@@ -183,6 +188,48 @@ class MasteryProgressionTest {
         )
 
         assertEquals(110, result.xp)
-        assertTrue(result.updatedCharacter.energy <= 120)
+        // 50 + min(20 + 110 / 25, 60) = 50 + 24 = 74
+        assertEquals(74, result.updatedCharacter.energy)
+    }
+
+    @Test
+    fun `recoupEnergy clamps to provided maxEnergy`() {
+        val now = System.currentTimeMillis()
+        val character = com.fitnessquest.rpg.data.db.CharacterEntity(
+            id = 1L,
+            name = "Hero",
+            energy = 90,
+            lastEnergyUpdate = now - (10 * 60 * 60 * 1000L) // 10 hours ago -> gains 50 energy points
+        )
+        // With standard max energy 100:
+        val standardRecoup = com.fitnessquest.rpg.domain.GameMath.recoupEnergy(character, now = now, maxEnergy = 100)
+        assertEquals(100, standardRecoup.energy)
+
+        // With expanded mastery max energy 140:
+        val masteryRecoup = com.fitnessquest.rpg.domain.GameMath.recoupEnergy(character, now = now, maxEnergy = 140)
+        assertEquals(140, masteryRecoup.energy)
+    }
+
+    @Test
+    fun `SessionResult carries masteryPerkUnlocks`() {
+        val unlocks = listOf(
+            com.fitnessquest.rpg.domain.MasteryPerkUnlock(
+                canonicalKey = "SQUAT",
+                perkName = "Iron Pillars",
+                perkDescription = "Gain +5 DEF and +10 Max HP"
+            )
+        )
+        val result = com.fitnessquest.rpg.domain.SessionResult(
+            xp = 100,
+            gold = 25,
+            energy = 20,
+            levelsGained = 0,
+            statGains = com.fitnessquest.rpg.domain.StatGains(),
+            updatedCharacter = com.fitnessquest.rpg.data.db.CharacterEntity(name = "Hero"),
+            masteryPerkUnlocks = unlocks
+        )
+
+        assertEquals(1, result.masteryPerkUnlocks.size)
+        assertEquals("Iron Pillars", result.masteryPerkUnlocks.first().perkName)
     }
 }

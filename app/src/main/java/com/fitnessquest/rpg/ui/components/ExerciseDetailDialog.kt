@@ -48,6 +48,7 @@ import coil.compose.AsyncImage
 import com.fitnessquest.rpg.FitQuestApp
 import com.fitnessquest.rpg.data.db.CharacterEntity
 import com.fitnessquest.rpg.data.db.ExerciseCategory
+import com.fitnessquest.rpg.data.db.MovementMasteryEntity
 import com.fitnessquest.rpg.data.db.SessionEntity
 import com.fitnessquest.rpg.data.db.SetLogEntity
 import com.fitnessquest.rpg.data.exercises.ExerciseInfo
@@ -99,6 +100,7 @@ fun ExerciseDetailDialog(
     val container = (LocalContext.current.applicationContext as FitQuestApp).container
     val imperial by container.prefs.imperial.collectAsState()
     val character by container.repository.character.collectAsState(initial = null)
+    val masteryList by container.repository.observeMovementMastery().collectAsState(initial = null)
 
     var loaded by remember(name) { mutableStateOf(false) }
     var info by remember(name) { mutableStateOf<ExerciseInfo?>(null) }
@@ -178,7 +180,7 @@ fun ExerciseDetailDialog(
                             .verticalScroll(rememberScrollState())
                     ) {
                         when (selectedTab) {
-                            0 -> SummaryTab(name, info, character, history, imperial)
+                            0 -> SummaryTab(name, info, character, history, imperial, masteryList)
                             1 -> HistoryTab(history, imperial)
                             2 -> HowToTab(info)
                         }
@@ -303,7 +305,8 @@ private fun SummaryTab(
     guide: ExerciseInfo?,
     p: CharacterEntity?,
     history: List<Pair<SessionEntity, List<SetLogEntity>>>,
-    imperial: Boolean
+    imperial: Boolean,
+    masteryList: List<MovementMasteryEntity>?
 ) {
     val category = guide?.let { ExerciseCategories.infer(it.name, it.equipment, it.dbCategory) } ?: ExerciseCategory.STRENGTH
     val trackingType = ExerciseTracking.resolve(
@@ -328,7 +331,7 @@ private fun SummaryTab(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // Mastery Header & Art
-        MasteryHeader(name, guide, history)
+        MasteryHeader(name, guide, masteryList)
 
         // Progress Section
         if (history.isNotEmpty()) {
@@ -436,9 +439,11 @@ private fun SummaryTab(
 }
 
 @Composable
-private fun MasteryHeader(name: String, guide: ExerciseInfo?, history: List<Pair<SessionEntity, List<SetLogEntity>>>) {
-    val container = (LocalContext.current.applicationContext as FitQuestApp).container
-    val masteryList by container.repository.observeMovementMastery().collectAsState(initial = null)
+private fun MasteryHeader(
+    name: String,
+    guide: ExerciseInfo?,
+    masteryList: List<MovementMasteryEntity>?
+) {
     val category = guide?.let { ExerciseCategories.infer(it.name, it.equipment, it.dbCategory) } ?: ExerciseCategory.STRENGTH
     val canonical = remember(name, guide) { MovementMasteryCatalog.resolve(name, category) }
     val masteryEntity = masteryList?.find { it.canonicalKey == canonical.name }

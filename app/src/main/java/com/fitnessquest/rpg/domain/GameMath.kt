@@ -106,7 +106,9 @@ data class CombatStats(
     val spd: Int,
     val critPercent: Int,
     /** Heal on victory when a Siphon rune is socketed. */
-    val siphonHeal: Int = 0
+    val siphonHeal: Int = 0,
+    /** Percentage physical damage mitigation bonus (e.g. 0.05 = 5%). */
+    val mitigationPercent: Float = 0f
 )
 
 object GameMath {
@@ -417,7 +419,8 @@ object GameMath {
             def = def,
             spd = (character.agility * 2 + character.level + runeSpd + masteryBonus.flatSpd + (if (cls == CharacterClass.DRUID && character.druidForm == "PANTHER") 20 else 0) + (if (cls == CharacterClass.SUMMONER && character.druidForm == "SHIVA") 40 else 0)),
             critPercent = min(baseCrit + runeCrit + masteryBonus.flatCritPercent, 70),
-            siphonHeal = siphonHeal
+            siphonHeal = if (masteryBonus.siphonBonusPercent > 0f) (siphonHeal * (1f + masteryBonus.siphonBonusPercent)).roundToInt() else siphonHeal,
+            mitigationPercent = masteryBonus.mitigationPercent
         )
     }
 

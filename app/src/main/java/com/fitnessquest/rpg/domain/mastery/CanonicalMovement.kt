@@ -117,7 +117,7 @@ enum class CanonicalMovement(
         displayName = "General Flexibility Mastery",
         category = ExerciseCategory.FLEXIBILITY,
         description = "General stretching and mobility exercises.",
-        icon = "🧘"
+        icon = "🌿"
     );
 
     companion object {

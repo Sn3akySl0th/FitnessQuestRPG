@@ -81,26 +81,13 @@ data class HeroUiState(
 
 class HeroViewModel(private val container: AppContainer) : ViewModel() {
 
-    val uiState: StateFlow<HeroUiState> = combine(
+    private val coreState: Flow<HeroUiState> = combine(
         container.repository.character,
         container.repository.ownedGear,
         container.repository.items.map { list -> list.filter { it.slot == ItemSlot.RUNE } },
         container.repository.sessions.map { it.take(10) },
-        container.repository.allClassProgress,
-        container.repository.observeMovementMastery()
-    ) { args: Array<Any?> ->
-        val character = args[0] as? CharacterEntity
-        @Suppress("UNCHECKED_CAST")
-        val owned = args[1] as List<OwnedGear>
-        @Suppress("UNCHECKED_CAST")
-        val runes = args[2] as List<ItemEntity>
-        @Suppress("UNCHECKED_CAST")
-        val recent = args[3] as List<SessionEntity>
-        @Suppress("UNCHECKED_CAST")
-        val allProgress = args[4] as List<ClassProgressEntity>
-        @Suppress("UNCHECKED_CAST")
-        val masteryList = args[5] as List<MovementMasteryEntity>
-
+        container.repository.allClassProgress
+    ) { character, owned, runes, recent, allProgress ->
         val gearMap = if (character != null) container.repository.equippedGear(character) else emptyMap()
         val combat = if (character != null) container.repository.combatStatsFor(character) else null
         val setPieces = if (character != null) GameMath.setPieceCount(character, gearMap.values.toList()) else 0
@@ -112,9 +99,15 @@ class HeroViewModel(private val container: AppContainer) : ViewModel() {
             recentSessions = recent,
             ownedGear = owned,
             runes = runes,
-            allClassProgress = allProgress,
-            movementMastery = masteryList
+            allClassProgress = allProgress
         )
+    }
+
+    val uiState: StateFlow<HeroUiState> = combine(
+        coreState,
+        container.repository.observeMovementMastery()
+    ) { core, masteryList ->
+        core.copy(movementMastery = masteryList)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), HeroUiState())
 
     val stepsToday: StateFlow<Int> = container.steps.stepsToday

@@ -89,7 +89,8 @@ object BattleEngine {
         )
         // Speed decides who strikes first: slower heroes eat an opening hit.
         if (monster.spd > stats.spd) {
-            val (dmg, _) = rollDamage(monster.atk * 0.75, stats.def.toDouble(), 0, rng)
+            val (rawDmg, _) = rollDamage(monster.atk * 0.75, stats.def.toDouble(), 0, rng)
+            val dmg = if (stats.mitigationPercent > 0f) max(1, (rawDmg * (1f - stats.mitigationPercent)).roundToInt()) else rawDmg
             s = s.copy(
                 playerHp = max(1, s.playerHp - dmg),
                 log = s.log + "The ${monster.name} is faster than you \u2014 it strikes first for $dmg damage!"
@@ -522,7 +523,10 @@ object BattleEngine {
         if (s.monsterChillTurns > 0) monsterAtk *= 0.65
 
         val (raw, crit) = rollDamage(monsterAtk, s.playerStats.def.toDouble(), 10, rng)
-        val dmg = if (s.playerDefending) max(1, (raw * 0.45).roundToInt()) else raw
+        var dmg = if (s.playerDefending) max(1, (raw * 0.45).roundToInt()) else raw
+        if (s.playerStats.mitigationPercent > 0f) {
+            dmg = max(1, (dmg * (1f - s.playerStats.mitigationPercent)).roundToInt())
+        }
         s = s.copy(playerHp = max(0, s.playerHp - dmg))
         lines += when {
             s.playerDefending -> "The ${s.monster.name} attacks, but your guard absorbs it. $dmg damage."
