@@ -46,7 +46,6 @@ import com.fitnessquest.rpg.domain.LootGrant
 import com.fitnessquest.rpg.domain.LootResult
 import com.fitnessquest.rpg.domain.LootSource
 import com.fitnessquest.rpg.domain.LootTables
-import com.fitnessquest.rpg.domain.Materials
 import com.fitnessquest.rpg.domain.MomentTrigger
 import com.fitnessquest.rpg.domain.Monster
 import com.fitnessquest.rpg.domain.MonsterCatalog
@@ -187,7 +186,7 @@ class GameRepository(
                 agiProgress = updated.agiProgress,
                 wilProgress = updated.wilProgress,
                 freeStatPoints = updated.freeStatPoints,
-            )
+            ),
         )
     }
 
@@ -382,6 +381,7 @@ class GameRepository(
         return ImportPersistResult(templatesAdded = templatesAdded, sessionsAdded = sessionsAdded)
     }
 
+    @Suppress("unused")
     suspend fun repairImportedHistoryTemplates(): Int {
         val candidates = db.workoutDao().getAllWorkouts().mapNotNull { workout ->
             importedHistoryTemplateDateMillis(workout.name)?.let { endedAt -> workout to endedAt }
@@ -391,7 +391,7 @@ class GameRepository(
         candidates.forEach { (workout, endedAt) ->
             val exercises = db.workoutDao().exercisesFor(workout.id)
             if (exercises.isEmpty()) return@forEach
-            val logs = exercises.flatMap { exercise ->
+            val logs = exercises.asSequence().flatMap { exercise ->
                 List(exercise.targetSets.coerceAtLeast(1)) {
                     SetLogEntity(
                         sessionId = 0,
@@ -400,7 +400,7 @@ class GameRepository(
                         reps = exercise.targetReps.coerceAtLeast(0)
                     )
                 }
-            }.map { log -> log.copy(xp = GameMath.xpForSet(log)) }
+            }.map { log -> log.copy(xp = GameMath.xpForSet(log)) }.toList()
             val session = SessionEntity(
                 name = workout.name,
                 startedAt = endedAt,
@@ -455,9 +455,9 @@ class GameRepository(
                 val singleExName = exercises.first().exerciseName.trim().lowercase()
                 val workoutName = workout.name.trim().lowercase()
 
-                val isFragmented = workoutName == singleExName ||
+                val isFragmented = (workoutName == singleExName) ||
                         workoutName.contains("imported workout") ||
-                        importedHistoryTemplateDateMillis(workout.name) != null
+                        (importedHistoryTemplateDateMillis(workout.name) != null)
 
                 if (isFragmented) {
                     db.workoutDao().deleteWorkoutFully(workout.id)
@@ -657,11 +657,13 @@ class GameRepository(
         db.activeSessionDao().upsertActiveSession(current.copy(restEndsAt = restEndsAt, restDurationSec = restDurationSec))
     }
 
+    @Suppress("unused")
     suspend fun updateActivePauseState(pausedAt: Long?, accumulatedPausedMs: Long) {
         val current = db.activeSessionDao().getActiveSession() ?: return
         db.activeSessionDao().upsertActiveSession(current.copy(pausedAt = pausedAt, accumulatedPausedMs = accumulatedPausedMs))
     }
 
+    @Suppress("unused")
     suspend fun updateActiveAmbushOffer(offered: Boolean, xpMult: Float) {
         val current = db.activeSessionDao().getActiveSession() ?: return
         db.activeSessionDao().upsertActiveSession(
@@ -672,6 +674,7 @@ class GameRepository(
         )
     }
 
+    @Suppress("unused")
     suspend fun updateActiveMomentSpoilsUsed(count: Int) {
         val current = db.activeSessionDao().getActiveSession() ?: return
         db.activeSessionDao().upsertActiveSession(current.copy(momentSpoilsUsed = count))
@@ -697,7 +700,9 @@ class GameRepository(
 
         // Idempotency Check: return existing result if completion already succeeded
         val existingSession = db.activeSessionDao().getSessionByCompletionToken(token)
-        if (existingSession != null) return restoreSessionResult(existingSession, getCharacter())
+        if (existingSession != null) {
+            return restoreSessionResult(existingSession, getCharacter())
+        }
 
         val result = db.withTransaction {
             val innerExisting = db.activeSessionDao().getSessionByCompletionToken(token)
@@ -1043,7 +1048,7 @@ class GameRepository(
         if (!jsonStr.isNullOrEmpty()) {
             try {
                 return SessionReceiptCodec.deserialize(jsonStr, character)
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 // Fallback to basic reconstruction below
             }
         }
@@ -2100,6 +2105,7 @@ class GameRepository(
 
     val bodyMetricHistory: Flow<List<BodyMetricEntity>> = db.bodyMetricDao().observeAll()
 
+    @Suppress("unused")
     suspend fun latestWeightKg(): Double? = db.bodyMetricDao().getLatest()?.weightKg
 
     // ---- Movement Mastery ----
@@ -2107,9 +2113,11 @@ class GameRepository(
     fun observeMovementMastery(characterId: Long = 1L): Flow<List<MovementMasteryEntity>> =
         db.movementMasteryDao().observeAll(characterId)
 
+    @Suppress("unused")
     suspend fun getAllMovementMastery(characterId: Long = 1L): List<MovementMasteryEntity> =
         db.movementMasteryDao().getAll(characterId)
 
+    @Suppress("unused")
     suspend fun getMasteryByCanonicalKey(key: String, characterId: Long = 1L): MovementMasteryEntity? =
         db.movementMasteryDao().getByCanonicalKey(key, characterId)
 }

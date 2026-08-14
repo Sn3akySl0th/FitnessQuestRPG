@@ -57,7 +57,7 @@ class AppContainer(val app: Application) {
 
         // Migrate any pre-existing Play Asset Delivery model to local filesDir storage
         val padFile = playAssetModel.getModelFile()
-        if (padFile != null && padFile.exists()) {
+        if ((padFile != null) && padFile.exists()) {
             localAiModel.migrateFromPlayAsset(padFile)
         }
     }
@@ -103,7 +103,7 @@ class FitQuestApp : Application() {
     private fun startSafely(
         name: String,
         crashlytics: FirebaseCrashlytics,
-        block: () -> Unit
+        block: () -> Unit,
     ) {
         runCatching(block).onFailure { error ->
             crashlytics.log("Startup task failed: $name")

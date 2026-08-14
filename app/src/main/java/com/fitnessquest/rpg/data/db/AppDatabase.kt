@@ -53,7 +53,7 @@ class Converters {
         ActiveExerciseEntity::class,
         ActiveSetLogEntity::class,
         PendingSyncEntity::class,
-        MovementMasteryEntity::class
+        MovementMasteryEntity::class,
     ],
     version = 26,
     exportSchema = true

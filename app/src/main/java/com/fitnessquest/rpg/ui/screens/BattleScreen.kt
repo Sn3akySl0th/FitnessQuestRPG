@@ -148,7 +148,7 @@ data class BattleSelectUiState(
 @Composable
 fun BattleScreen(
     onFight: (Int) -> Unit,
-    viewModel: BattleSelectViewModel = viewModel(factory = BattleSelectViewModel.Factory)
+    viewModel: BattleSelectViewModel = viewModel(factory = BattleSelectViewModel.Factory),
 ) {
     val battleState by viewModel.battleState.collectAsState()
     val imperial by viewModel.imperial.collectAsState()
@@ -401,8 +401,8 @@ private fun battleEstimate(monster: Monster, playerLevel: Int, combat: CombatSta
         combat == null -> "balanced stats"
         monster.atk > (combat.def + 6) -> "DEF"
         monster.hp > combat.maxHp -> "HP/END"
-        monster.spd > combat.spd + 4 -> "SPD/AGI"
-        monster.def > combat.atk / 2 -> "ATK/STR"
+        monster.spd > (combat.spd + 4) -> "SPD/AGI"
+        monster.def > (combat.atk / 2) -> "ATK/STR"
         else -> "your main stat"
     }
     return BattleEstimate(chance, warning, recommended)

@@ -1,6 +1,5 @@
 package com.fitnessquest.rpg.data.importexport
 
-import android.content.Context
 import com.fitnessquest.rpg.data.db.ExerciseCategory
 import com.fitnessquest.rpg.data.db.SessionEntity
 import com.fitnessquest.rpg.data.db.SetLogEntity
@@ -25,7 +24,7 @@ data class ImportedExercise(
     val sets: Int,
     val reps: Int,
     val weightKg: Double = 0.0,
-    val notes: String = ""
+    val notes: String = "",
 ) {
     fun toEntity(workoutId: Long = 0, sortOrder: Int = 0): WorkoutExerciseEntity =
         WorkoutExerciseEntity(
@@ -159,7 +158,7 @@ object WorkoutImportService {
                         var firstReps = 10
                         var firstWeight = 0.0
 
-                        if (setsArray != null && setsArray.length() > 0) {
+                        if ((setsArray != null) && (setsArray.length() > 0)) {
                             val firstSet = setsArray.getJSONObject(0)
                             firstReps = firstSet.optInt("reps", 10).coerceAtLeast(1)
                             firstWeight = firstSet.optDouble("weight_kg", firstSet.optDouble("weight", 0.0))
@@ -227,7 +226,7 @@ object WorkoutImportService {
             // 1. Fetch Routine Folders (Trainer Programs) - and pull nested routines
             try {
                 var folderPage = 1
-                var totalFolderPages = 1
+                var totalFolderPages: Int
                 do {
                     val request = Request.Builder()
                         .url("https://api.hevyapp.com/v1/routine_folders?page=$folderPage&pageSize=$HEVY_PAGE_SIZE")
@@ -497,7 +496,7 @@ object WorkoutImportService {
     suspend fun parseCsvStream(inputStream: InputStream): Result<List<ImportedWorkout>> = withContext(Dispatchers.IO) {
         runCatching {
             val reader = BufferedReader(InputStreamReader(inputStream, Charsets.UTF_8))
-            val lines = reader.readLines().map { it.trim() }.filter { it.isNotBlank() }
+            val lines = reader.use { it.readLines() }.asSequence().map { it.trim() }.filter { it.isNotBlank() }.toList()
             require(lines.size >= 2) { "CSV file is empty or missing headers." }
 
             val headerLine = lines[0]
@@ -607,10 +606,10 @@ object WorkoutImportService {
                 val distanceKm = if (headers.getOrNull(distanceIdx)?.contains("mile") == true) distanceRaw * 1.609344 else distanceRaw
 
                 val belongsToCurrent = currentSession != null && (
-                    (explicitSessionId != null && explicitSessionId == currentSession!!.explicitId) ||
-                    (startedAt != null && startedAt == currentSession!!.startedAt && currentSession!!.workoutTitle.equals(workoutTitle, ignoreCase = true)) ||
-                    (startedAt == null && startRaw != null && startRaw == currentSession!!.rawStart && currentSession!!.workoutTitle.equals(workoutTitle, ignoreCase = true)) ||
-                    (startedAt == null && startRaw == null && currentSession!!.workoutTitle.equals(workoutTitle, ignoreCase = true))
+                    (explicitSessionId != null && explicitSessionId == currentSession.explicitId) ||
+                    (startedAt != null && startedAt == currentSession.startedAt && currentSession.workoutTitle.equals(workoutTitle, ignoreCase = true)) ||
+                    (startedAt == null && startRaw != null && startRaw == currentSession.rawStart && currentSession.workoutTitle.equals(workoutTitle, ignoreCase = true)) ||
+                    (startedAt == null && startRaw == null && currentSession.workoutTitle.equals(workoutTitle, ignoreCase = true))
                 )
 
                 if (!belongsToCurrent) {
@@ -731,11 +730,15 @@ object WorkoutImportService {
         var inQuotes = false
 
         for (ch in line) {
-            when {
-                ch == '"' -> inQuotes = !inQuotes
-                ch == ',' && !inQuotes -> {
-                    result.add(sb.toString().trim())
-                    sb.clear()
+            when (ch) {
+                '"' -> inQuotes = !inQuotes
+                ',' -> {
+                    if (!inQuotes) {
+                        result.add(sb.toString().trim())
+                        sb.clear()
+                    } else {
+                        sb.append(ch)
+                    }
                 }
                 else -> sb.append(ch)
             }

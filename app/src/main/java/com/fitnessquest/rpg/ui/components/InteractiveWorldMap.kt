@@ -98,7 +98,7 @@ fun InteractiveWorldMap(
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
                     text = "🗺️ WORLD MAP OF FITQUEST",
@@ -128,7 +128,7 @@ fun InteractiveWorldMap(
                         is ProgressionRules.BiomeRequirement.Locked -> {
                             val threshold = ProgressionRules.bossUnlockPointsFor(currentBiome)
                             val currentPts = (threshold - biomeRequirement.pointsNeeded).coerceAtLeast(0)
-                            val percent = (currentPts * 100 / threshold.coerceAtLeast(1)).coerceIn(0, 100)
+                            val percent = ((currentPts * 100) / threshold.coerceAtLeast(1)).coerceIn(0, 100)
 
                             Text(
                                 if (biomeRequirement.pointsNeeded > 0) "🔒" else "⚔️",
