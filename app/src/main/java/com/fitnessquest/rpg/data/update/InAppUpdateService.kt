@@ -1,6 +1,7 @@
 package com.fitnessquest.rpg.data.update
 
 import android.content.Context
+import android.util.Log
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.IntentSenderRequest
 import com.google.android.play.core.appupdate.AppUpdateInfo
@@ -62,6 +63,11 @@ class PlayAppUpdateClient(context: Context) : AppUpdateClient {
     override suspend fun getAppUpdateInfo(): Result<AppUpdateData> = runCatching {
         val info = appUpdateManager.appUpdateInfo.await()
         val isAvailable = info.updateAvailability() == UpdateAvailability.UPDATE_AVAILABLE
+        Log.d(
+            "FitQuestUpdate",
+            "Play update check: availability=${info.updateAvailability()} (1=NOT_AVAIL, 2=AVAIL), " +
+                "availableVersionCode=${info.availableVersionCode()}, flexibleAllowed=${info.isFlexibleUpdateAllowed}"
+        )
         AppUpdateData(
             isAvailable = isAvailable,
             isFlexibleAllowed = info.isFlexibleUpdateAllowed,

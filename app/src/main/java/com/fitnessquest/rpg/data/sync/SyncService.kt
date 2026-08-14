@@ -60,7 +60,7 @@ data class SyncStatus(
  * - Firestore's offline persistence queues writes made without a connection.
  */
 class SyncService(
-    app: Application,
+    private val app: Application,
     private val db: AppDatabase,
     private val auth: AuthService,
     private val userPrefs: UserPrefs,
@@ -107,7 +107,17 @@ class SyncService(
                             db.workoutDao().observeAll()
                         ) { s, w -> s to w }
 
-                        coreFlow.combine(activityFlow) { core, activity ->
+                        val settingsFlow = combine(
+                            userPrefs.imperial,
+                            userPrefs.sound,
+                            userPrefs.haptics,
+                            userPrefs.useLocalAi,
+                            userPrefs.hevyApiKey
+                        ) { imp, snd, hap, loc, hevKey ->
+                            listOf(imp, snd, hap, loc, hevKey)
+                        }
+
+                        combine(coreFlow, activityFlow, settingsFlow) { core, activity, _ ->
                             SyncPayload(
                                 character = core.character,
                                 items = core.items,
@@ -286,6 +296,25 @@ class SyncService(
             if (!shouldRestore) return
 
             db.characterDao().upsert(cloud.copy(id = 1L))
+
+            // Restore user settings & API keys
+            @Suppress("UNCHECKED_CAST")
+            (doc.get("settings") as? Map<String, Any?>)?.let { s ->
+                (s["imperial"] as? Boolean)?.let { userPrefs.setImperial(it) }
+                (s["sound"] as? Boolean)?.let { userPrefs.setSound(it) }
+                (s["haptics"] as? Boolean)?.let { userPrefs.setHaptics(it) }
+                (s["lowPowerUi"] as? Boolean)?.let { userPrefs.setLowPowerUi(it) }
+                (s["showCardioIntensity"] as? Boolean)?.let { userPrefs.setShowCardioIntensity(it) }
+                (s["useLocalAi"] as? Boolean)?.let { userPrefs.setUseLocalAi(it) }
+                (s["geminiApiKey"] as? String)?.takeIf { it.isNotBlank() }?.let { key ->
+                    (app as? com.fitnessquest.rpg.FitQuestApp)?.container?.gemini?.apiKey = key
+                }
+                (s["hevyApiKey"] as? String)?.takeIf { it.isNotBlank() }?.let { key ->
+                    userPrefs.setHevyApiKey(key)
+                }
+                (s["hevyAutoSync"] as? Boolean)?.let { userPrefs.setHevyAutoSyncEnabled(it) }
+            }
+
             // Stackable quantities (consumables, runes, materials, chests).
             @Suppress("UNCHECKED_CAST")
             (doc.get("stacks") as? Map<String, Any?> ?: doc.get("consumables") as? Map<String, Any?>)
@@ -465,12 +494,25 @@ class SyncService(
         if (userPrefs.developerSandbox.value) return
         try {
             val now = System.currentTimeMillis()
+            val settingsMap = mapOf(
+                "imperial" to userPrefs.imperial.value,
+                "sound" to userPrefs.sound.value,
+                "haptics" to userPrefs.haptics.value,
+                "lowPowerUi" to userPrefs.lowPowerUi.value,
+                "showCardioIntensity" to userPrefs.showCardioIntensity.value,
+                "useLocalAi" to userPrefs.useLocalAi.value,
+                "geminiApiKey" to ((app as? com.fitnessquest.rpg.FitQuestApp)?.container?.gemini?.userApiKey.orEmpty()),
+                "hevyApiKey" to userPrefs.hevyApiKey.value,
+                "hevyAutoSync" to userPrefs.hevyAutoSyncEnabled.value
+            )
+
             // Merge so console-granted fields like `premium` are not wiped.
             userDoc(uid).set(
                 mapOf(
                     "schema" to 4,
                     "updatedAt" to now,
                     "character" to characterToMap(character),
+                    "settings" to settingsMap,
                     "classProgress" to classProgress.map { classProgressToMap(it) },
                     "stacks" to items.asSequence()
                         .filter { it.slot.isStackable() && it.quantity > 0 }
