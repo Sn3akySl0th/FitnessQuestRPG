@@ -673,6 +673,11 @@ class GameRepository(
         db.activeSessionDao().upsertActiveSession(current.copy(restEndsAt = restEndsAt, restDurationSec = restDurationSec))
     }
 
+    suspend fun updateActiveSessionStartTime(startedAt: Long) {
+        val current = db.activeSessionDao().getActiveSession() ?: return
+        db.activeSessionDao().upsertActiveSession(current.copy(startedAt = startedAt))
+    }
+
     @Suppress("unused")
     suspend fun updateActivePauseState(pausedAt: Long?, accumulatedPausedMs: Long) {
         val current = db.activeSessionDao().getActiveSession() ?: return

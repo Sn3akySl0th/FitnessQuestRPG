@@ -426,6 +426,17 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
     fun skipMusic() = container.music.skipNext()
     fun prevMusic() = container.music.skipPrevious()
 
+    fun setManualDuration(minutes: Int) {
+        val newStartedAt = System.currentTimeMillis() - (minutes * 60 * 1000L)
+        startedAt = newStartedAt
+        _sessionDurationMs.value = (minutes * 60 * 1000L)
+        if (!demoMode) {
+            viewModelScope.launch {
+                container.repository.updateActiveSessionStartTime(newStartedAt)
+            }
+        }
+    }
+
     fun load(workoutId: Long) {
         if (loadedFor == workoutId) return
         loadedFor = workoutId
@@ -1209,7 +1220,23 @@ fun ActiveSessionScreen(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     val durationMs by viewModel.sessionDurationMs.collectAsState()
-                    MetricItem("Time", formatDuration(durationMs))
+                    var showDurationEdit by remember { mutableStateOf(false) }
+                    if (showDurationEdit) {
+                        DurationEditDialog(
+                            initialMinutes = (durationMs / 60000L).toInt(),
+                            onDismiss = { showDurationEdit = false },
+                            onConfirm = { mins ->
+                                viewModel.setManualDuration(mins)
+                                showDurationEdit = false
+                            }
+                        )
+                    }
+
+                    MetricItem(
+                        label = "Time", 
+                        value = formatDuration(durationMs),
+                        modifier = Modifier.clickable { showDurationEdit = true }
+                    )
                     MetricItem("Volume", "${state.totalVolumeKg.toInt()} ${Units.label(imperial)}")
                     MetricItem("Sets", state.totalSets.toString())
                 }
@@ -1400,7 +1427,8 @@ fun ActiveSessionScreen(
     }
 
     state.finish?.let { finish ->
-        if (finish.result.levelsGained > 0) {
+        var showLevelUp by remember(finish) { mutableStateOf(finish.result.levelsGained > 0) }
+        if (showLevelUp) {
             val newLevel = finish.result.updatedCharacter.level
             val cls = finish.result.updatedCharacter.characterClass ?: CharacterClass.WARRIOR
             LevelUpModal(
@@ -1408,7 +1436,7 @@ fun ActiveSessionScreen(
                 clazz = cls,
                 statGains = finish.result.statGains,
                 unlockedSkills = cls.skills.filter { it.unlockLevel in (newLevel - finish.result.levelsGained + 1)..newLevel },
-                onDismiss = { }
+                onDismiss = { showLevelUp = false }
             )
         } else {
             SessionResultDialog(finish = finish, imperial = imperial, onDismiss = { (onFinished ?: onDone)() })
@@ -1417,8 +1445,41 @@ fun ActiveSessionScreen(
 }
 
 @Composable
-private fun MetricItem(label: String, value: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+private fun DurationEditDialog(
+    initialMinutes: Int,
+    onDismiss: () -> Unit,
+    onConfirm: (Int) -> Unit
+) {
+    var minutes by remember { mutableStateOf(initialMinutes.toString()) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Edit Duration") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Set workout duration in minutes:")
+                CompactNumberField(
+                    value = minutes,
+                    onValueChange = { minutes = it },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    minutes.toIntOrNull()?.let { onConfirm(it) }
+                }
+            ) { Text("Confirm") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
+}
+
+@Composable
+private fun MetricItem(label: String, value: String, modifier: Modifier = Modifier) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier) {
         Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary)
         Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
