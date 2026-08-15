@@ -1,7 +1,13 @@
 package com.fitnessquest.rpg.wear
 
+import android.app.Application
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.os.IBinder
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -135,7 +141,7 @@ data class WearUiState(
     val localBpm: Int? get() = metrics.bpm
 }
 
-class WearSessionViewModel(private val app: android.app.Application) : ViewModel(),
+class WearSessionViewModel(private val app: Application) : ViewModel(),
     MessageClient.OnMessageReceivedListener {
 
     private val _uiState = MutableStateFlow(WearUiState())
@@ -145,36 +151,48 @@ class WearSessionViewModel(private val app: android.app.Application) : ViewModel
     private val nodeClient by lazy { Wearable.getNodeClient(app) }
     private val capabilityClient by lazy { Wearable.getCapabilityClient(app) }
 
-    private val exerciseEngine = WearExerciseEngine(
-        context = app,
-        onMetrics = { metrics ->
-            _uiState.update {
-                it.copy(
-                    metrics = metrics,
-                    hrStatus = metrics.bpm?.let { bpm -> "♥ $bpm" } ?: it.hrStatus
-                )
+    private var workoutService: WearWorkoutService? = null
+    private var isBound = false
+
+    private val connection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
+            val service = (binder as WearWorkoutService.LocalBinder).getService()
+            workoutService = service
+            isBound = true
+            
+            // Sync current state to service if needed
+            if (_uiState.value.session.active) {
+                service.startWorkout()
+                _uiState.value.session.maxHr?.let { service.setMaxHr(it) }
+                service.onRestChanged(_uiState.value.session.restEndsAt)
             }
-            viewModelScope.launch { sendToPhone(WearPaths.METRICS, metrics.toJson()) }
-        },
-        onGoal = { kind, message ->
-            val feedbackKind = runCatching { WearFeedbackKind.valueOf(kind) }
-                .getOrDefault(WearFeedbackKind.GOAL_MET)
-            _uiState.update {
-                it.copy(feedback = WearFeedbackEvent(feedbackKind, message))
+
+            // Observe metrics from service
+            viewModelScope.launch {
+                service.metrics.collect { metrics ->
+                    _uiState.update {
+                        it.copy(
+                            metrics = metrics,
+                            hrStatus = metrics.bpm?.let { bpm -> "♥ $bpm" } ?: it.hrStatus
+                        )
+                    }
+                    sendToPhone(WearPaths.METRICS, metrics.toJson())
+                }
             }
-            WearHaptics.pulse(app, WearHaptics.Pattern.SET_LOGGED)
-        },
-        onStatus = { status ->
-            _uiState.update { it.copy(hrStatus = status) }
         }
-    )
+
+        override fun onServiceDisconnected(name: ComponentName?) {
+            workoutService = null
+            isBound = false
+        }
+    }
 
     private var pollJob: Job? = null
 
     fun onSensorPermissionResult(granted: Boolean) {
         if (granted) {
             _uiState.update { it.copy(hrStatus = "Reading HR…") }
-            if (_uiState.value.session.active) exerciseEngine.start()
+            if (_uiState.value.session.active) workoutService?.startWorkout()
         } else {
             _uiState.update { it.copy(hrStatus = "Allow heart rate") }
         }
@@ -182,6 +200,10 @@ class WearSessionViewModel(private val app: android.app.Application) : ViewModel
 
     fun bind() {
         messageClient.addListener(this)
+        
+        val intent = Intent(app, WearWorkoutService::class.java)
+        app.bindService(intent, connection, Context.BIND_AUTO_CREATE)
+
         pollJob?.cancel()
         pollJob = viewModelScope.launch {
             while (isActive) {
@@ -189,14 +211,17 @@ class WearSessionViewModel(private val app: android.app.Application) : ViewModel
                 delay(4_000)
             }
         }
-        if (_uiState.value.session.active) exerciseEngine.start()
     }
 
     fun unbind() {
         pollJob?.cancel()
         pollJob = null
         messageClient.removeListener(this)
-        exerciseEngine.stop()
+        
+        if (isBound) {
+            app.unbindService(connection)
+            isBound = false
+        }
     }
 
     fun retryLink() {
@@ -218,7 +243,7 @@ class WearSessionViewModel(private val app: android.app.Application) : ViewModel
             }
             WearPaths.SESSION_STATE -> {
                 val session = WearSessionState.fromJson(event.data)
-                session.maxHr?.let { exerciseEngine.setMaxHr(it) }
+                session.maxHr?.let { workoutService?.setMaxHr(it) }
                 _uiState.update { s ->
                     val maxIdx = (session.exercises.size - 1).coerceAtLeast(0)
                     val phoneIdx = session.currentIndex.coerceIn(0, maxIdx)
@@ -250,14 +275,14 @@ class WearSessionViewModel(private val app: android.app.Application) : ViewModel
                     )
                 }
                 if (session.active) {
-                    exerciseEngine.start()
-                    exerciseEngine.onRestChanged(session.restEndsAt)
+                    workoutService?.startWorkout()
+                    workoutService?.onRestChanged(session.restEndsAt)
                 } else {
-                    exerciseEngine.stop()
+                    workoutService?.stopWorkout()
                 }
             }
             WearPaths.SESSION_ENDED -> {
-                exerciseEngine.stop()
+                workoutService?.stopWorkout()
                 _uiState.update {
                     it.copy(
                         session = it.session.copy(active = false, restEndsAt = null),
@@ -449,7 +474,7 @@ class WearSessionViewModel(private val app: android.app.Application) : ViewModel
     }
 
     companion object {
-        fun Factory(app: android.app.Application) = object : ViewModelProvider.Factory {
+        fun Factory(app: Application) = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T =
                 WearSessionViewModel(app) as T

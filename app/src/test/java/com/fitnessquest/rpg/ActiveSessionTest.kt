@@ -159,9 +159,11 @@ class ActiveSessionTest {
                 }
                 "insertActiveSetLog" -> {
                     val log = args[0] as ActiveSetLogEntity
-                    setLogs.add(log)
+                    val id = (setLogs.size + 1).toLong()
+                    val created = log.copy(id = id)
+                    setLogs.add(created)
                     updateActiveFlow()
-                    log.id
+                    id
                 }
                 "updateActiveSession" -> {
                     activeSessionEntity = args[0] as ActiveSessionEntity
@@ -224,6 +226,19 @@ class ActiveSessionTest {
                 "logsForExercise" -> {
                     val exName = args[0] as String
                     savedSetLogs.filter { it.exerciseName == exName }
+                }
+                "getAllLoggedExerciseNames" -> {
+                    savedSetLogs.map { it.exerciseName }.distinct()
+                }
+                "logsForExercises" -> {
+                    @Suppress("UNCHECKED_CAST")
+                    val names = args[0] as List<String>
+                    savedSetLogs.filter { it.exerciseName in names }
+                }
+                "sessionsByIds" -> {
+                    @Suppress("UNCHECKED_CAST")
+                    val ids = args[0] as List<Long>
+                    savedSessions.filter { it.id in ids }.sortedByDescending { it.endedAt }
                 }
                 "countSessionsSince" -> {
                     val sinceMs = args[0] as Long
@@ -592,5 +607,20 @@ class ActiveSessionTest {
         // Assert all exercises and sets were CASCADE deleted
         assertNull(repository.getActiveSessionWithDetails())
         assertEquals(0, db.activeSessionDao().getActiveExercises().size)
+    }
+
+    @Test
+    fun testSessionCompletionResetsSetIds() = runBlocking {
+        db.character = CharacterEntity(name = "Hero", level = 1, xp = 0, gold = 100)
+        val exercises = listOf(SessionExercise(name = "Bench Press", category = ExerciseCategory.STRENGTH))
+        repository.startActiveSession("Test Quest", null, exercises)
+        val activeEx = db.exercises.first()
+        repository.logActiveSet(activeEx.id, activeEx.exerciseName, activeEx.category, 100.0, 10, 0.0, 0.0, 10, 2, null, null, 0.0, 0.0, "", SetType.NORMAL, 1, 60)
+        val draftSet = db.setLogs.first()
+        assertTrue("Draft set should have a generated ID", draftSet.id > 0)
+        val logs = listOf(SetLogEntity(id = draftSet.id, sessionId = 0, exerciseName = "Bench Press", category = ExerciseCategory.STRENGTH, weightKg = 100.0, reps = 10, xp = 10))
+        repository.completeSession("Test Quest", System.currentTimeMillis() - 1000, logs, 1.0f, "token_123", "user_1")
+        val savedLog = db.savedSetLogs.first()
+        assertEquals("Set ID must be reset to 0 for history insertion", 0L, savedLog.id)
     }
 }

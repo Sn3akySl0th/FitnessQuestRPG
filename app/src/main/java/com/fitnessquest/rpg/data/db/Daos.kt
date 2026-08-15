@@ -62,6 +62,9 @@ interface WorkoutDao {
     @Insert
     suspend fun insertExercises(exercises: List<WorkoutExerciseEntity>)
 
+    @Update
+    suspend fun updateExercise(exercise: WorkoutExerciseEntity)
+
     @Query("DELETE FROM workouts WHERE id = :id")
     suspend fun deleteWorkout(id: Long)
 
@@ -126,6 +129,12 @@ interface SessionDao {
 
     @Query("SELECT * FROM set_logs WHERE exerciseName = :exerciseName")
     suspend fun logsForExercise(exerciseName: String): List<SetLogEntity>
+
+    @Query("SELECT DISTINCT exerciseName FROM set_logs")
+    suspend fun getAllLoggedExerciseNames(): List<String>
+
+    @Query("SELECT * FROM set_logs WHERE exerciseName IN (:names)")
+    suspend fun logsForExercises(names: List<String>): List<SetLogEntity>
 
 
     @Query("SELECT * FROM sessions WHERE id IN (:ids) ORDER BY endedAt DESC")

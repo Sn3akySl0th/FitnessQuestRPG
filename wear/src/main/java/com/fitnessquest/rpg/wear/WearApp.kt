@@ -7,13 +7,14 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -31,6 +32,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.wear.compose.foundation.lazy.ScalingLazyColumn
+import androidx.wear.compose.foundation.lazy.rememberScalingLazyListState
 import androidx.wear.compose.material.*
 import androidx.wear.compose.material.dialog.Dialog
 import com.fitnessquest.shared.wear.WearLiveMetrics
@@ -103,14 +105,14 @@ fun WearApp(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            fb.message,
+                            text = fb.message,
                             textAlign = TextAlign.Center,
-                            color = MaterialTheme.colors.onSurface,
-                            maxLines = 4,
-                            overflow = TextOverflow.Ellipsis
+                            style = MaterialTheme.typography.body1
                         )
                         Spacer(Modifier.height(8.dp))
-                        Button(onClick = onDismissFeedback) { Text("OK") }
+                        Button(onClick = onDismissFeedback) {
+                            Text("OK")
+                        }
                     }
                 }
             }
@@ -124,49 +126,36 @@ private fun IdleScreen(
     statusText: String,
     onRetryLink: () -> Unit
 ) {
-    Box(Modifier.fillMaxSize()) {
-        TimeText()
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 16.dp, vertical = 28.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                "FitnessRPG",
-                style = MaterialTheme.typography.title2,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colors.primary,
-                textAlign = TextAlign.Center,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Spacer(Modifier.height(6.dp))
-            Text(
-                if (phoneConnected) "Watch linked"
-                else "Waiting for phone",
-                style = MaterialTheme.typography.body2,
-                fontWeight = FontWeight.SemiBold,
-                color = if (phoneConnected) Color(0xFF6BC96B) else MaterialTheme.colors.primary,
-                textAlign = TextAlign.Center,
-                maxLines = 1
-            )
-            Spacer(Modifier.height(6.dp))
-            Text(
-                statusText.ifBlank {
-                    if (phoneConnected) "Start a quest on your phone"
-                    else "Open FitnessRPG on your phone"
-                },
-                textAlign = TextAlign.Center,
-                style = MaterialTheme.typography.caption1,
-                color = MaterialTheme.colors.onBackground,
-                maxLines = 3,
-                overflow = TextOverflow.Ellipsis
-            )
-            Spacer(Modifier.height(10.dp))
-            Button(onClick = onRetryLink, modifier = Modifier.fillMaxWidth(0.78f)) {
-                Text(if (phoneConnected) "Refresh" else "Find phone")
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        val color = if (phoneConnected) MaterialTheme.colors.primary else Color.Gray
+        Box(
+            Modifier
+                .size(12.dp)
+                .clip(CircleShape)
+                .background(color)
+        )
+        Spacer(Modifier.height(12.dp))
+        Text(
+            text = "FitQuest",
+            style = MaterialTheme.typography.title1,
+            fontWeight = FontWeight.Black
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = statusText,
+            textAlign = TextAlign.Center,
+            style = MaterialTheme.typography.caption2
+        )
+        if (!phoneConnected) {
+            Spacer(Modifier.height(16.dp))
+            Button(onClick = onRetryLink) {
+                Text("Retry Link")
             }
         }
     }
@@ -183,49 +172,38 @@ private fun SessionScreen(
     onAdjustDistance: (Double) -> Unit,
     onRequestHrPermission: () -> Unit
 ) {
+    val listState = rememberScalingLazyListState()
     val session = state.session
+    val idx = state.selectedIndex
+    val ex = session.exercises.getOrNull(idx)
+    val count = session.exercises.size
+    val tracking = ex?.trackingType?.uppercase() ?: "WEIGHT_REPS"
     val unit = if (session.imperial) "lb" else "kg"
     val distUnit = if (session.imperial) "mi" else "km"
     val weightStep = if (session.imperial) 5.0 else 2.5
-    val count = session.exercises.size
-    val idx = state.selectedIndex.coerceIn(0, (count - 1).coerceAtLeast(0))
-    val ex = session.exercises.getOrNull(idx)
-    val category = ex?.category?.uppercase().orEmpty()
-    val tracking = ex?.trackingType?.uppercase()?.takeIf { it.isNotBlank() } ?: when (category) {
-        "CARDIO" -> "DISTANCE_TIME"
-        "FLEXIBILITY" -> "TIME_ONLY"
-        "BODYWEIGHT" -> "BODYWEIGHT_REPS"
-        else -> "WEIGHT_REPS"
-    }
-    val m = state.metrics
 
     ScalingLazyColumn(
         modifier = Modifier.fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 20.dp)
+        state = listState,
+        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        item { TimeText() }
-        
-        // Compact Status & Metrics at the top
+        // Header: Heart Rate and Timer
         item {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .clickable { onRequestHrPermission() },
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                modifier = Modifier.fillMaxWidth(0.92f),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                // Focused Heart Rate
-                Column(horizontalAlignment = Alignment.Start) {
-                    val bpm = m.bpm
-                    val color = wearZoneColor(m.zone)
+                val m = state.metrics
+                val color = wearZoneColor(m.zone)
+                
+                Column {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        WearPulsingHeart(bpm, color, Modifier.size(16.dp))
+                        WearPulsingHeart(bpm = m.bpm, color = color, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(4.dp))
                         Text(
-                            text = bpm?.toString() ?: "--",
+                            text = m.bpm?.toString() ?: "--",
                             style = MaterialTheme.typography.title3,
                             color = color,
                             fontWeight = FontWeight.Black
@@ -234,7 +212,6 @@ private fun SessionScreen(
                     Text(m.zone ?: "Zone", style = MaterialTheme.typography.caption2, color = color)
                 }
 
-                // Focused Calories / Activity
                 Column(horizontalAlignment = Alignment.End) {
                     Text(
                         text = m.caloriesKcal?.let { "${it.toInt()} kcal" } ?: "0 kcal",
@@ -248,7 +225,6 @@ private fun SessionScreen(
         }
 
         if (ex != null) {
-            // Exercise Title & Navigation
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
@@ -262,9 +238,9 @@ private fun SessionScreen(
                     ) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null) }
                     
                     Text(
-                        text = "${idx + 1} of $count",
+                        text = "${idx + 1} / $count",
                         style = MaterialTheme.typography.caption2,
-                        modifier = Modifier.padding(horizontal = 12.dp)
+                        modifier = Modifier.padding(horizontal = 8.dp)
                     )
 
                     Button(
@@ -283,7 +259,7 @@ private fun SessionScreen(
                     textAlign = TextAlign.Center,
                     color = MaterialTheme.colors.primary,
                     maxLines = 2,
-                    modifier = Modifier.fillMaxWidth(0.92f)
+                    modifier = Modifier.fillMaxWidth(0.95f)
                 )
             }
 
@@ -295,19 +271,19 @@ private fun SessionScreen(
                 )
             }
 
-            // Controls Section
+            // High-tactility steppers
             when (tracking) {
                 "CARDIO_MACHINE", "DISTANCE_TIME" -> {
                     item {
-                        StepperRow(
-                            label = "${fmt(state.durationMin)} min",
+                        BigStepper(
+                            value = "${fmt(state.durationMin)} min",
                             onMinus = { onAdjustDuration(-0.5) },
                             onPlus = { onAdjustDuration(0.5) }
                         )
                     }
                     item {
-                        StepperRow(
-                            label = "${fmt(state.distanceDisplay)} $distUnit",
+                        BigStepper(
+                            value = "${fmt(state.distanceDisplay)} $distUnit",
                             onMinus = { onAdjustDistance(-0.1) },
                             onPlus = { onAdjustDistance(0.1) }
                         )
@@ -315,8 +291,8 @@ private fun SessionScreen(
                 }
                 "DISTANCE_ONLY" -> {
                     item {
-                        StepperRow(
-                            label = "${fmt(state.distanceDisplay)} $distUnit",
+                        BigStepper(
+                            value = "${fmt(state.distanceDisplay)} $distUnit",
                             onMinus = { onAdjustDistance(-0.1) },
                             onPlus = { onAdjustDistance(0.1) }
                         )
@@ -324,8 +300,8 @@ private fun SessionScreen(
                 }
                 "TIME_ONLY" -> {
                     item {
-                        StepperRow(
-                            label = "${fmt(state.durationMin)} min",
+                        BigStepper(
+                            value = "${fmt(state.durationMin)} min",
                             onMinus = { onAdjustDuration(-0.5) },
                             onPlus = { onAdjustDuration(0.5) }
                         )
@@ -333,8 +309,8 @@ private fun SessionScreen(
                 }
                 "BODYWEIGHT_REPS", "REPS_ONLY" -> {
                     item {
-                        StepperRow(
-                            label = "${state.reps} reps",
+                        BigStepper(
+                            value = "${state.reps} reps",
                             onMinus = { onAdjustReps(-1) },
                             onPlus = { onAdjustReps(1) }
                         )
@@ -342,15 +318,15 @@ private fun SessionScreen(
                 }
                 else -> {
                     item {
-                        StepperRow(
-                            label = "${fmt(state.weightDisplay)} $unit",
+                        BigStepper(
+                            value = "${fmt(state.weightDisplay)} $unit",
                             onMinus = { onAdjustWeight(-weightStep) },
                             onPlus = { onAdjustWeight(weightStep) }
                         )
                     }
                     item {
-                        StepperRow(
-                            label = "${state.reps} reps",
+                        BigStepper(
+                            value = "${state.reps} reps",
                             onMinus = { onAdjustReps(-1) },
                             onPlus = { onAdjustReps(1) }
                         )
@@ -358,18 +334,16 @@ private fun SessionScreen(
                 }
             }
 
-            item {
-                Spacer(Modifier.height(4.dp))
-            }
+            item { Spacer(Modifier.height(8.dp)) }
 
             item {
                 Button(
                     onClick = onLogSet,
-                    modifier = Modifier.fillMaxWidth(0.9f).height(48.dp),
-                    shape = RoundedCornerShape(24.dp),
+                    modifier = Modifier.fillMaxWidth(0.95f).height(52.dp),
+                    shape = RoundedCornerShape(26.dp),
                     colors = ButtonDefaults.primaryButtonColors()
                 ) {
-                    Text("LOG SET", fontWeight = FontWeight.Black)
+                    Text("LOG SET", fontWeight = FontWeight.Black, fontSize = 16.sp)
                 }
             }
 
@@ -379,93 +353,80 @@ private fun SessionScreen(
                         state.lastLogFlash,
                         style = MaterialTheme.typography.caption2,
                         color = MaterialTheme.colors.secondary,
-                        textAlign = TextAlign.Center
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(top = 8.dp)
                     )
                 }
-            }
-        } else {
-            item {
-                Text(
-                    "No exercises in this quest",
-                    color = MaterialTheme.colors.onBackground,
-                    textAlign = TextAlign.Center
-                )
             }
         }
     }
 }
 
 @Composable
-private fun HeartRatePill(
-    bpm: Int?,
-    zone: String?,
-    fallback: String,
-    onClick: () -> Unit
+private fun BigStepper(
+    value: String,
+    onMinus: () -> Unit,
+    onPlus: () -> Unit
 ) {
-    val color = wearZoneColor(zone)
-    Button(
-        onClick = onClick,
-        colors = ButtonDefaults.secondaryButtonColors(),
-        modifier = Modifier.fillMaxWidth(0.88f)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth(0.95f)
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        Button(
+            onClick = onMinus,
+            modifier = Modifier.size(44.dp),
+            colors = ButtonDefaults.secondaryButtonColors()
+        ) { Icon(Icons.Default.Remove, contentDescription = "Decrease") }
+        
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .height(44.dp)
+                .clip(RoundedCornerShape(22.dp))
+                .background(MaterialTheme.colors.surface)
+                .border(1.dp, MaterialTheme.colors.onSurface.copy(alpha = 0.1f), RoundedCornerShape(22.dp)),
+            contentAlignment = Alignment.Center
         ) {
-            WearPulsingHeart(
-                bpm = bpm,
-                color = color,
-                modifier = Modifier.size(34.dp)
+            Text(
+                text = value,
+                style = MaterialTheme.typography.body1,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
             )
-            Column(Modifier.weight(1f), horizontalAlignment = Alignment.Start) {
-                Text(
-                    bpm?.let { "$it bpm" } ?: fallback,
-                    style = MaterialTheme.typography.caption1,
-                    color = color,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    zone?.let { "$it zone" } ?: "Tap for HR",
-                    style = MaterialTheme.typography.caption2,
-                    color = MaterialTheme.colors.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
         }
+
+        Button(
+            onClick = onPlus,
+            modifier = Modifier.size(44.dp),
+            colors = ButtonDefaults.secondaryButtonColors()
+        ) { Icon(Icons.Default.Add, contentDescription = "Increase") }
     }
 }
 
 @Composable
 private fun WearPulsingHeart(bpm: Int?, color: Color, modifier: Modifier = Modifier) {
-    val beatMs = bpm?.let { (60_000 / it.coerceIn(45, 190)).coerceIn(320, 1_300) } ?: 900
-    val transition = rememberInfiniteTransition(label = "wearHeartPulse")
+    val beatMs = bpm?.let { (60_000 / it.coerceIn(45, 200)).coerceIn(300, 1_300) } ?: 1000
+    val transition = rememberInfiniteTransition(label = "heartPulse")
     val scale by transition.animateFloat(
         initialValue = 1f,
-        targetValue = if (bpm == null) 1.04f else 1.22f,
+        targetValue = 1.25f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = (beatMs / 2).coerceAtLeast(160)),
+            animation = tween(durationMillis = (beatMs / 2).coerceAtLeast(150)),
             repeatMode = RepeatMode.Reverse
         ),
-        label = "wearHeartPulseScale"
+        label = "heartScale"
     )
-    Box(
-        modifier = modifier
-            .clip(CircleShape)
-            .background(color.copy(alpha = 0.18f)),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            "\u2665",
-            color = color,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Black,
-            modifier = Modifier.scale(scale)
-        )
-    }
+    Text(
+        "\u2665",
+        color = color,
+        fontSize = 20.sp,
+        fontWeight = FontWeight.Black,
+        modifier = modifier.scale(scale),
+        textAlign = TextAlign.Center
+    )
 }
 
 private fun wearZoneColor(zone: String?): Color = when (zone?.lowercase()) {
@@ -474,36 +435,6 @@ private fun wearZoneColor(zone: String?): Color = when (zone?.lowercase()) {
     "work" -> Color(0xFFF0A830)
     "high" -> Color(0xFFE35B5B)
     else -> Color(0xFF9C7BE3)
-}
-
-@Composable
-private fun StepperRow(
-    label: String,
-    onMinus: () -> Unit,
-    onPlus: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth(0.9f)
-            .clip(RoundedCornerShape(22.dp))
-            .background(MaterialTheme.colors.surface)
-            .border(1.dp, MaterialTheme.colors.primary.copy(alpha = 0.28f), RoundedCornerShape(22.dp))
-            .padding(horizontal = 6.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Button(onClick = onMinus, modifier = Modifier.size(36.dp)) { Text("-") }
-        Text(
-            label,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colors.onBackground,
-            textAlign = TextAlign.Center,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f)
-        )
-        Button(onClick = onPlus, modifier = Modifier.size(36.dp)) { Text("+") }
-    }
 }
 
 @Composable
@@ -525,47 +456,48 @@ private fun RestScreen(
             delay(250.milliseconds)
         }
     }
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 14.dp, vertical = 20.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text("Rest", style = MaterialTheme.typography.title2, color = MaterialTheme.colors.onBackground, maxLines = 1)
-        Text(
-            "%d:%02d".format(remaining / 60, remaining % 60),
-            style = MaterialTheme.typography.display1,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colors.primary
-        )
-        HeartRatePill(
-            bpm = metrics.restHrCurrent ?: metrics.bpm,
-            zone = metrics.zone,
-            fallback = hrStatus,
-            onClick = onRequestHrPermission
-        )
-        val start = metrics.restHrStart
-        val drop = metrics.restHrDrop
-        if (start != null && drop != null) {
+    
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text("REST", style = MaterialTheme.typography.caption1, fontWeight = FontWeight.Bold)
             Text(
-                "Recovery $start → ${metrics.restHrCurrent ?: "—"} (−$drop)",
-                style = MaterialTheme.typography.caption1,
-                color = if (metrics.restHrGoalMet) Color(0xFF6BC96B) else MaterialTheme.colors.onBackground,
-                textAlign = TextAlign.Center
+                "%d:%02d".format(remaining / 60, remaining % 60),
+                style = MaterialTheme.typography.display1,
+                fontWeight = FontWeight.Black,
+                color = MaterialTheme.colors.primary
             )
-        }
-        metrics.restHrGoalBpm?.let { goal ->
-            Text(
-                if (metrics.restHrGoalMet) "Ready (≤$goal)" else "Goal ♥ ≤ $goal",
-                style = MaterialTheme.typography.caption2,
-                color = MaterialTheme.colors.secondary
-            )
-        }
-        Spacer(Modifier.height(8.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = onExtend) { Text("+30s") }
-            Button(onClick = onSkip) { Text("Skip") }
+            
+            Spacer(Modifier.height(8.dp))
+            
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                val color = wearZoneColor(metrics.zone)
+                WearPulsingHeart(bpm = metrics.bpm, color = color, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(4.dp))
+                Text(
+                    text = "${metrics.bpm ?: "--"} bpm",
+                    style = MaterialTheme.typography.title3,
+                    color = color,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            
+            Spacer(Modifier.height(12.dp))
+            
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Button(
+                    onClick = onExtend,
+                    colors = ButtonDefaults.secondaryButtonColors(),
+                    modifier = Modifier.size(ButtonDefaults.SmallButtonSize)
+                ) { Text("+30s", fontSize = 12.sp) }
+                
+                Button(
+                    onClick = onSkip,
+                    modifier = Modifier.size(ButtonDefaults.SmallButtonSize)
+                ) { Text("Skip", fontSize = 12.sp) }
+            }
         }
     }
 }

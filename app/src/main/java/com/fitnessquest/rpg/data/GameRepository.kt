@@ -601,6 +601,22 @@ class GameRepository(
                     loggedAt = now
                 )
             )
+
+            // Task 1.1: Auto-advance to next exercise if target sets reached
+            val exercises = db.activeSessionDao().getActiveExercises()
+            val currentEx = exercises.find { it.id == exerciseId }
+            if (currentEx != null) {
+                val details = db.activeSessionDao().getActiveSessionWithDetails()
+                val loggedCount = details?.exercises?.find { it.exercise.id == exerciseId }?.sets?.size ?: 0
+                if (loggedCount >= currentEx.targetSets) {
+                    val currentIndex = current.currentExerciseIndex
+                    // Only advance if we are logging the current (or earlier) exercise
+                    val exerciseOrderIndex = exercises.indexOf(currentEx)
+                    if (exerciseOrderIndex >= currentIndex && currentIndex + 1 < exercises.size) {
+                        db.activeSessionDao().upsertActiveSession(current.copy(currentExerciseIndex = currentIndex + 1))
+                    }
+                }
+            }
         }
     }
 
@@ -712,6 +728,7 @@ class GameRepository(
 
             val endedAt = System.currentTimeMillis()
             val durationMs = endedAt - startedAt
+            val currentActive = db.activeSessionDao().getActiveSession()
             var withXp = logs.map { it.copy(xp = GameMath.xpForSet(it)) }
             if ((strengthXpMultiplier != 1f) && (strengthXpMultiplier > 0f)) {
                 withXp = withXp.map { log ->
@@ -736,7 +753,8 @@ class GameRepository(
             withXp
                 .groupBy { it.exerciseName }
                 .forEach { (exercise, currentSets) ->
-                    val history = db.sessionDao().logsForExercise(exercise)
+                    // Task 1.2: Use fuzzy matching for PR history lookup
+                    val history = getFuzzyMatchedLogs(exercise)
                     if (history.isEmpty()) return@forEach
 
                     if (currentSets.any { it.weightKg > 0.0 }) {
@@ -918,6 +936,10 @@ class GameRepository(
                 gold = res.gold + loot.goldBonus,
                 rewardBatch = RewardBatch(RewardSource.WORKOUT, allRewards)
             )
+            
+            // Task 1.1: Explicitly persist the updated hero character
+            db.characterDao().upsert(updated)
+
             val receipt = serializeSessionResult(res)
             val sessionId = db.sessionDao().insertSession(
                 SessionEntity(
@@ -932,7 +954,40 @@ class GameRepository(
                     completionReceiptJson = receipt
                 )
             )
-            db.sessionDao().insertSetLogs(withXp.map { it.copy(sessionId = sessionId) })
+            // Task 1.1: Reset ID to 0 to avoid primary key conflicts with active session table
+            db.sessionDao().insertSetLogs(withXp.map { it.copy(id = 0, sessionId = sessionId) })
+
+            // Task 1.1: Auto-advance workout template if based on one
+            currentActive?.workoutId?.let { workoutId ->
+                val templateExercises = db.workoutDao().exercisesFor(workoutId)
+                withXp.groupBy { it.exerciseName }.forEach { (name, sessionSets) ->
+                    val template = templateExercises.find { it.exerciseName == name }
+                    if (template != null) {
+                        val sessionMaxReps = sessionSets.maxOfOrNull { it.reps } ?: 0
+                        val sessionSetsCount = sessionSets.size
+                        
+                        var newTargetSets = template.targetSets
+                        var newTargetReps = template.targetReps
+                        var changed = false
+                        
+                        if (sessionSetsCount > template.targetSets) {
+                            newTargetSets = sessionSetsCount
+                            changed = true
+                        }
+                        if (sessionSets.all { it.reps > template.targetReps } && sessionMaxReps > 0) {
+                            newTargetReps = sessionSets.minOf { it.reps }
+                            changed = true
+                        }
+                        
+                        if (changed) {
+                            db.workoutDao().updateExercise(template.copy(
+                                targetSets = newTargetSets,
+                                targetReps = newTargetReps
+                            ))
+                        }
+                    }
+                }
+            }
 
             // -------------------------------------------------------------
             // Movement Mastery Progression Award
@@ -2120,4 +2175,32 @@ class GameRepository(
     @Suppress("unused")
     suspend fun getMasteryByCanonicalKey(key: String, characterId: Long = 1L): MovementMasteryEntity? =
         db.movementMasteryDao().getByCanonicalKey(key, characterId)
+
+    // ---- Fuzzy Matching & Previous Performance (Task 1.2) ----
+
+    fun normalizeExerciseName(name: String): String {
+        return name.lowercase()
+            .replace(Regex("\\s*\\([^)]*\\)"), "") // strip parenthetical suffixes
+            .replace(Regex("^(barbell|dumbbell|cable|machine|weighted|assisted)\\s+"), "") // strip leading adjectives
+            .trim()
+    }
+
+    private suspend fun getFuzzyMatchedLogs(exerciseName: String): List<SetLogEntity> {
+        val target = normalizeExerciseName(exerciseName)
+        val allNames = db.sessionDao().getAllLoggedExerciseNames()
+        val matchedNames = allNames.filter { normalizeExerciseName(it) == target }
+        if (matchedNames.isEmpty()) return emptyList()
+        return db.sessionDao().logsForExercises(matchedNames)
+    }
+
+    suspend fun getPreviousPerformance(exerciseName: String): List<SetLogEntity> {
+        val allLogs = getFuzzyMatchedLogs(exerciseName)
+        if (allLogs.isEmpty()) return emptyList()
+
+        val sessionIds = allLogs.map { it.sessionId }.distinct()
+        val sessions = db.sessionDao().sessionsByIds(sessionIds)
+        val latestSessionId = sessions.maxByOrNull { it.endedAt }?.id ?: return emptyList()
+
+        return allLogs.filter { it.sessionId == latestSessionId }
+    }
 }

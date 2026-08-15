@@ -49,6 +49,11 @@
         </activity>
 
         <service
+            android:name=".WearWorkoutService"
+            android:foregroundServiceType="health"
+            android:exported="false" />
+
+        <service
             android:name=".WearDataListenerService"
             android:exported="true">
             <intent-filter>
