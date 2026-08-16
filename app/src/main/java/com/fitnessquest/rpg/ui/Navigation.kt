@@ -65,7 +65,9 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.core.content.ContextCompat
 import com.fitnessquest.rpg.data.update.InAppUpdateStatus
 import com.fitnessquest.rpg.ui.components.InAppUpdateBanner
+import com.fitnessquest.rpg.ui.components.WhatNewDialog
 import com.fitnessquest.rpg.ui.onboarding.PermissionsConsolidator
+import com.fitnessquest.rpg.BuildConfig
 
 object Routes {
     const val HERO = "hero"
@@ -164,6 +166,19 @@ fun FitQuestNav() {
     if (!onboardingComplete) {
         OnboardingScreen()
         return
+    }
+
+    var showWhatNew by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        val lastSeen = container.prefs.getLastSeenVersion()
+        if (lastSeen < BuildConfig.VERSION_CODE) {
+            showWhatNew = true
+            container.prefs.setLastSeenVersion(BuildConfig.VERSION_CODE)
+        }
+    }
+
+    if (showWhatNew) {
+        WhatNewDialog(onDismiss = { showWhatNew = false })
     }
 
     val permissionsRepairShown by container.prefs.permissionsRepairShown.collectAsState()

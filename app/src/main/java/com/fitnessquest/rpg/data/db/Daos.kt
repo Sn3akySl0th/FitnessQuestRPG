@@ -72,12 +72,12 @@ interface WorkoutDao {
     suspend fun deleteExercisesFor(workoutId: Long)
 
     @Update
-    suspend fun updateWorkout(workout: WorkoutEntity)
+    suspend fun updateWorkout(workout: WorkoutEntity): Int
 
     @Transaction
     suspend fun saveWorkout(workout: WorkoutEntity, exercises: List<WorkoutExerciseEntity>): Long {
         val id = insertWorkout(workout)
-        insertExercises(exercises.mapIndexed { i, e -> e.copy(workoutId = id, sortOrder = i) })
+        insertExercises(exercises.mapIndexed { i, e -> e.copy(id = 0, workoutId = id, sortOrder = i) })
         return id
     }
 
@@ -87,7 +87,10 @@ interface WorkoutDao {
         workout: WorkoutEntity,
         exercises: List<WorkoutExerciseEntity>,
     ) {
-        updateWorkout(workout)
+        val affected = updateWorkout(workout)
+        if (affected == 0) {
+            insertWorkout(workout)
+        }
         deleteExercisesFor(workout.id)
         insertExercises(exercises.mapIndexed { i, e -> e.copy(id = 0, workoutId = workout.id, sortOrder = i) })
     }
@@ -116,6 +119,9 @@ interface SessionDao {
     @Query("SELECT * FROM sessions ORDER BY endedAt DESC LIMIT :limit")
     suspend fun getRecentSessions(limit: Int): List<SessionEntity>
 
+
+    @Query("SELECT * FROM sessions WHERE id = :id")
+    suspend fun getSession(id: Long): SessionEntity?
 
     @Query("SELECT * FROM set_logs WHERE sessionId = :sessionId")
     suspend fun setLogsFor(sessionId: Long): List<SetLogEntity>
@@ -155,6 +161,18 @@ interface SessionDao {
     /** Restore path: keeps the explicit id, ignores if it already exists. Returns -1 when ignored. */
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertSessionKeepId(session: SessionEntity): Long
+
+    @Query("DELETE FROM sessions WHERE id = :id")
+    suspend fun deleteSession(id: Long)
+
+    @Query("DELETE FROM set_logs WHERE sessionId = :sessionId")
+    suspend fun deleteSetLogsForSession(sessionId: Long)
+
+    @Transaction
+    suspend fun deleteSessionFully(id: Long) {
+        deleteSetLogsForSession(id)
+        deleteSession(id)
+    }
 
     @Query("DELETE FROM set_logs")
     suspend fun deleteAllSetLogs()

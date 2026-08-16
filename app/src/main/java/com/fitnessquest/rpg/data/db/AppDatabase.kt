@@ -55,7 +55,7 @@ class Converters {
         PendingSyncEntity::class,
         MovementMasteryEntity::class,
     ],
-    version = 26,
+    version = 27,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -515,13 +515,44 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        internal val MIGRATION_26_27 = object : Migration(26, 27) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Delete orphaned exercises first to ensure FK constraint can be added
+                db.execSQL("DELETE FROM workout_exercises WHERE workoutId NOT IN (SELECT id FROM workouts)")
+
+                // Recreate table with FK
+                db.execSQL(
+                    """CREATE TABLE workout_exercises_new (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        workoutId INTEGER NOT NULL,
+                        exerciseName TEXT NOT NULL,
+                        category TEXT NOT NULL,
+                        targetSets INTEGER NOT NULL,
+                        targetReps INTEGER NOT NULL,
+                        targetWeightKg REAL,
+                        sortOrder INTEGER NOT NULL,
+                        FOREIGN KEY(workoutId) REFERENCES workouts(id) ON DELETE CASCADE
+                    )"""
+                )
+                db.execSQL(
+                    """INSERT INTO workout_exercises_new (
+                        id, workoutId, exerciseName, category, targetSets, targetReps, targetWeightKg, sortOrder
+                    ) SELECT id, workoutId, exerciseName, category, targetSets, targetReps, targetWeightKg, sortOrder
+                    FROM workout_exercises"""
+                )
+                db.execSQL("DROP TABLE workout_exercises")
+                db.execSQL("ALTER TABLE workout_exercises_new RENAME TO workout_exercises")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_workout_exercises_workoutId ON workout_exercises(workoutId)")
+            }
+        }
+
         internal val ALL_MIGRATIONS: Array<Migration> = arrayOf(
             MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4,
             MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10,
             MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15,
             MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20,
             MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25,
-            MIGRATION_25_26
+            MIGRATION_25_26, MIGRATION_26_27
         )
 
         private fun SupportSQLiteDatabase.addColumnIfNotExists(table: String, column: String, definition: String) {

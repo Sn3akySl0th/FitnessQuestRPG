@@ -33,6 +33,7 @@ import com.fitnessquest.rpg.data.importexport.ImportPersistResult
 import com.fitnessquest.rpg.data.importexport.ImportedWorkout
 import com.fitnessquest.rpg.data.importexport.ImportedWorkoutKind
 import com.fitnessquest.rpg.data.importexport.WorkoutImportService
+import com.fitnessquest.rpg.data.sync.SyncService
 import com.fitnessquest.rpg.domain.Biome
 import com.fitnessquest.rpg.domain.CharacterClass
 import com.fitnessquest.rpg.domain.CombatStats
@@ -69,6 +70,7 @@ import java.time.LocalDate
 import java.time.Month
 import java.time.ZoneId
 import java.time.temporal.TemporalAdjusters
+import kotlin.math.max
 
 /**
  * An owned gear copy with its catalog template resolved for UI / combat.
@@ -106,7 +108,11 @@ class GameRepository(
     private val db: AppDatabase,
     private val exerciseInfo: ExerciseInfoService? = null,
     private val prefs: UserPrefs? = null,
+    private var syncService: SyncService? = null,
 ) {
+    fun setSyncService(sync: SyncService) {
+        syncService = sync
+    }
 
     val character: Flow<CharacterEntity> = db.characterDao().observe().filterNotNull()
     val workouts: Flow<List<WorkoutEntity>> = db.workoutDao().observeAll()
@@ -298,6 +304,53 @@ class GameRepository(
     }
 
     suspend fun deleteWorkout(id: Long) = db.workoutDao().deleteWorkoutFully(id)
+
+    suspend fun deleteSession(sessionId: Long, userId: String? = null) {
+        val session = db.sessionDao().getSession(sessionId) ?: return
+        val logs = db.sessionDao().setLogsFor(sessionId)
+
+        db.withTransaction {
+            val char = getCharacter()
+            // 1. Revert basic stats (XP, gold, energy)
+            val revertedChar = GameMath.revertXp(char, session.xpEarned)
+                .copy(
+                    gold = max(0, char.gold - session.goldEarned),
+                    energy = max(0, char.energy - session.energyEarned),
+                    sessionsCompleted = max(0, char.sessionsCompleted - 1)
+                )
+
+            // 2. Revert per-stat progress
+            var strP = revertedChar.strProgress
+            var endP = revertedChar.endProgress
+            var agiP = revertedChar.agiProgress
+            var wilP = revertedChar.wilProgress
+
+            logs.forEach { log ->
+                when (log.category) {
+                    ExerciseCategory.STRENGTH -> strP -= log.xp
+                    ExerciseCategory.CARDIO -> endP -= log.xp
+                    ExerciseCategory.BODYWEIGHT -> agiP -= log.xp
+                    ExerciseCategory.FLEXIBILITY -> wilP -= log.xp
+                }
+            }
+
+            db.characterDao().upsert(
+                revertedChar.copy(
+                    strProgress = max(0, strP),
+                    endProgress = max(0, endP),
+                    agiProgress = max(0, agiP),
+                    wilProgress = max(0, wilP)
+                )
+            )
+
+            db.sessionDao().deleteSessionFully(sessionId)
+        }
+
+        // 3. Cloud cleanup
+        if (userId != null) {
+            syncService?.deleteCloudSession(userId, sessionId)
+        }
+    }
 
     suspend fun getWorkout(id: Long): WorkoutEntity? = db.workoutDao().get(id)
 

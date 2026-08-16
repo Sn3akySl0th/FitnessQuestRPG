@@ -168,6 +168,18 @@ class SyncService(
         }
     }
 
+    /** Permanently removes a session from this account's cloud history. */
+    fun deleteCloudSession(uid: String, sessionId: Long) {
+        scope.launch {
+            runCatching {
+                userDoc(uid).collection("sessions")
+                    .document(sessionId.toString())
+                    .delete()
+                    .await()
+            }
+        }
+    }
+
     private suspend fun listenCloudPremium(uid: String) {
         suspendCancellableCoroutine<Unit> { cont ->
             val regs = mutableListOf<ListenerRegistration>()

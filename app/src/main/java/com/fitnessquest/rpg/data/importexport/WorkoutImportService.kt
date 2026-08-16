@@ -639,16 +639,23 @@ object WorkoutImportService {
 
             val result = mutableListOf<ImportedWorkout>()
 
-            // 1. Create Workout Routine Templates for Training Grounds (grouped by Workout Title)
-            val templateGroupMap = LinkedHashMap<String, LinkedHashMap<String, MutableList<CsvSetInfo>>>()
-            for (session in sessionList) {
-                val exerciseMap = templateGroupMap.getOrPut(session.workoutTitle) { LinkedHashMap() }
-                for (setData in session.sets) {
+            // 1. Create Workout Routine Templates for Training Grounds.
+            // We group by Workout Title, but only take the LATEST session's structure to avoid
+            // merging multiple versions of the same routine into one giant 29-exercise list.
+            val latestSessionByTitle = sessionList.groupBy { it.workoutTitle }
+                .mapValues { (_, sessions) ->
+                    sessions.maxByOrNull { it.startedAt ?: 0L }
+                }
+
+            for ((title, latestSession) in latestSessionByTitle) {
+                if (latestSession == null) continue
+
+                // Group sets in the LATEST session by exercise name to get set counts
+                val exerciseMap = LinkedHashMap<String, MutableList<CsvSetInfo>>()
+                for (setData in latestSession.sets) {
                     exerciseMap.getOrPut(setData.exerciseName) { mutableListOf() }.add(setData)
                 }
-            }
 
-            for ((title, exerciseMap) in templateGroupMap) {
                 val importedExercises = mutableListOf<ImportedExercise>()
                 for ((exName, setList) in exerciseMap) {
                     val setsCount = setList.size

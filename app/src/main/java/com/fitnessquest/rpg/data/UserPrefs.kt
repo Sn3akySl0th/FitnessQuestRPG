@@ -445,6 +445,7 @@ class UserPrefs(context: Context) {
         const val KEY_HEVY_LAST_SYNC = "hevy_last_sync_timestamp"
         const val KEY_PERMISSIONS_REPAIR_SHOWN = "permissions_repair_shown"
         const val KEY_USE_LOCAL_AI = "use_local_ai_by_default"
+        const val KEY_LAST_SEEN_VERSION = "last_seen_version_code"
     }
 
     // ---- Local AI ----
@@ -490,5 +491,12 @@ class UserPrefs(context: Context) {
     fun setHevyLastSyncTimestamp(timestamp: Long) {
         prefs.edit { putLong(KEY_HEVY_LAST_SYNC, timestamp) }
         _hevyLastSyncTimestamp.value = timestamp
+    }
+
+    // ---- Version Tracking ----
+    fun getLastSeenVersion(): Int = prefs.getInt(KEY_LAST_SEEN_VERSION, 0)
+
+    fun setLastSeenVersion(versionCode: Int) {
+        prefs.edit { putInt(KEY_LAST_SEEN_VERSION, versionCode) }
     }
 }

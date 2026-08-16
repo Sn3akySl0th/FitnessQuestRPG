@@ -306,6 +306,17 @@ object GameMath {
         return character.copy(level = level, xp = xp)
     }
 
+    /** Safely subtracts XP from a character, handling potential level-downs. */
+    fun revertXp(character: CharacterEntity, xpToSubtract: Int): CharacterEntity {
+        var level = character.level
+        var xp = character.xp - xpToSubtract
+        while (xp < 0 && level > 1) {
+            level--
+            xp += xpToNextLevel(level)
+        }
+        return character.copy(level = level, xp = max(0, xp))
+    }
+
     fun applyBattleRewards(character: CharacterEntity, monster: Monster): CharacterEntity {
         val now = System.currentTimeMillis()
         val next = character.copy(

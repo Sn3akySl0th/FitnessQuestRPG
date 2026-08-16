@@ -51,6 +51,7 @@ class AppContainer(val app: Application) {
 
 
     init {
+        repository.setSyncService(sync)
         prefs.setRepository(repository)
         // Free guest username before Firebase abandons that uid on Google collision.
         auth.beforeAbandonAnonymous = { usernames.releaseClaim() }

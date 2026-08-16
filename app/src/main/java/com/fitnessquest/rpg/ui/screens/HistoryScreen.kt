@@ -23,6 +23,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -31,6 +33,7 @@ import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -48,6 +51,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import kotlinx.coroutines.launch
 import com.fitnessquest.rpg.AppContainer
 import com.fitnessquest.rpg.data.db.ExerciseCategory
 import com.fitnessquest.rpg.data.db.SessionEntity
@@ -160,6 +164,12 @@ class HistoryViewModel(private val container: AppContainer) : ViewModel() {
 
     val imperial: StateFlow<Boolean> = container.prefs.imperial
 
+    fun deleteSession(sessionId: Long) {
+        viewModelScope.launch {
+            container.repository.deleteSession(sessionId, container.auth.currentUid())
+        }
+    }
+
     companion object {
         val Factory = viewModelFactory {
             initializer { HistoryViewModel(appContainer) }
@@ -184,6 +194,26 @@ fun HistoryScreen(
     val state by viewModel.uiState.collectAsState()
     val imperial by viewModel.imperial.collectAsState()
     var tab by remember(initialTab) { mutableIntStateOf(initialTab) }
+
+    var sessionToDelete by remember { mutableStateOf<SessionEntity?>(null) }
+    sessionToDelete?.let { session ->
+        AlertDialog(
+            onDismissRequest = { sessionToDelete = null },
+            title = { Text("Delete Workout?") },
+            text = { Text("This will remove '${session.name}' from your history and revert the XP, Gold, and Energy you earned from it. Your level might decrease.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.deleteSession(session.id)
+                        sessionToDelete = null
+                    }
+                ) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { sessionToDelete = null }) { Text("Cancel") }
+            }
+        )
+    }
 
     Column(Modifier.fillMaxSize()) {
         Surface(
@@ -241,7 +271,7 @@ fun HistoryScreen(
                     }
                 }
             } else if (tab == 0) {
-                historyItems(state, imperial)
+                historyItems(state, imperial, onDelete = { sessionToDelete = it })
             } else {
                 progressItems(state, imperial)
             }
@@ -251,7 +281,11 @@ fun HistoryScreen(
 
 // ---- History tab ----
 
-private fun LazyListScope.historyItems(state: LogUiState, imperial: Boolean) {
+private fun LazyListScope.historyItems(
+    state: LogUiState,
+    imperial: Boolean,
+    onDelete: (SessionEntity) -> Unit
+) {
     val zone = ZoneId.systemDefault()
     val byDay = state.sessions.groupBy {
         Instant.ofEpochMilli(it.endedAt).atZone(zone).toLocalDate()
@@ -278,14 +312,20 @@ private fun LazyListScope.historyItems(state: LogUiState, imperial: Boolean) {
             SessionLogCard(
                 session = session,
                 logs = state.logsBySession[session.id].orEmpty(),
-                imperial = imperial
+                imperial = imperial,
+                onDelete = { onDelete(session) }
             )
         }
     }
 }
 
 @Composable
-private fun SessionLogCard(session: SessionEntity, logs: List<SetLogEntity>, imperial: Boolean) {
+private fun SessionLogCard(
+    session: SessionEntity,
+    logs: List<SetLogEntity>,
+    imperial: Boolean,
+    onDelete: () -> Unit
+) {
     var expanded by remember { mutableStateOf(value = false) }
     var detailFor by remember { mutableStateOf<String?>(null) }
     detailFor?.let { name ->
@@ -308,12 +348,23 @@ private fun SessionLogCard(session: SessionEntity, logs: List<SetLogEntity>, imp
                 )
             }
             Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    "+${session.xpEarned} XP",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "+${session.xpEarned} XP",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    IconButton(onClick = onDelete, modifier = Modifier.size(24.dp)) {
+                        Icon(
+                            Icons.Default.Delete,
+                            contentDescription = "Delete",
+                            tint = MaterialTheme.colorScheme.error.copy(alpha = 0.6f),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
                 Text(
                     if (expanded) "Hide sets \u25B2" else "Show sets \u25BC",
                     style = MaterialTheme.typography.labelSmall,
