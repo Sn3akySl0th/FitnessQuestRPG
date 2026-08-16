@@ -114,7 +114,8 @@ object ExerciseCategories {
                 name.startsWith("run ") ||
                 name.contains("walking") ||
                 name.startsWith("walk") ||
-                name.contains(" walk")
+                name.contains(" walk") ||
+                name.contains("treadmill")
             )
 
         if (machineCue || rowErg || bike || gait) return true

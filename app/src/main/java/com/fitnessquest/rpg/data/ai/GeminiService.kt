@@ -68,8 +68,11 @@ class GeminiService(private val context: Context) {
 
     private val prefs = context.getSharedPreferences("fitquest_prefs", Context.MODE_PRIVATE)
     private val client = OkHttpClient.Builder()
-
-        .callTimeout(90, TimeUnit.SECONDS)
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(120, TimeUnit.SECONDS)
+        .writeTimeout(60, TimeUnit.SECONDS)
+        .callTimeout(180, TimeUnit.SECONDS)
+        .retryOnConnectionFailure(true)
         .build()
 
     /** The user-provided key from preferences, if any. */
@@ -166,12 +169,15 @@ class GeminiService(private val context: Context) {
                 "contents",
                 JSONArray().put(JSONObject().put("parts", partsArray))
             )
+        // Disable experimental thinkingConfig for now as it may cause timeouts on Flash models
+        /*
         if (fastThinking) {
             payload.put(
                 "generationConfig",
                 JSONObject().put("thinkingConfig", JSONObject().put("thinkingLevel", "minimal"))
             )
         }
+        */
         val body = payload.toString().toRequestBody("application/json".toMediaType())
 
         val request = Request.Builder()

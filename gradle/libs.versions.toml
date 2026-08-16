@@ -26,6 +26,7 @@ healthServices = "1.0.0-rc02"
 healthConnect = "1.1.0"
 wearCompose = "1.4.1"
 wearOngoing = "1.0.0"
+wear = "1.4.0"
 mediapipeGenai = "0.10.35"
 playAssetDelivery = "2.3.0"
 playAppUpdate = "2.1.0"
@@ -77,6 +78,7 @@ androidx-wear-compose-material = { group = "androidx.wear.compose", name = "comp
 androidx-wear-compose-foundation = { group = "androidx.wear.compose", name = "compose-foundation", version.ref = "wearCompose" }
 androidx-wear-compose-navigation = { group = "androidx.wear.compose", name = "compose-navigation", version.ref = "wearCompose" }
 androidx-wear-ongoing = { group = "androidx.wear", name = "wear-ongoing", version.ref = "wearOngoing" }
+androidx-wear = { group = "androidx.wear", name = "wear", version.ref = "wear" }
 dadb = { group = "dev.mobile", name = "dadb", version.ref = "dadb" }
 
 [plugins]

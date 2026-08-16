@@ -87,6 +87,7 @@ dependencies {
     implementation(libs.androidx.wear.compose.material)
     implementation(libs.androidx.wear.compose.foundation)
     implementation(libs.androidx.wear.compose.navigation)
+    implementation(libs.androidx.wear)
     implementation(libs.androidx.material.icons.extended)
     implementation(libs.play.services.wearable)
     implementation(libs.androidx.health.services)

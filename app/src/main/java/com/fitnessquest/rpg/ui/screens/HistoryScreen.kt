@@ -86,6 +86,7 @@ data class PersonalRecord(
     val value: Double,
     val reps: Int,
     val date: Long,
+    val sessionId: Long,
 )
 
 data class LogUiState(
@@ -105,31 +106,31 @@ data class LogUiState(
             allLogs.groupBy { it.exerciseName }.forEach { (name, sets) ->
                 // 1. Weight Record
                 sets.filter { it.weightKg > 0 }.maxByOrNull { it.weightKg }?.let { best ->
-                    results += PersonalRecord(name, PrKind.WEIGHT, best.weightKg, best.reps, endedAt[best.sessionId] ?: 0L)
+                    results += PersonalRecord(name, PrKind.WEIGHT, best.weightKg, best.reps, endedAt[best.sessionId] ?: 0L, best.sessionId)
                 }
                 // 2. Distance Record
                 sets.filter { it.distanceKm > 0 }.maxByOrNull { it.distanceKm }?.let { best ->
-                    results += PersonalRecord(name, PrKind.DISTANCE, best.distanceKm, 0, endedAt[best.sessionId] ?: 0L)
+                    results += PersonalRecord(name, PrKind.DISTANCE, best.distanceKm, 0, endedAt[best.sessionId] ?: 0L, best.sessionId)
                 }
                 // 3. Pace Record
                 sets.filter { it.distanceKm > 0 && it.durationMin > 0 }.minByOrNull { it.durationMin / it.distanceKm }?.let { best ->
-                    results += PersonalRecord(name, PrKind.PACE, best.durationMin / best.distanceKm, 0, endedAt[best.sessionId] ?: 0L)
+                    results += PersonalRecord(name, PrKind.PACE, best.durationMin / best.distanceKm, 0, endedAt[best.sessionId] ?: 0L, best.sessionId)
                 }
                 // 4. Reps Record (Bodyweight)
                 sets.filter { it.weightKg <= 0 && it.reps > 0 }.maxByOrNull { it.reps }?.let { best ->
-                    results += PersonalRecord(name, PrKind.REPS, best.reps.toDouble(), 0, endedAt[best.sessionId] ?: 0L)
+                    results += PersonalRecord(name, PrKind.REPS, best.reps.toDouble(), 0, endedAt[best.sessionId] ?: 0L, best.sessionId)
                 }
                 // 5. Duration Record
                 sets.filter { it.durationMin > 0 }.maxByOrNull { it.durationMin }?.let { best ->
-                    results += PersonalRecord(name, PrKind.TIME, best.durationMin, 0, endedAt[best.sessionId] ?: 0L)
+                    results += PersonalRecord(name, PrKind.TIME, best.durationMin, 0, endedAt[best.sessionId] ?: 0L, best.sessionId)
                 }
                 // 6. Speed Record
                 sets.filter { it.speedKmh > 0 }.maxByOrNull { it.speedKmh }?.let { best ->
-                    results += PersonalRecord(name, PrKind.SPEED, best.speedKmh, 0, endedAt[best.sessionId] ?: 0L)
+                    results += PersonalRecord(name, PrKind.SPEED, best.speedKmh, 0, endedAt[best.sessionId] ?: 0L, best.sessionId)
                 }
                 // 7. Incline Record
                 sets.filter { it.inclinePercent > 0 }.maxByOrNull { it.inclinePercent }?.let { best ->
-                    results += PersonalRecord(name, PrKind.INCLINE, best.inclinePercent, 0, endedAt[best.sessionId] ?: 0L)
+                    results += PersonalRecord(name, PrKind.INCLINE, best.inclinePercent, 0, endedAt[best.sessionId] ?: 0L, best.sessionId)
                 }
             }
             return results.sortedByDescending { it.date }
@@ -187,6 +188,7 @@ private val categoryColors = mapOf(
 @Composable
 fun HistoryScreen(
     onBack: () -> Unit,
+    onOpenSession: (Long) -> Unit = {},
     initialTab: Int = 0,
     title: String = "Chronicle",
     viewModel: HistoryViewModel = viewModel(factory = HistoryViewModel.Factory)
@@ -271,9 +273,9 @@ fun HistoryScreen(
                     }
                 }
             } else if (tab == 0) {
-                historyItems(state, imperial, onDelete = { sessionToDelete = it })
+                historyItems(state, imperial, onOpenSession = onOpenSession, onDelete = { sessionToDelete = it })
             } else {
-                progressItems(state, imperial)
+                progressItems(state, imperial, onOpenSession = onOpenSession)
             }
         }
     }
@@ -284,6 +286,7 @@ fun HistoryScreen(
 private fun LazyListScope.historyItems(
     state: LogUiState,
     imperial: Boolean,
+    onOpenSession: (Long) -> Unit,
     onDelete: (SessionEntity) -> Unit
 ) {
     val zone = ZoneId.systemDefault()
@@ -313,6 +316,7 @@ private fun LazyListScope.historyItems(
                 session = session,
                 logs = state.logsBySession[session.id].orEmpty(),
                 imperial = imperial,
+                onClick = { onOpenSession(session.id) },
                 onDelete = { onDelete(session) }
             )
         }
@@ -324,6 +328,7 @@ private fun SessionLogCard(
     session: SessionEntity,
     logs: List<SetLogEntity>,
     imperial: Boolean,
+    onClick: () -> Unit,
     onDelete: () -> Unit
 ) {
     var expanded by remember { mutableStateOf(value = false) }
@@ -335,7 +340,7 @@ private fun SessionLogCard(
         Row(
             Modifier
                 .fillMaxWidth()
-                .clickable { expanded = !expanded },
+                .clickable { onClick() },
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(Modifier.weight(1f)) {
@@ -430,7 +435,7 @@ private fun SessionLogCard(
 
 // ---- Progress tab ----
 
-private fun LazyListScope.progressItems(state: LogUiState, imperial: Boolean) {
+private fun LazyListScope.progressItems(state: LogUiState, imperial: Boolean, onOpenSession: (Long) -> Unit) {
     item(key = "stats") {
         SectionCard(title = "Stats Overview") {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
@@ -491,7 +496,7 @@ private fun LazyListScope.progressItems(state: LogUiState, imperial: Boolean) {
             SectionCard {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.clickable { showDetail = true }
+                    modifier = Modifier.clickable { onOpenSession(pr.sessionId) }
                 ) {
                     Text("\uD83C\uDFC6", style = MaterialTheme.typography.titleLarge)
                     Spacer(Modifier.width(10.dp))

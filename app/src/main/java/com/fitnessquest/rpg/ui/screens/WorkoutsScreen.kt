@@ -12,6 +12,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
@@ -548,19 +549,20 @@ private fun RecommendedQuestCard(
                 )
             }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 4.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 4.dp)) {
                 if (recommendation.isRestDay) {
                     Button(
                         onClick = { recommendation.sideQuestTitle?.let { onCompleteSideQuest(it) } },
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                        shape = RoundedCornerShape(8.dp)
                     ) {
-                        Text("🛡️ Complete Side Quest (+Buff)")
+                        Text("🛡️ Complete Side Quest (+Buff)", maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 } else if (recommendation.routine != null) {
                     val routineId = recommendation.routine.id
                     Button(
                         onClick = { onStartWorkout(routineId) },
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.fillMaxWidth().height(48.dp)
                     ) {
                         Icon(Icons.Filled.PlayArrow, contentDescription = null)
                         Spacer(Modifier.width(4.dp))
@@ -568,7 +570,10 @@ private fun RecommendedQuestCard(
                     }
                 }
 
-                OutlinedButton(onClick = onOpenSorenessDialog) {
+                OutlinedButton(
+                    onClick = onOpenSorenessDialog,
+                    modifier = Modifier.fillMaxWidth().height(48.dp)
+                ) {
                     Text("🩹 Soreness Check-in")
                 }
             }

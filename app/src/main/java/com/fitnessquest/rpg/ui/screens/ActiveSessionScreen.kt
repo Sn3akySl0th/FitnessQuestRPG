@@ -7,9 +7,11 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -23,6 +25,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -50,6 +53,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -62,6 +66,9 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
@@ -135,6 +142,7 @@ import com.fitnessquest.rpg.domain.StatGains
 import com.fitnessquest.rpg.domain.Units
 import com.fitnessquest.rpg.notifications.WorkoutNotificationController
 import com.fitnessquest.rpg.ui.appContainer
+import com.fitnessquest.rpg.ui.components.AvatarDetail
 import com.fitnessquest.rpg.ui.components.AvatarExpression
 import com.fitnessquest.rpg.ui.components.CharacterAvatar
 import com.fitnessquest.rpg.ui.components.ConfettiOverlay
@@ -189,7 +197,8 @@ data class WorkoutSummaryItem(
     val isIncreasedVolume: Boolean,
     val isIncreased1RM: Boolean,
     val prs: Set<PrKind>,
-    val iconUrl: String? = null
+    val iconUrl: String? = null,
+    val muscles: Set<String> = emptySet()
 )
 
 data class MomentSpoil(
@@ -255,7 +264,8 @@ data class ActiveSessionUiState(
     val wearBanner: String? = null,
     val currentExerciseIndex: Int = 0,
     val isDemo: Boolean = false,
-    val media: MediaState = MediaState()
+    val media: MediaState = MediaState(),
+    val originalWorkoutId: Long? = null
 ) {
     val totalSets: Int get() = exercises.sumOf { it.loggedSets.size }
     val totalXp: Int get() = exercises.sumOf { ex -> ex.loggedSets.sumOf { it.xp } }
@@ -270,8 +280,10 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
     val imperial: StateFlow<Boolean> = container.prefs.imperial
     val effortMethod: StateFlow<EffortMethod> = container.prefs.effortMethod
     val showCardioIntensity: StateFlow<Boolean> = container.prefs.showCardioIntensity
+    val customCardioPrograms: StateFlow<Set<String>> = container.prefs.customCardioPrograms
 
     fun setShowCardioIntensity(value: Boolean) = container.prefs.setShowCardioIntensity(value)
+    fun addCustomCardioProgram(program: String) = container.prefs.addCustomCardioProgram(program)
 
     private val wearBridge = WearSessionBridge(container.app)
     private val workoutNotification = WorkoutNotificationController(container.app)
@@ -406,7 +418,8 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
                     currentExerciseIndex = session.currentExerciseIndex,
                     ambushOfferedThisSession = session.ambushOfferedThisSession,
                     ambushXpMult = session.ambushXpMult,
-                    momentSpoilsUsed = session.momentSpoilsUsed
+                    momentSpoilsUsed = session.momentSpoilsUsed,
+                    originalWorkoutId = session.workoutId
                 )
             }
             publishWearState()
@@ -916,10 +929,11 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
         }
     }
 
-    fun swapExercise(index: Int, name: String, category: ExerciseCategory) {
+    fun swapExercise(index: Int, name: String, category: ExerciseCategory, permanent: Boolean = false) {
         viewModelScope.launch {
             val resolved = resolveExerciseTracking(name, category)
             val ex = _uiState.value.exercises.getOrNull(index) ?: return@launch
+            val workoutId = if (permanent) _uiState.value.originalWorkoutId else null
             if (demoMode) {
                 _uiState.update { s ->
                     s.copy(exercises = s.exercises.toMutableList().also {
@@ -927,13 +941,13 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
                     })
                 }
             } else {
-                container.repository.swapActiveExercise(ex.dbId, name, resolved.first, resolved.second.name)
+                container.repository.swapActiveExercise(ex.dbId, name, resolved.first, resolved.second.name, workoutId)
             }
             publishWearState()
         }
     }
 
-    fun aiSwap(index: Int) {
+    fun aiSwap(index: Int, permanent: Boolean = false) {
         val s = _uiState.value
         val ex = s.exercises.getOrNull(index) ?: return
         if (!s.hasAi || s.aiSwapIndex != null) return
@@ -948,6 +962,7 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
                 profile = container.prefs.profile.value
             ).onSuccess { swap ->
                 val tracking = resolveExerciseTracking(swap.name, swap.category)
+                val workoutId = if (permanent) _uiState.value.originalWorkoutId else null
                 if (demoMode) {
                     _uiState.update { state ->
                         val current = state.exercises.getOrNull(index)
@@ -967,7 +982,7 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
                         )
                     }
                 } else {
-                    container.repository.swapActiveExercise(ex.dbId, swap.name, tracking.first, tracking.second.name)
+                    container.repository.swapActiveExercise(ex.dbId, swap.name, tracking.first, tracking.second.name, workoutId)
                     _uiState.update { it.copy(aiSwapIndex = null, swapNote = "Swapped ${ex.name} \u2192 ${swap.name}. ${swap.reason}") }
                 }
             }.onFailure { e ->
@@ -1051,12 +1066,34 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
 
                 val strMult = if (container.prefs.consumeEncounterStrBoost()) 1.15f else 1f
                 val token = activeCompletionToken ?: "session_${startedAt}_${logs.size}"
-                val result = container.repository.completeSession(state.title, startedAt, logs, strMult, token, container.auth.currentUid())
+                val result = container.repository.completeSession(
+                    name = state.title,
+                    startedAt = startedAt,
+                    logs = logs,
+                    strengthXpMultiplier = strMult,
+                    completionToken = token,
+                    userId = container.auth.currentUid(),
+                    caloriesKcal = state.wearCaloriesKcal?.toInt(),
+                    avgHr = state.heartRateBpm, // Better than nothing if set-level HR missing
+                    maxHr = state.maxHeartRate, // Placeholder or from peak HR tracking if we had it
+                    steps = state.wearSteps,
+                    distanceMeters = state.wearDistanceMeters,
+                    activeDurationMs = state.wearActiveDurationMs
+                )
                 OutboxWorker.enqueue(container.app)
 
                 val summaryItems = state.exercises.map { ex ->
                     val exPrs = result.prs.filter { it.exerciseName == ex.name }
-                    WorkoutSummaryItem(ex.name, exPrs.any { it.kind == PrKind.WEIGHT }, exPrs.any { it.kind == PrKind.VOLUME }, exPrs.any { it.kind == PrKind.ONE_RM }, exPrs.filter { it.isNew }.map { it.kind }.toSet(), container.exerciseInfo.find(ex.name)?.imageUrls?.firstOrNull())
+                    val info = container.exerciseInfo.find(ex.name)
+                    WorkoutSummaryItem(
+                        name = ex.name,
+                        isIncreasedWeight = exPrs.any { it.kind == PrKind.WEIGHT },
+                        isIncreasedVolume = exPrs.any { it.kind == PrKind.VOLUME },
+                        isIncreased1RM = exPrs.any { it.kind == PrKind.ONE_RM },
+                        prs = exPrs.filter { it.isNew }.map { it.kind }.toSet(),
+                        iconUrl = info?.imageUrls?.firstOrNull(),
+                        muscles = info?.primaryMuscles?.toSet() ?: emptySet()
+                    )
                 }
 
                 val wantPraise = container.gemini.hasKey
@@ -1120,9 +1157,87 @@ fun ActiveSessionScreen(
     }
     val state by viewModel.uiState.collectAsState()
     val imperial by viewModel.imperial.collectAsState()
+    val listState = rememberLazyListState()
     var showPicker by remember { mutableStateOf(false) }
     var swapFor by remember { mutableStateOf<Int?>(null) }
     var showPlates by remember { mutableStateOf(false) }
+    var showDiscardConfirm by remember { mutableStateOf(false) }
+
+    data class PendingSwap(val index: Int, val name: String, val category: ExerciseCategory, val isAi: Boolean = false)
+    var pendingSwap by remember { mutableStateOf<PendingSwap?>(null) }
+
+    if (pendingSwap != null && state.originalWorkoutId != null && state.originalWorkoutId!! > 0) {
+        AlertDialog(
+            onDismissRequest = { pendingSwap = null },
+            title = { Text("Update Routine?") },
+            text = { Text("Would you like to make this exercise swap permanent in your routine template, or just for this session?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    val p = pendingSwap!!
+                    if (p.isAi) viewModel.aiSwap(p.index, true) else viewModel.swapExercise(p.index, p.name, p.category, true)
+                    pendingSwap = null
+                }) { Text("Make Permanent") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    val p = pendingSwap!!
+                    if (p.isAi) viewModel.aiSwap(p.index, false) else viewModel.swapExercise(p.index, p.name, p.category, false)
+                    pendingSwap = null
+                }) { Text("Session Only") }
+            }
+        )
+    }
+
+    if (showDiscardConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDiscardConfirm = false },
+            title = { Text("Discard Quest?") },
+            text = { Text("This will abandon your current progress. All sets logged in this session will be lost.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDiscardConfirm = false
+                        viewModel.abandon()
+                        onDone()
+                    }
+                ) { Text("Discard", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDiscardConfirm = false }) { Text("Cancel") }
+            }
+        )
+    }
+
+    state.coach?.let { coach ->
+        AlertDialog(
+            onDismissRequest = viewModel::dismissCoach,
+            title = { Text("\uD83E\uDDD9 Coach's Counsel") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(coach.message, style = MaterialTheme.typography.bodyMedium)
+                    coach.changes.forEach { change ->
+                        val action = if (change.replaceWith != null) "${change.exercise} \u2192 ${change.replaceWith}" else "${change.exercise}: ${change.sets ?: "?"} \u00D7 ${change.reps ?: "?"}"
+                        Column {
+                            Text(action, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
+                            if (change.reason.isNotBlank()) Text(change.reason, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(onClick = viewModel::applyCoachChanges) { Text("Apply Changes") }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::dismissCoach) { Text("Keep Plan") }
+            }
+        )
+    }
+
+    LaunchedEffect(state.currentExerciseIndex) {
+        if (state.exercises.isNotEmpty()) {
+            listState.animateScrollToItem(state.currentExerciseIndex + 2) // +2 to account for headers
+        }
+    }
 
     if (showPlates) {
         PlateCalculatorDialog(onDismiss = { showPlates = false })
@@ -1136,7 +1251,7 @@ fun ActiveSessionScreen(
         }
     }
 
-    Column(Modifier.fillMaxSize()) {
+    Column(Modifier.fillMaxSize().imePadding()) {
         Surface(
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 4.dp,
@@ -1160,6 +1275,9 @@ fun ActiveSessionScreen(
                     )
                     IconButton(onClick = { showPlates = true }) {
                         Icon(Icons.Filled.FitnessCenter, contentDescription = "Plates")
+                    }
+                    IconButton(onClick = { showDiscardConfirm = true }) {
+                        Icon(Icons.Default.Delete, contentDescription = "Discard", tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f))
                     }
                     Button(
                         onClick = { viewModel.finish() },
@@ -1237,13 +1355,14 @@ fun ActiveSessionScreen(
                         value = formatDuration(durationMs),
                         modifier = Modifier.clickable { showDurationEdit = true }
                     )
-                    MetricItem("Volume", "${state.totalVolumeKg.toInt()} ${Units.label(imperial)}")
+                    MetricItem("Volume", "${Units.toDisplay(state.totalVolumeKg, imperial).toInt()} ${Units.label(imperial)}")
                     MetricItem("Sets", state.totalSets.toString())
                 }
             }
         }
 
         LazyColumn(
+            state = listState,
             modifier = Modifier.weight(1f).fillMaxWidth(),
             contentPadding = PaddingValues(12.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -1266,10 +1385,6 @@ fun ActiveSessionScreen(
                         }
                     }
                 }
-            }
-
-            state.coach?.let { coach ->
-                item { CoachCard(coach, onApply = viewModel::applyCoachChanges, onDismiss = viewModel::dismissCoach) }
             }
 
             state.coachError?.let { error ->
@@ -1325,7 +1440,9 @@ fun ActiveSessionScreen(
                         viewModel.logSet(index, w, r, dur, dist, rir, null, null, speed, incline, program, st)
                     },
                     onUndo = { viewModel.removeLastSet(index) },
-                    getPreviousPerformance = viewModel::getPreviousPerformance
+                    getPreviousPerformance = viewModel::getPreviousPerformance,
+                    customPrograms = viewModel.customCardioPrograms.collectAsState().value,
+                    onAddCustomProgram = viewModel::addCustomCardioProgram
                 )
             }
 
@@ -1373,7 +1490,11 @@ fun ActiveSessionScreen(
                         Button(
                             onClick = {
                                 swapFor = null
-                                viewModel.aiSwap(index)
+                                if (state.originalWorkoutId != null && state.originalWorkoutId!! > 0) {
+                                    pendingSwap = PendingSwap(index, "", exercise.category, true)
+                                } else {
+                                    viewModel.aiSwap(index)
+                                }
                             },
                             modifier = Modifier.fillMaxWidth()
                         ) {
@@ -1386,7 +1507,11 @@ fun ActiveSessionScreen(
                 onDismiss = { swapFor = null },
                 onPick = { n, c ->
                     swapFor = null
-                    viewModel.swapExercise(index, n, c)
+                    if (state.originalWorkoutId != null && state.originalWorkoutId!! > 0) {
+                        pendingSwap = PendingSwap(index, n, c, false)
+                    } else {
+                        viewModel.swapExercise(index, n, c)
+                    }
                 }
             )
         }
@@ -1522,7 +1647,9 @@ private fun ExerciseLogCard(
     onRemove: () -> Unit = {},
     onLogSet: (weightKg: Double, reps: Int, durationMin: Double, distanceKm: Double, rir: Int?, speedKmh: Double, inclinePercent: Double, cardioProgram: String, setType: SetType) -> Unit,
     onUndo: () -> Unit,
-    getPreviousPerformance: suspend (String) -> List<SetLogEntity>
+    getPreviousPerformance: suspend (String) -> List<SetLogEntity>,
+    customPrograms: Set<String> = emptySet(),
+    onAddCustomProgram: (String) -> Unit = {}
 ) {
     var weight by rememberSaveable(exercise.name) { mutableStateOf(exercise.targetWeightKg?.let { Units.toDisplay(it, imperial).let(HeightFormat::trimNum) } ?: "") }
     var reps by rememberSaveable(exercise.name) { mutableStateOf("") }
@@ -1536,6 +1663,66 @@ private fun ExerciseLogCard(
     var setType by rememberSaveable(exercise.name) { mutableStateOf(SetType.NORMAL) }
     var previousSets by remember(exercise.name) { mutableStateOf<List<SetLogEntity>>(emptyList()) }
     LaunchedEffect(exercise.name) { previousSets = getPreviousPerformance(exercise.name) }
+
+    var showAdvanced by rememberSaveable(exercise.name) { mutableStateOf(false) }
+    var showAddProgramDialog by remember { mutableStateOf(false) }
+
+    if (showAddProgramDialog) {
+        var newProgramName by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { showAddProgramDialog = false },
+            title = { Text("Add Custom Program") },
+            text = {
+                OutlinedTextField(
+                    value = newProgramName,
+                    onValueChange = { newProgramName = it },
+                    label = { Text("Program Name") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (newProgramName.isNotBlank()) {
+                        onAddCustomProgram(newProgramName)
+                        program = newProgramName
+                    }
+                    showAddProgramDialog = false
+                }) { Text("Add") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAddProgramDialog = false }) { Text("Cancel") }
+            }
+        )
+    }
+
+    // Stopwatch state
+    var timerActive by rememberSaveable(exercise.name) { mutableStateOf(false) }
+    var timerSeconds by rememberSaveable(exercise.name) { mutableIntStateOf(0) }
+    LaunchedEffect(timerActive) {
+        if (timerActive) {
+            while (isActive) {
+                delay(1000L)
+                timerSeconds++
+            }
+        }
+    }
+
+    val isTimed = exercise.trackingType in setOf(ExerciseTrackingType.TIME_ONLY, ExerciseTrackingType.DISTANCE_TIME, ExerciseTrackingType.CARDIO_MACHINE)
+    val isCardio = exercise.trackingType == ExerciseTrackingType.CARDIO_MACHINE
+    val hasDistance = exercise.trackingType in setOf(ExerciseTrackingType.DISTANCE_TIME, ExerciseTrackingType.CARDIO_MACHINE)
+
+    // Auto-calculate speed
+    LaunchedEffect(distance, durationMin, durationSec) {
+        if (hasDistance) {
+            val dist = distance.toDoubleOrNull() ?: 0.0
+            val mins = (durationMin.toDoubleOrNull() ?: 0.0) + (durationSec.toDoubleOrNull() ?: 0.0) / 60.0
+            if (dist > 0 && mins > 0) {
+                val calculatedSpeed = dist / (mins / 60.0)
+                speed = "%.1f".format(calculatedSpeed)
+            }
+        }
+    }
 
     val effortApplies = effortMethod != EffortMethod.OFF && exercise.trackingType in setOf(ExerciseTrackingType.WEIGHT_REPS, ExerciseTrackingType.BODYWEIGHT_REPS, ExerciseTrackingType.ASSISTED_REPS)
     val lastSet = exercise.loggedSets.lastOrNull()
@@ -1571,19 +1758,73 @@ private fun ExerciseLogCard(
                         Text(exercise.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         Text("${exercise.category.label} \u2022 ${targetSummary(exercise)} \u2022 ${exercise.category.statLabel}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
+                    if (isTimed) {
+                        IconButton(onClick = { 
+                            if (timerActive) {
+                                durationMin = (timerSeconds / 60).toString()
+                                durationSec = (timerSeconds % 60).toString()
+                                timerActive = false
+                            } else {
+                                timerSeconds = 0
+                                timerActive = true
+                            }
+                        }) {
+                            Icon(
+                                if (timerActive) Icons.Default.Pause else Icons.Default.Timer,
+                                contentDescription = "Timer",
+                                tint = if (timerActive) Gold else MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        if (timerActive || timerSeconds > 0) {
+                            Text(
+                                "%d:%02d".format(timerSeconds / 60, timerSeconds % 60),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = Gold,
+                                modifier = Modifier.padding(horizontal = 4.dp)
+                            )
+                        }
+                    }
                     if (exercise.trackingType == ExerciseTrackingType.WEIGHT_REPS) IconButton(onClick = { showPlates = true }, modifier = Modifier.size(32.dp)) { Icon(Icons.Filled.FitnessCenter, "Plates", modifier = Modifier.size(18.dp)) }
                     IconButton(onClick = onSwap, modifier = Modifier.size(32.dp)) { Icon(Icons.Default.Bolt, "Swap", modifier = Modifier.size(18.dp)) }
+                    if (isCardio) {
+                        IconButton(onClick = { showAdvanced = !showAdvanced }, modifier = Modifier.size(32.dp)) {
+                            Icon(if (showAdvanced) Icons.Default.KeyboardArrowUp else Icons.Default.Tune, "Advanced", modifier = Modifier.size(18.dp), tint = if (showAdvanced) Gold else MaterialTheme.colorScheme.primary)
+                        }
+                    }
                     IconButton(onClick = onRemove, enabled = canRemove, modifier = Modifier.size(32.dp)) { Icon(Icons.Filled.Delete, "Remove", modifier = Modifier.size(18.dp), tint = if (canRemove) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.outline) }
+                }
+                if (isCardio && exercise.loggedSets.isNotEmpty()) {
+                    val last = exercise.loggedSets.last()
+                    if (last.inclinePercent > 0 || last.cardioProgram.isNotBlank()) {
+                        Text(
+                            text = buildString {
+                                if (last.inclinePercent > 0) append("Last Incline: ${trim(last.inclinePercent)}%")
+                                if (last.cardioProgram.isNotBlank()) {
+                                    if (isNotEmpty()) append(" • ")
+                                    append("Program: ${last.cardioProgram}")
+                                }
+                            },
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(start = 12.dp, bottom = 4.dp)
+                        )
+                    }
                 }
                 Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("Type", Modifier.width(32.dp), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
                     Text("Set", Modifier.width(24.dp), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
                     Text("Previous", Modifier.weight(1.2f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
-                    val c1 = if (exercise.trackingType == ExerciseTrackingType.TIME_ONLY) "Min" else "Weight"
-                    val c2 = if (exercise.trackingType == ExerciseTrackingType.TIME_ONLY) "Sec" else "Reps"
-                    Text(c1, Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
-                    Text(c2, Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
-                    Text(effortMethod.label, Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
+                    if (isCardio) {
+                        Text("Dist", Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
+                        Text("Time", Modifier.weight(1.5f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
+                    } else {
+                        val c1 = if (isTimed) "Min" else "Weight"
+                        val c2 = if (isTimed) "Sec" else "Reps"
+                        Text(c1, Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
+                        Text(c2, Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
+                        Text(effortMethod.label, Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
+                    }
                     Spacer(Modifier.width(36.dp))
                 }
                 exercise.loggedSets.forEachIndexed { i, set ->
@@ -1591,32 +1832,107 @@ private fun ExerciseLogCard(
                         Text(set.setType.shortLabel, Modifier.width(32.dp), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center, fontWeight = FontWeight.Bold)
                         Text("${i + 1}", Modifier.width(24.dp), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
                         val p = previousSets.getOrNull(i); Text(if (p != null) setSummary(p, imperial) else "—", Modifier.weight(1.2f), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
-                        Text(if (exercise.trackingType == ExerciseTrackingType.TIME_ONLY) set.durationMin.toInt().toString() else Units.formatWeight(set.weightKg, imperial), Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
-                        Text(if (exercise.trackingType == ExerciseTrackingType.TIME_ONLY) ((set.durationMin % 1.0) * 60).toInt().toString() else set.reps.toString(), Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
-                        Text(set.rir?.let { effortMethod.display(it) } ?: "—", Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+                        
+                        if (isCardio) {
+                            Text(Units.trimmed(Units.kmToDisplay(set.distanceKm, imperial)), Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+                            Text(Units.formatTimeMinutes(set.durationMin), Modifier.weight(1.5f), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+                        } else {
+                            val totalSecs = Math.round(set.durationMin * 60.0).toInt()
+                            Text(if (isTimed) (totalSecs / 60).toString() else Units.formatWeight(set.weightKg, imperial), Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+                            Text(if (isTimed) (totalSecs % 60).toString() else set.reps.toString(), Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+                            Text(set.rir?.let { effortMethod.display(it) } ?: "—", Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+                        }
                         Icon(Icons.Default.Check, null, tint = Color(0xFF4CAF50), modifier = Modifier.size(36.dp).padding(8.dp))
                     }
                 }
                 if (exercise.loggedSets.size < 20) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.width(32.dp)) {
-                            var exp by remember { mutableStateOf(false) }; Text(setType.shortLabel, Modifier.clickable { exp = true }.padding(4.dp), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, textAlign = TextAlign.Center)
-                            DropdownMenu(exp, { exp = false }) { SetType.entries.forEach { type -> DropdownMenuItem(text = { Text("${type.shortLabel} (${type.label})") }, onClick = { setType = type; exp = false }) } }
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.width(32.dp)) {
+                                var exp by remember { mutableStateOf(false) }; Text(setType.shortLabel, Modifier.clickable { exp = true }.padding(4.dp), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, textAlign = TextAlign.Center)
+                                DropdownMenu(exp, { exp = false }) { SetType.entries.forEach { type -> DropdownMenuItem(text = { Text("${type.shortLabel} (${type.label})") }, onClick = { setType = type; exp = false }) } }
+                            }
+                            Text("${exercise.loggedSets.size + 1}", Modifier.width(24.dp), style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
+                            val p = previousSets.getOrNull(exercise.loggedSets.size); Text(if (p != null) setSummary(p, imperial) else "—", Modifier.weight(1.2f), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline, textAlign = TextAlign.Center)
+                            
+                            if (isCardio) {
+                                CompactNumberField(distance, { distance = it }, Modifier.weight(1f))
+                                Row(Modifier.weight(1.5f), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    CompactNumberField(durationMin, { durationMin = it }, Modifier.weight(1f))
+                                    Text(":", Modifier.align(Alignment.CenterVertically), style = MaterialTheme.typography.bodyMedium)
+                                    CompactNumberField(durationSec, { durationSec = it }, Modifier.weight(1f))
+                                }
+                            } else {
+                                CompactNumberField(if (isTimed) durationMin else weight, { if (isTimed) durationMin = it else weight = it }, Modifier.weight(1f))
+                                CompactNumberField(if (isTimed) durationSec else reps, { if (isTimed) durationSec = it else reps = it }, Modifier.weight(1f))
+                                Box(Modifier.weight(1f)) {
+                                    var exp by remember { mutableStateOf(false) }; Text(effort?.let { effortMethod.display(it) } ?: "—", Modifier.fillMaxWidth().clickable { exp = true }.padding(4.dp), style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center, color = if (effort == null) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.primary)
+                                    DropdownMenu(exp, { exp = false }) { val ops = if (effortMethod == EffortMethod.RPE) listOf(null to "—", 4 to "6", 3 to "7", 2 to "8", 1 to "9", 0 to "10") else listOf(null to "—", 0 to "0", 1 to "1", 2 to "2", 3 to "3", 4 to "4", 5 to "5+")
+                                        ops.forEach { (v, l) -> DropdownMenuItem(text = { Text(l) }, onClick = { effort = v; exp = false }) } }
+                                }
+                            }
+                            IconButton(onClick = {
+                                val totalMins = (durationMin.toDoubleOrNull() ?: 0.0) + (durationSec.toDoubleOrNull() ?: 0.0) / 60.0
+                                onLogSet(
+                                    Units.toKg(weight.toDoubleOrNull() ?: 0.0, imperial),
+                                    reps.toIntOrNull() ?: 0,
+                                    totalMins,
+                                    Units.toKm(distance.toDoubleOrNull() ?: 0.0, imperial),
+                                    effort,
+                                    Units.toSpeedKmh(speed.toDoubleOrNull() ?: 0.0, imperial),
+                                    incline.toDoubleOrNull() ?: 0.0,
+                                    program,
+                                    setType
+                                )
+                                effort = null; setType = SetType.NORMAL; durationMin = ""; durationSec = ""; distance = ""; speed = ""; incline = ""; program = ""; timerSeconds = 0; timerActive = false
+                            }, enabled = if (isCardio) distance.isNotEmpty() && (durationMin.isNotEmpty() || durationSec.isNotEmpty()) else if (exercise.trackingType == ExerciseTrackingType.WEIGHT_REPS) weight.isNotEmpty() && reps.isNotEmpty() else reps.isNotEmpty(), modifier = Modifier.size(36.dp)) { Icon(Icons.Default.Add, "Log", tint = MaterialTheme.colorScheme.primary) }
                         }
-                        Text("${exercise.loggedSets.size + 1}", Modifier.width(24.dp), style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
-                        val p = previousSets.getOrNull(exercise.loggedSets.size); Text(if (p != null) setSummary(p, imperial) else "—", Modifier.weight(1.2f), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline, textAlign = TextAlign.Center)
-                        CompactNumberField(if (exercise.trackingType == ExerciseTrackingType.TIME_ONLY) durationMin else weight, { if (exercise.trackingType == ExerciseTrackingType.TIME_ONLY) durationMin = it else weight = it }, Modifier.weight(1f))
-                        CompactNumberField(if (exercise.trackingType == ExerciseTrackingType.TIME_ONLY) durationSec else reps, { if (exercise.trackingType == ExerciseTrackingType.TIME_ONLY) durationSec = it else reps = it }, Modifier.weight(1f))
-                        Box(Modifier.weight(1f)) {
-                            var exp by remember { mutableStateOf(false) }; Text(effort?.let { effortMethod.display(it) } ?: "—", Modifier.fillMaxWidth().clickable { exp = true }.padding(4.dp), style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center, color = if (effort == null) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.primary)
-                            DropdownMenu(exp, { exp = false }) { val ops = if (effortMethod == EffortMethod.RPE) listOf(null to "—", 4 to "6", 3 to "7", 2 to "8", 1 to "9", 0 to "10") else listOf(null to "—", 0 to "0", 1 to "1", 2 to "2", 3 to "3", 4 to "4", 5 to "5+")
-                                ops.forEach { (v, l) -> DropdownMenuItem(text = { Text(l) }, onClick = { effort = v; exp = false }) } }
+                        if (isCardio && showAdvanced) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // Incline Dropdown
+                                LabeledBox(
+                                    label = "Incl %",
+                                    value = incline.ifEmpty { "0" },
+                                    modifier = Modifier.weight(1f),
+                                    onClick = { /* Set exp state via internal box? No, need state here */ }
+                                ) { 
+                                    var exp by remember { mutableStateOf(false) }
+                                    Box(Modifier.fillMaxSize().clickable { exp = true })
+                                    DropdownMenu(exp, { exp = false }) {
+                                        listOf("0", "0.5", "1.0", "1.5", "2.0", "3.0", "4.0", "5.0", "6.0", "7.5", "10.0", "12.0", "15.0").forEach { v ->
+                                            DropdownMenuItem(text = { Text("$v%") }, onClick = { incline = v; exp = false })
+                                        }
+                                    }
+                                }
+
+                                LabeledTextField(
+                                    label = "Avg Spd",
+                                    value = speed,
+                                    onValueChange = { speed = it },
+                                    modifier = Modifier.weight(1f)
+                                )
+
+                                // Program Dropdown
+                                LabeledBox(
+                                    label = "Program",
+                                    value = program.ifEmpty { "Manual" },
+                                    modifier = Modifier.weight(1.5f)
+                                ) {
+                                    var exp by remember { mutableStateOf(false) }
+                                    Box(Modifier.fillMaxSize().clickable { exp = true })
+                                    DropdownMenu(exp, { exp = false }) {
+                                        customPrograms.sorted().forEach { p ->
+                                            DropdownMenuItem(text = { Text(p) }, onClick = { program = p; exp = false })
+                                        }
+                                        DropdownMenuItem(text = { Text("+ Add Custom...") }, onClick = { showAddProgramDialog = true; exp = false })
+                                    }
+                                }
+                            }
                         }
-                        IconButton(onClick = {
-                            val totalMins = (durationMin.toDoubleOrNull() ?: 0.0) + (durationSec.toDoubleOrNull() ?: 0.0) / 60.0
-                            onLogSet(Units.toKg(weight.toDoubleOrNull() ?: 0.0, imperial), reps.toIntOrNull() ?: 0, totalMins, Units.toKm(distance.toDoubleOrNull() ?: 0.0, imperial), effort, 0.0, 0.0, "", setType)
-                            effort = null; setType = SetType.NORMAL; durationMin = ""; durationSec = ""
-                        }, enabled = if (exercise.trackingType == ExerciseTrackingType.WEIGHT_REPS) weight.isNotEmpty() && reps.isNotEmpty() else reps.isNotEmpty(), modifier = Modifier.size(36.dp)) { Icon(Icons.Default.Add, "Log", tint = MaterialTheme.colorScheme.primary) }
                     }
                 }
                 if (suggestion != null) {
@@ -1631,28 +1947,40 @@ private fun ExerciseLogCard(
 }
 
 @Composable
+private fun LabeledTextField(label: String, value: String, onValueChange: (String) -> Unit, modifier: Modifier = Modifier) {
+    Column(modifier) {
+        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 2.dp))
+        BasicTextField(
+            value = value,
+            onValueChange = onValueChange,
+            modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), RoundedCornerShape(4.dp)).border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f), RoundedCornerShape(4.dp)).padding(vertical = 8.dp, horizontal = 6.dp),
+            textStyle = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurface),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            singleLine = true,
+            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary)
+        )
+    }
+}
+
+@Composable
+private fun LabeledBox(label: String, value: String, modifier: Modifier = Modifier, onClick: () -> Unit = {}, content: @Composable BoxScope.() -> Unit = {}) {
+    Column(modifier) {
+        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 2.dp))
+        Box(
+            modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), RoundedCornerShape(4.dp)).border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f), RoundedCornerShape(4.dp)).clickable { onClick() }.padding(vertical = 8.dp, horizontal = 6.dp)
+        ) {
+            Text(value, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            content()
+        }
+    }
+}
+
+@Composable
 private fun CompactNumberField(value: String, onValueChange: (String) -> Unit, modifier: Modifier = Modifier) {
     BasicTextField(value = value, onValueChange = onValueChange, modifier = modifier.background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(4.dp)).padding(vertical = 8.dp, horizontal = 4.dp), textStyle = MaterialTheme.typography.bodyMedium.copy(textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurface), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, cursorBrush = SolidColor(MaterialTheme.colorScheme.primary))
 }
 
 @Composable
-private fun CoachCard(coach: CoachAdvice, onApply: () -> Unit, onDismiss: () -> Unit) {
-    SectionCard(title = "\uD83E\uDDD9 Coach's counsel") {
-        Text(coach.message, style = MaterialTheme.typography.bodyMedium)
-        coach.changes.forEach { change ->
-            val action = if (change.replaceWith != null) "${change.exercise} \u2192 ${change.replaceWith}" else "${change.exercise}: ${change.sets ?: "?"} \u00D7 ${change.reps ?: "?"}"
-            Column {
-                Text(action, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
-                if (change.reason.isNotBlank()) Text(change.reason, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (coach.changes.isNotEmpty()) Button(onClick = onApply, modifier = Modifier.weight(1f)) { Text("Apply changes") }
-            OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f)) { Text(if (coach.changes.isEmpty()) "Thanks!" else "Keep plan") }
-        }
-    }
-}
-
 private fun setSummary(set: SetLogEntity, imperial: Boolean): String {
     val typePrefix = if (set.setType != SetType.NORMAL) "[${set.setType.shortLabel}] " else ""
     val body = when (set.category) {
@@ -1685,7 +2013,7 @@ private fun SessionResultDialog(finish: SessionFinish, imperial: Boolean, onDism
     val r = finish.result
     var showRewards by remember { mutableStateOf(false) }
     val durationText = formatDuration(r.durationMs)
-    val volumeText = "${r.volumeKg.roundToInt()} ${Units.label(imperial)}"
+    val volumeText = "${Units.toDisplay(r.volumeKg, imperial).roundToInt()} ${Units.label(imperial)}"
     val prCount = r.prs.count { it.isNew }
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
@@ -1704,7 +2032,7 @@ private fun SessionResultDialog(finish: SessionFinish, imperial: Boolean, onDism
                 }
                 Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("Workout Summary", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color.White)
-                    finish.summaryItems.forEach { SummaryItem(it) }
+                    finish.summaryItems.forEach { SummaryItem(it, r.updatedCharacter.characterClass ?: CharacterClass.WARRIOR) }
                 }
                 if (r.prs.isNotEmpty()) PRSection(r.prs, imperial)
                 if (finish.praise != null) Text("\u201C${finish.praise}\u201D", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 16.dp))
@@ -1755,11 +2083,24 @@ private fun PRSection(prs: List<SessionPr>, imperial: Boolean) {
 }
 
 @Composable
-private fun SummaryItem(item: WorkoutSummaryItem) {
+private fun SummaryItem(item: WorkoutSummaryItem, clazz: CharacterClass) {
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Box(modifier = Modifier.size(48.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.1f)), contentAlignment = Alignment.Center) {
-            if (item.iconUrl != null) AsyncImage(model = item.iconUrl, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-            else Text("\uD83C\uDFCB\uFE0F", fontSize = 20.sp)
+            if (item.muscles.isNotEmpty()) {
+                // Show naked avatar with highlights
+                CharacterAvatar(
+                    clazz = clazz,
+                    modifier = Modifier.size(40.dp),
+                    gear = emptyMap(),
+                    highlightMuscles = item.muscles,
+                    expression = AvatarExpression.CALM,
+                    detail = AvatarDetail.COMPACT
+                )
+            } else if (item.iconUrl != null) {
+                AsyncImage(model = item.iconUrl, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            } else {
+                Text("\uD83C\uDFCB\uFE0F", fontSize = 20.sp)
+            }
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {

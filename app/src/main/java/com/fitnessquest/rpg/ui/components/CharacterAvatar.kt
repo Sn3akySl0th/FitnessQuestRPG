@@ -533,7 +533,7 @@ private fun expandMuscleHighlights(raw: Set<String>): Set<String> {
     val out = mutableSetOf<String>()
     for (rawM in raw) {
         val m = rawM.lowercase().trim().replace("_", " ")
-        if (m.isEmpty()) continue
+        if (m.isEmpty() || m == "face" || m == "head" || m == "neck") continue // Don't highlight head/face/neck
         out += m
         when (m) {
             "abdominals", "abs", "core" -> out += setOf("abs", "abdominals", "core")
@@ -1175,7 +1175,7 @@ private fun DrawScope.drawHeadLayer(f: AvatarFrame) {
     val item = f.head
     if (item == null) {
         drawRaceEars(f) // behind the skull so elf tips read clearly
-        drawCircle(f.skinColor("neck", "traps"), radius = 14f * f.u, center = f.p(50f, 30f))
+        drawCircle(f.skinColor("head", "face"), radius = 14f * f.u, center = f.p(50f, 30f))
         drawHair(f, f.appearance.hairStyle, isHat = false)
         if (!f.facingBack) {
             eyes(f, 44f, 32f, 56f)
@@ -1187,7 +1187,7 @@ private fun DrawScope.drawHeadLayer(f: AvatarFrame) {
     when (GearVisuals.headgearShape(item)) {
         HeadgearShape.HELM -> {
             drawRaceEars(f)
-            drawCircle(f.skinColor("head", "neck", "face"), radius = 14f * f.u, center = f.p(50f, 30f))
+            drawCircle(f.skinColor("head", "face"), radius = 14f * f.u, center = f.p(50f, 30f))
             drawArc(pal.main, startAngle = 180f, sweepAngle = 180f, useCenter = true, topLeft = f.p(34.5f, 14.5f), size = f.s(31f, 31f))
             drawRect(pal.dark, topLeft = f.p(34.5f, 26f), size = f.s(31f, 3.5f))
             drawRoundRect(pal.main, topLeft = f.p(35f, 28f), size = f.s(7f, 12f), cornerRadius = CornerRadius(2f * f.u))
@@ -1201,7 +1201,7 @@ private fun DrawScope.drawHeadLayer(f: AvatarFrame) {
         }
         HeadgearShape.HAT -> {
             drawRaceEars(f)
-            drawCircle(f.skinColor("head", "neck", "face"), radius = 14f * f.u, center = f.p(50f, 30f))
+            drawCircle(f.skinColor("head", "face"), radius = 14f * f.u, center = f.p(50f, 30f))
             drawHair(f, f.appearance.hairStyle, isHat = true)
             eyes(f, 44f, 30f, 56f)
             drawRaceFaceAccents(f)
@@ -1222,7 +1222,7 @@ private fun DrawScope.drawHeadLayer(f: AvatarFrame) {
         HeadgearShape.HOOD -> {
             drawCircle(pal.main, radius = 15.5f * f.u, center = f.p(50f, 29f))
             drawArc(pal.dark, startAngle = 200f, sweepAngle = 140f, useCenter = true, topLeft = f.p(34.5f, 13.5f), size = f.s(31f, 31f))
-            drawOval(f.skinColor("head", "neck", "face"), topLeft = f.p(40f, 24f), size = f.s(20f, 17f))
+            drawOval(f.skinColor("head", "face"), topLeft = f.p(40f, 24f), size = f.s(20f, 17f))
             eyes(f, 45f, 31f, 55f)
             drawRaceFaceAccents(f)
             val point = Path().apply {
@@ -1240,7 +1240,7 @@ private fun DrawScope.drawHeadLayer(f: AvatarFrame) {
         }
         HeadgearShape.CAP -> {
             drawRaceEars(f)
-            drawCircle(f.skinColor("head", "neck", "face"), radius = 14f * f.u, center = f.p(50f, 30f))
+            drawCircle(f.skinColor("head", "face"), radius = 14f * f.u, center = f.p(50f, 30f))
             drawHair(f, f.appearance.hairStyle, isHat = true)
             eyes(f, 44f, 31f, 56f)
             drawRaceFaceAccents(f)
@@ -1251,7 +1251,7 @@ private fun DrawScope.drawHeadLayer(f: AvatarFrame) {
 }
 
 private fun DrawScope.drawClassCostumeHead(f: AvatarFrame) {
-    drawCircle(f.skinColor("head", "neck", "face"), radius = 14f * f.u, center = f.p(50f, 30f))
+    drawCircle(f.skinColor("head", "face"), radius = 14f * f.u, center = f.p(50f, 30f))
     when (f.cls) {
         CharacterClass.WARRIOR -> {
             drawArc(f.look.headgear, startAngle = 180f, sweepAngle = 180f, useCenter = true, topLeft = f.p(34.5f, 14.5f), size = f.s(31f, 31f))
@@ -1274,7 +1274,7 @@ private fun DrawScope.drawClassCostumeHead(f: AvatarFrame) {
         }
         CharacterClass.THIEF -> {
             drawCircle(f.look.headgear, radius = 15.5f * f.u, center = f.p(50f, 29f))
-            drawOval(f.skinColor("head", "neck", "face"), topLeft = f.p(40f, 24f), size = f.s(20f, 17f))
+            drawOval(f.skinColor("head", "face"), topLeft = f.p(40f, 24f), size = f.s(20f, 17f))
             eyes(f, 45f, 31f, 55f)
             val point = Path().apply {
                 moveTo(42f * f.u, 16f * f.u)

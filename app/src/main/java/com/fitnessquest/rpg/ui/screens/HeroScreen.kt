@@ -81,6 +81,13 @@ data class HeroUiState(
 
 class HeroViewModel(private val container: AppContainer) : ViewModel() {
 
+    val clockTick: Flow<Long> = flow {
+        while (true) {
+            emit(System.currentTimeMillis())
+            delay(1000)
+        }
+    }
+
     private val coreState: Flow<HeroUiState> = combine(
         container.repository.character,
         container.repository.ownedGear,
@@ -110,17 +117,22 @@ class HeroViewModel(private val container: AppContainer) : ViewModel() {
         core.copy(movementMastery = masteryList)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), HeroUiState())
 
+    init {
+        viewModelScope.launch {
+            clockTick
+                .map { LocalDate.now().toEpochDay() }
+                .distinctUntilChanged()
+                .collect { day ->
+                    handleDayChange(day)
+                }
+        }
+    }
+
     val stepsToday: StateFlow<Int> = container.steps.stepsToday
     val stepTracking: StateFlow<Boolean> = container.steps.tracking
     val wearPresence: StateFlow<WearPresenceState> = container.wearPresence.state
     val isPremium: StateFlow<Boolean> = container.prefs.isPremium
 
-    val clockTick: Flow<Long> = flow {
-        while (true) {
-            emit(System.currentTimeMillis())
-            delay(1000)
-        }
-    }
 
     fun refreshCharacter() {
         viewModelScope.launch {

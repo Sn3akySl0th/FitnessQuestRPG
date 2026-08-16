@@ -697,7 +697,7 @@ class GameRepository(
         db.activeSessionDao().deleteActiveExercise(exerciseId)
     }
 
-    suspend fun swapActiveExercise(exerciseId: Long, newName: String, newCategory: ExerciseCategory, trackingType: String) {
+    suspend fun swapActiveExercise(exerciseId: Long, newName: String, newCategory: ExerciseCategory, trackingType: String, permanentWorkoutId: Long? = null) {
         db.withTransaction {
             val current = db.activeSessionDao().getActiveExercises().find { it.id == exerciseId } ?: return@withTransaction
             db.activeSessionDao().updateActiveExercise(
@@ -707,6 +707,20 @@ class GameRepository(
                     trackingType = trackingType
                 )
             )
+            
+            if (permanentWorkoutId != null && permanentWorkoutId > 0) {
+                // Find matching exercise in the template and update it
+                val templateExercises = db.workoutDao().exercisesFor(permanentWorkoutId)
+                // We try to match by name or position. Matching by name is risky if multiple, so we'll try to find a close match.
+                // In ActiveSession, we don't have the original template exercise ID easily linked.
+                // However, we can use the position (sortOrder).
+                val toUpdate = templateExercises.find { it.exerciseName == current.exerciseName && it.sortOrder == current.sortOrder }
+                    ?: templateExercises.find { it.sortOrder == current.sortOrder }
+                
+                toUpdate?.let {
+                    db.workoutDao().updateExercise(it.copy(exerciseName = newName, category = newCategory))
+                }
+            }
         }
     }
 
@@ -768,7 +782,13 @@ class GameRepository(
         logs: List<SetLogEntity>,
         strengthXpMultiplier: Float = 1f,
         completionToken: String? = null,
-        userId: String? = null
+        userId: String? = null,
+        caloriesKcal: Int? = null,
+        avgHr: Int? = null,
+        maxHr: Int? = null,
+        steps: Long? = null,
+        distanceMeters: Double? = null,
+        activeDurationMs: Long? = null
     ): SessionResult {
         val token = completionToken ?: "session_${startedAt}_${logs.size}"
 
@@ -904,7 +924,13 @@ class GameRepository(
                 weeklyWorkoutsDone = weeklyDone,
                 weeklyWorkoutsGoal = weeklyGoal,
                 bonusXp = bonusXp,
-                isWellRested = isWellRested
+                isWellRested = isWellRested,
+                caloriesKcal = caloriesKcal,
+                avgHr = avgHr,
+                maxHr = maxHr,
+                steps = steps,
+                distanceMeters = distanceMeters,
+                activeDurationMs = activeDurationMs
             )
             
             res = res.copy(xpBoostApplied = character.pendingXpBoost, prs = prs)
@@ -1304,6 +1330,12 @@ class GameRepository(
                 appendLine("- ${session.name}: $exSummary")
             }
         }
+    }
+
+    suspend fun getSessionWithLogs(sessionId: Long): Pair<SessionEntity, List<SetLogEntity>>? {
+        val session = db.sessionDao().getSession(sessionId) ?: return null
+        val logs = db.sessionDao().setLogsFor(sessionId)
+        return session to logs
     }
 
 

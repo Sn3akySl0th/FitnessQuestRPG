@@ -68,6 +68,7 @@ import com.fitnessquest.rpg.ui.components.InAppUpdateBanner
 import com.fitnessquest.rpg.ui.components.WhatNewDialog
 import com.fitnessquest.rpg.ui.onboarding.PermissionsConsolidator
 import com.fitnessquest.rpg.BuildConfig
+import com.fitnessquest.rpg.ui.screens.SessionDetailScreen
 
 object Routes {
     const val HERO = "hero"
@@ -83,9 +84,11 @@ object Routes {
     const val EXERCISES = "train/exercises"
     const val AI = "train/ai"
     const val SESSION = "train/session/{workoutId}"
+    const val SESSION_DETAIL = "train/session-detail/{sessionId}"
     const val FIGHT = "battle/fight/{monsterId}?ambush={ambush}"
 
     fun session(workoutId: Long) = "train/session/$workoutId"
+    fun sessionDetail(sessionId: Long) = "train/session-detail/$sessionId"
     fun detail(workoutId: Long) = "train/detail/$workoutId"
     fun editor(workoutId: Long = -1L) =
         if (workoutId > 0) "train/editor/$workoutId" else EDITOR
@@ -283,13 +286,27 @@ fun FitQuestNav() {
                     )
                 }
                 composable(Routes.HISTORY) {
-                    HistoryScreen(onBack = { navController.popBackStack() })
+                    HistoryScreen(
+                        onBack = { navController.popBackStack() },
+                        onOpenSession = { id -> navController.navigate(Routes.sessionDetail(id)) }
+                    )
                 }
                 composable(Routes.RECORDS) {
                     HistoryScreen(
                         onBack = { navController.popBackStack() },
+                        onOpenSession = { id -> navController.navigate(Routes.sessionDetail(id)) },
                         initialTab = 1,
                         title = "Personal Records"
+                    )
+                }
+                composable(
+                    Routes.SESSION_DETAIL,
+                    arguments = listOf(navArgument("sessionId") { type = NavType.LongType })
+                ) { entry ->
+                    val id = entry.arguments?.getLong("sessionId") ?: -1L
+                    SessionDetailScreen(
+                        sessionId = id,
+                        onBack = { navController.popBackStack() }
                     )
                 }
                 composable(Routes.EXERCISES) {

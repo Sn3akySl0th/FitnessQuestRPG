@@ -583,7 +583,7 @@ object WorkoutImportService {
                 if (row.size <= exerciseIdx) continue
 
                 val workoutTitle = row.getOrNull(titleIdx)?.takeIf { it.isNotBlank() } ?: "Imported Workout"
-                val exerciseName = row.getOrNull(exerciseIdx)?.takeIf { it.isNotBlank() } ?: continue
+                val exerciseName = row.getOrNull(exerciseIdx)?.takeIf { it.isNotBlank() }?.let { normalizeExerciseName(it) } ?: continue
 
                 val weightVal = if (weightIdx >= 0 && weightIdx < row.size) row[weightIdx].toDoubleOrNull() ?: 0.0 else 0.0
                 val repsVal = if (repsIdx >= 0 && repsIdx < row.size) row[repsIdx].toIntOrNull() ?: 10 else 10
@@ -839,6 +839,16 @@ object WorkoutImportService {
         }
     }
 
+    private fun normalizeExerciseName(raw: String): String {
+        val n = raw.lowercase()
+        return when {
+            n.contains("treadmill") || 
+            n == "run" || n == "running" || n == "jog" || n == "jogging" || n == "walk" || n == "walking" ||
+            n.startsWith("run ") || n.startsWith("jog ") || n.startsWith("walk ") -> "Treadmill"
+            else -> raw
+        }
+    }
+
     private fun extractExerciseTitle(exObj: JSONObject, index: Int): String {
         var title = exObj.optString("title")
         if (title.isBlank()) title = exObj.optString("name")
@@ -847,7 +857,7 @@ object WorkoutImportService {
         if (title.isBlank()) title = exObj.optString("exercise_title")
         if (title.isBlank()) title = exObj.optString("exercise_template_id")
         if (title.isBlank()) title = "Exercise ${index + 1}"
-        return title
+        return normalizeExerciseName(title)
     }
 
     suspend fun inspectHevyApi(apiKey: String): Result<String> = withContext(Dispatchers.IO) {

@@ -91,8 +91,8 @@ fun HeroAnatomyHeatmap(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("🩸 HERO MUSCLE RECOVERY & HEATMAP", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Black, color = Gold)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.weight(1f)) {
+                    Text("🩸 HERO MUSCLE RECOVERY & HEATMAP", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Black, color = Gold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
 
                 // Front / Back Toggle Switch
@@ -133,10 +133,10 @@ fun HeroAnatomyHeatmap(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(360.dp)
+                    .height(250.dp)
                     .clip(RoundedCornerShape(12.dp))
                     .background(Color.Black.copy(alpha = 0.2f)),
-                contentAlignment = Alignment.Center
+                contentAlignment = Alignment.BottomCenter
             ) {
                 val highlightedMuscles = remember(soreMuscles, freshnessMap) {
                     val set = mutableSetOf<String>()
@@ -159,9 +159,9 @@ fun HeroAnatomyHeatmap(
                 character?.let { hero ->
                     CharacterAvatar(
                         clazz = hero.characterClass ?: CharacterClass.WARRIOR,
-                        modifier = Modifier.fillMaxSize().padding(16.dp),
+                        modifier = Modifier.fillMaxHeight().aspectRatio(100f / 120f).padding(top = 4.dp),
                         gear = emptyMap(), // Remove armor to show muscles
-                        appearance = hero.toAppearance(),
+                        appearance = hero.toAppearance().copy(druidForm = ""), // Always humanoid for heatmap
                         facingBack = activeView == AnatomyView.BACK,
                         expression = AvatarExpression.BATTLE_READY,
                         detail = AvatarDetail.FULL,

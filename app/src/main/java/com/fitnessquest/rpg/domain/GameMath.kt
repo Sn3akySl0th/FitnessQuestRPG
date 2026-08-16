@@ -74,7 +74,15 @@ data class SessionResult(
     /** End-of-workout loot grants (labels for UI). */
     val lootLabels: List<String> = emptyList(),
     /** Unlocked Movement Mastery perks earned in this session. */
-    val masteryPerkUnlocks: List<MasteryPerkUnlock> = emptyList()
+    val masteryPerkUnlocks: List<MasteryPerkUnlock> = emptyList(),
+
+    // Extra Wear/Summary metrics for History Detail
+    val caloriesKcal: Int? = null,
+    val avgHr: Int? = null,
+    val maxHr: Int? = null,
+    val steps: Long? = null,
+    val distanceMeters: Double? = null,
+    val activeDurationMs: Long? = null
 )
 
 /** A personal record set during a session. */
@@ -223,7 +231,13 @@ object GameMath {
         bonusXp: Int = 0,
         isWellRested: Boolean = false,
         maxEnergy: Int = MAX_ENERGY,
-        masteryBonus: MasteryStatBonus = MasteryStatBonus.NONE
+        masteryBonus: MasteryStatBonus = MasteryStatBonus.NONE,
+        caloriesKcal: Int? = null,
+        avgHr: Int? = null,
+        maxHr: Int? = null,
+        steps: Long? = null,
+        distanceMeters: Double? = null,
+        activeDurationMs: Long? = null
     ): SessionResult {
         var totalXp = logs.sumOf { it.xp } + bonusXp
         if (masteryBonus.xpMultiplierBonus > 0f) {
@@ -291,7 +305,13 @@ object GameMath {
             musclesWorked = musclesWorked,
             weeklyWorkoutsDone = weeklyWorkoutsDone,
             weeklyWorkoutsGoal = weeklyWorkoutsGoal,
-            xpBoostApplied = bonusXp
+            xpBoostApplied = bonusXp,
+            caloriesKcal = caloriesKcal,
+            avgHr = avgHr,
+            maxHr = maxHr,
+            steps = steps,
+            distanceMeters = distanceMeters,
+            activeDurationMs = activeDurationMs
         )
     }
 

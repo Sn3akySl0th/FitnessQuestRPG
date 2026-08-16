@@ -443,6 +443,7 @@ class UserPrefs(context: Context) {
         const val KEY_HEVY_API_KEY = "hevy_api_key"
         const val KEY_HEVY_AUTO_SYNC = "hevy_auto_sync_enabled"
         const val KEY_HEVY_LAST_SYNC = "hevy_last_sync_timestamp"
+        const val KEY_CUSTOM_CARDIO_PROGRAMS = "custom_cardio_programs"
         const val KEY_PERMISSIONS_REPAIR_SHOWN = "permissions_repair_shown"
         const val KEY_USE_LOCAL_AI = "use_local_ai_by_default"
         const val KEY_LAST_SEEN_VERSION = "last_seen_version_code"
@@ -491,6 +492,18 @@ class UserPrefs(context: Context) {
     fun setHevyLastSyncTimestamp(timestamp: Long) {
         prefs.edit { putLong(KEY_HEVY_LAST_SYNC, timestamp) }
         _hevyLastSyncTimestamp.value = timestamp
+    }
+
+    // ---- Cardio Programs ----
+    private val _customCardioPrograms = MutableStateFlow(prefs.getStringSet(KEY_CUSTOM_CARDIO_PROGRAMS, setOf("Manual", "Hills", "Intervals", "Fat Burn", "Random")) ?: setOf("Manual", "Hills", "Intervals", "Fat Burn", "Random"))
+    val customCardioPrograms: StateFlow<Set<String>> = _customCardioPrograms
+
+    fun addCustomCardioProgram(program: String) {
+        val current = _customCardioPrograms.value.toMutableSet()
+        if (current.add(program)) {
+            prefs.edit { putStringSet(KEY_CUSTOM_CARDIO_PROGRAMS, current) }
+            _customCardioPrograms.value = current
+        }
     }
 
     // ---- Version Tracking ----

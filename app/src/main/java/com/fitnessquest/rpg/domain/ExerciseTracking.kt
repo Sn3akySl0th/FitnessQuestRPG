@@ -60,7 +60,7 @@ object ExerciseTracking {
         val cardioMachineNames = listOf(
             "treadmill", "elliptical", "stair", "stepmill", "stairmaster",
             "rower", "rowing machine", "stationary bike", "recumbent bike",
-            "air bike", "assault bike", "ski erg", "skierg"
+            "air bike", "assault bike", "ski erg", "skierg", "walk", "jog", "run"
         )
         return cardioMachineNames.any { name.contains(it) || equipment.contains(it) }
     }

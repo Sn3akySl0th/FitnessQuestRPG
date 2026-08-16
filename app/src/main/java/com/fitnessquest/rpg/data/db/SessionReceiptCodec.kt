@@ -44,6 +44,14 @@ object SessionReceiptCodec {
 
         obj.put("rewardBatch", res.rewardBatch?.let { serializeRewardBatch(it) } ?: JSONObject.NULL)
 
+        // Extra metrics
+        obj.put("caloriesKcal", res.caloriesKcal ?: JSONObject.NULL)
+        obj.put("avgHr", res.avgHr ?: JSONObject.NULL)
+        obj.put("maxHr", res.maxHr ?: JSONObject.NULL)
+        obj.put("steps", res.steps ?: JSONObject.NULL)
+        obj.put("distanceMeters", res.distanceMeters ?: JSONObject.NULL)
+        obj.put("activeDurationMs", res.activeDurationMs ?: JSONObject.NULL)
+
         return obj.toString()
     }
 
@@ -195,6 +203,13 @@ object SessionReceiptCodec {
             else -> legacyRewardBatch(xp, gold, energy, levelsGained, arrivedAt, character)
         }
 
+        val caloriesKcal = if (obj.isNull("caloriesKcal")) null else obj.optInt("caloriesKcal")
+        val avgHr = if (obj.isNull("avgHr")) null else obj.optInt("avgHr")
+        val maxHr = if (obj.isNull("maxHr")) null else obj.optInt("maxHr")
+        val steps = if (obj.isNull("steps")) null else obj.optLong("steps")
+        val distanceMeters = if (obj.isNull("distanceMeters")) null else obj.optDouble("distanceMeters")
+        val activeDurationMs = if (obj.isNull("activeDurationMs")) null else obj.optLong("activeDurationMs")
+
         return SessionResult(
             xp = xp,
             gold = gold,
@@ -214,7 +229,13 @@ object SessionReceiptCodec {
             xpBoostApplied = xpBoostApplied,
             prs = prs,
             lootLabels = lootLabels,
-            rewardBatch = rewardBatch
+            rewardBatch = rewardBatch,
+            caloriesKcal = caloriesKcal,
+            avgHr = avgHr,
+            maxHr = maxHr,
+            steps = steps,
+            distanceMeters = distanceMeters,
+            activeDurationMs = activeDurationMs
         )
     }
 

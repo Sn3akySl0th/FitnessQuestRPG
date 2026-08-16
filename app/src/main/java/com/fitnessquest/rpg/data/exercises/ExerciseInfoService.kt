@@ -346,6 +346,7 @@ class ExerciseInfoService(private val context: Context) {
             "jump rope" to "Rope Jumping",
             "stair climber" to "Stairmaster",
             "elliptical" to "Elliptical Trainer",
+            "treadmill" to "Running, Treadmill",
             "walking brisk" to "Walking, Treadmill",
             "push up" to "Pushups",
             "pull up" to "Pullups",
