@@ -1271,7 +1271,9 @@ fun ActiveSessionScreen(
                         text = state.title,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                     IconButton(onClick = { showPlates = true }) {
                         Icon(Icons.Filled.FitnessCenter, contentDescription = "Plates")
@@ -1756,7 +1758,13 @@ private fun ExerciseLogCard(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f).clickable { showDetail = true }) {
                         Text(exercise.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Text("${exercise.category.label} \u2022 ${targetSummary(exercise)} \u2022 ${exercise.category.statLabel}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(
+                            text = "${exercise.category.label} \u2022 ${targetSummary(exercise)} \u2022 ${exercise.category.statLabel}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
                     if (isTimed) {
                         IconButton(onClick = { 
@@ -1857,9 +1865,9 @@ private fun ExerciseLogCard(
                             
                             if (isCardio) {
                                 CompactNumberField(distance, { distance = it }, Modifier.weight(1f))
-                                Row(Modifier.weight(1.5f), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Row(Modifier.weight(2f), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                                     CompactNumberField(durationMin, { durationMin = it }, Modifier.weight(1f))
-                                    Text(":", Modifier.align(Alignment.CenterVertically), style = MaterialTheme.typography.bodyMedium)
+                                    Text(":", style = MaterialTheme.typography.bodyMedium)
                                     CompactNumberField(durationSec, { durationSec = it }, Modifier.weight(1f))
                                 }
                             } else {
@@ -1977,7 +1985,20 @@ private fun LabeledBox(label: String, value: String, modifier: Modifier = Modifi
 
 @Composable
 private fun CompactNumberField(value: String, onValueChange: (String) -> Unit, modifier: Modifier = Modifier) {
-    BasicTextField(value = value, onValueChange = onValueChange, modifier = modifier.background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(4.dp)).padding(vertical = 8.dp, horizontal = 4.dp), textStyle = MaterialTheme.typography.bodyMedium.copy(textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurface), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, cursorBrush = SolidColor(MaterialTheme.colorScheme.primary))
+    BasicTextField(
+        value = value,
+        onValueChange = onValueChange,
+        modifier = modifier
+            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(4.dp))
+            .padding(vertical = 8.dp, horizontal = 4.dp),
+        textStyle = MaterialTheme.typography.bodyMedium.copy(
+            textAlign = TextAlign.Center,
+            color = MaterialTheme.colorScheme.onSurface
+        ),
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        singleLine = true,
+        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary)
+    )
 }
 
 @Composable

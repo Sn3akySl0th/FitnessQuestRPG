@@ -41,6 +41,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -251,17 +252,18 @@ private fun RewardItemCard(reward: Reward) {
                 fontWeight = FontWeight.Bold,
                 color = color,
                 textAlign = TextAlign.Center,
-                maxLines = 2
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }
 }
 
 private fun rewardPresentation(reward: Reward): Triple<String, String, Color> = when (reward) {
-    is Reward.Gold -> Triple("Gold", "+${reward.amount}", Gold)
-    is Reward.Xp -> Triple("XP", "+${reward.amount} XP", Color(0xFF9C7BE3))
-    is Reward.Energy -> Triple("EN", "+${reward.amount}", Color(0xFF4ADE80))
-    is Reward.XpBoost -> Triple("XP+", "+${reward.amount} XP Boost", Color(0xFF4A6FD8))
+    is Reward.Gold -> Triple("\uD83D\uDCB0", "+${reward.amount}", Gold)
+    is Reward.Xp -> Triple("\u2B50", "+${reward.amount} XP", Color(0xFF9C7BE3))
+    is Reward.Energy -> Triple("\u26A1", "+${reward.amount}", Color(0xFF4ADE80))
+    is Reward.XpBoost -> Triple("\u2728", "+${reward.amount} XP Boost", Color(0xFF4A6FD8))
     is Reward.Gear -> Triple(reward.item.emoji, reward.item.name, Color.White)
     is Reward.Stackable -> Triple(reward.item.emoji, "${reward.item.name} x${reward.quantity}", Color.White)
     is Reward.LevelUp -> Triple("LV", "Level ${reward.newLevel}!", Gold)

@@ -15,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Watch
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -153,9 +154,17 @@ fun SessionDetailScreen(
                 }
                 Column(Modifier.weight(1f)) {
                     Text(state.session?.name ?: "Workout Detail", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Color.White)
-                    state.session?.let { s ->
-                        val fmt = remember(locale) { SimpleDateFormat("EEEE, MMM d, yyyy \u00B7 h:mm a", locale) }
-                        Text(fmt.format(Date(s.endedAt)), style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.6f))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        state.session?.let { s ->
+                            val fmt = remember(locale) { SimpleDateFormat("EEEE, MMM d, yyyy \u00B7 h:mm a", locale) }
+                            Text(fmt.format(Date(s.endedAt)), style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.6f))
+                        }
+                        if (state.result?.avgHr != null) {
+                            Spacer(Modifier.width(8.dp))
+                            Icon(Icons.Filled.Watch, null, tint = StatEnd, modifier = Modifier.size(12.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Wear OS", style = MaterialTheme.typography.labelSmall, color = StatEnd)
+                        }
                     }
                 }
                 IconButton(onClick = { confirmDelete = true }) {
@@ -247,6 +256,32 @@ fun SessionDetailScreen(
                                         Column(Modifier.weight(1f)) {
                                             Text("Peak", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.6f))
                                             Text("${res.maxHr} bpm", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color(0xFFE35B5B))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Personal Records Set
+                state.result?.prs?.filter { it.isNew }?.let { newPrs ->
+                    if (newPrs.isNotEmpty()) {
+                        item {
+                            SectionCard(title = "\uD83C\uDFC6 Personal Records Set") {
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    newPrs.forEach { pr ->
+                                        val label = when (pr.kind) {
+                                            PrKind.WEIGHT -> "Weight"; PrKind.VOLUME -> "Volume"; PrKind.ONE_RM -> "1RM"; PrKind.DISTANCE -> "Distance"; PrKind.PACE -> "Pace"; PrKind.TIME -> "Duration"; PrKind.REPS -> "Reps"; PrKind.SPEED -> "Speed"; PrKind.INCLINE -> "Incline"
+                                        }
+                                        val valText = when (pr.kind) {
+                                            PrKind.WEIGHT -> "${Units.trimmed(Units.toDisplay(pr.value, imperial))} ${Units.label(imperial)} \u00D7 ${pr.reps}"; PrKind.DISTANCE -> Units.formatDistance(pr.value, imperial); PrKind.PACE -> Units.formatPace(pr.value, imperial); PrKind.TIME -> Units.formatTimeMinutes(pr.value); PrKind.REPS -> "${pr.value.toInt()} reps"; PrKind.SPEED -> Units.formatSpeed(pr.value, imperial); PrKind.INCLINE -> "${Units.trimmed(pr.value)}%"; else -> "${Units.trimmed(Units.toDisplay(pr.value, imperial))} ${Units.label(imperial)}"
+                                        }
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Box(Modifier.size(6.dp).clip(CircleShape).background(Gold))
+                                            Spacer(Modifier.width(8.dp))
+                                            Text("${pr.exerciseName}: ", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = Color.White)
+                                            Text("$label $valText", style = MaterialTheme.typography.bodySmall, color = Gold)
                                         }
                                     }
                                 }

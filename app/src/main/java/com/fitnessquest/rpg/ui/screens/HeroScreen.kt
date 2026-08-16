@@ -801,10 +801,10 @@ private fun HeroHeaderBanner(
                     }
                 }
             }
-            
-            Box(Modifier.align(Alignment.Top)) {
-                SettingsIconButton()
-            }
+        }
+        
+        Box(Modifier.align(Alignment.TopEnd).padding(8.dp)) {
+            SettingsIconButton()
         }
         
         // Glowing XP Bar at the very bottom
@@ -854,6 +854,7 @@ private fun HeroCurrencyBar(character: CharacterEntity, viewModel: HeroViewModel
             text = if (wear.watchLinked) "Linked" else "Offline",
             color = if (wear.watchLinked) Color(0xFF35C46A) else Color(0xFFE34D59)
         )
+        Spacer(Modifier.width(16.dp))
     }
 }
 

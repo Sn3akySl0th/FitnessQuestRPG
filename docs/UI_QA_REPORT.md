@@ -257,9 +257,9 @@ Emoji characters (⚔️, 🛡️, 🔥, 💧) are mixed with non-emoji text in 
 
 | ID | Screen | Issue | Severity |
 |----|--------|-------|----------|
-| H-1 | Hero | Currency bar scroll affordance missing | 🟠 |
+| H-1 | Hero | Currency bar scroll affordance missing | ✅ Fixed |
 | H-2 | Hero | Banner header vertical crowding (form chips + export buttons) | 🟠 |
-| H-3 | Hero | Settings button alignment off (center vs. top-right) | 🟠 |
+| H-3 | Hero | Settings button alignment off (center vs. top-right) | ✅ Fixed |
 | H-4 | Hero | Stat allocation buttons: 0dp contentPadding | 🟡 |
 | H-5 | Hero | Saga tab bottom clip risk on gesture nav phones | 🟡 |
 | H-6 | Hero | Switch Job "Premium" label: no overflow | 🟡 |
@@ -268,21 +268,21 @@ Emoji characters (⚔️, 🛡️, 🔥, 💧) are mixed with non-emoji text in 
 | F-2 | Fight | Monster name/trait badge Row alignment | 🟠 |
 | F-3 | Fight | Skill buttons: no explanation when disabled | 🟡 |
 | F-4 | Fight | Narration text unbounded — CTA can be pushed off-screen | 🟡 |
-| A-1 | Session | Exercise subtitle silently truncates stat label | 🔴 |
-| A-2 | Session | Cardio row: 5 elements + Log button on small screens | 🔴 |
-| A-3 | Session | Workout title wraps, expands sticky header | 🟠 |
-| A-4 | Session | Volume metric value clips at large font scale | 🟠 |
+| A-1 | Session | Exercise subtitle silently truncates stat label | ✅ Fixed |
+| A-2 | Session | Cardio row: 5 elements + Log button on small screens | ✅ Fixed |
+| A-3 | Session | Workout title wraps, expands sticky header | ✅ Fixed |
+| A-4 | Session | Volume metric value clips at large font scale | ✅ Fixed |
 | A-5 | Session | Log button too small for primary action | 🟠 |
 | A-6 | Session | Heat streak/XP multiplier not surfaced in header | 🟡 |
-| A-7 | Session | Duplicate import statements | 🟡 |
-| S-1 | Shop | Grid item name truncation (verify) | 🟠 |
+| A-7 | Session | Duplicate import statements | ✅ Fixed |
+| S-1 | Shop | Item grid name truncation (verify) | 🟠 |
 | S-2 | Shop | "Inventory" segment label overflows at 1.2× font scale | 🟠 |
 | S-3 | Shop | Filter chip row (verify scroll) | 🟡 |
 | R-1 | Rivals | Leaderboard name truncation | 🟠 |
 | R-2 | Rivals | Party invite code not copyable | 🟡 |
-| Hi-1 | History | Session name overflow | 🟡 |
-| RR-1 | Rewards | Label clipped (no TextOverflow.Ellipsis) | 🟠 |
-| RR-2 | Rewards | Currency tiles show text instead of emoji | 🟡 |
+| Hi-1 | History | Session name overflow | ✅ Fixed |
+| RR-1 | Rewards | Label clipped (no TextOverflow.Ellipsis) | ✅ Fixed |
+| RR-2 | Rewards | Currency tiles show text instead of emoji | ✅ Fixed |
 | SB-2 | Dock | Tab labels missing overflow | 🟡 |
 | CC-1 | All | 0dp contentPadding on compact Buttons | 🟠 |
 | CC-2 | All | Emoji baseline misalignment in mixed Text | 🟡 |
