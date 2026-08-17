@@ -1146,8 +1146,10 @@ class GameRepository(
             }
 
             // Durable outbox events for social sync (Party & Guild)
-            val partyId = updated.partyId
-            val guildId = updated.guildId
+            // Re-read character record to ensure freshest IDs (Issue 1)
+            val freshCharacter = db.characterDao().get() ?: updated
+            val partyId = freshCharacter.partyId
+            val guildId = freshCharacter.guildId
             val uid = userId?.takeIf { it.isNotBlank() }
 
             if (!partyId.isNullOrBlank() && uid != null) {

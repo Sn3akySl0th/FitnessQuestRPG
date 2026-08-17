@@ -90,6 +90,11 @@ service cloud.firestore {
         allow write: if isOwner(uid);
       }
 
+      match /pulses/{uid} {
+        allow read: if isSignedIn();
+        allow write: if isOwner(uid);
+      }
+
       match /workouts/{workoutId} {
         allow read, create: if isSignedIn();
         allow delete: if isSignedIn()

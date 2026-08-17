@@ -57,7 +57,7 @@
 | W-1 | Wear | Exercise name (`maxLines = 2`, no overflow) | `WearApp.kt` |
 | W-4 | Wear | "Find phone" button text | `WearApp.kt` |
 | CC-1 | All | Compact buttons: `contentPadding = PaddingValues(0.dp)` → min 8dp | `HeroScreen.kt` |
-| A-7 | Session | Remove duplicate import statements (×4) | `ActiveSessionScreen.kt` |
+| A-7 | Session | Remove duplicate import statements (×4) [DONE] | `ActiveSessionScreen.kt` |
 
 ### Acceptance Criteria
 - [ ] Settings opens fullscreen or as bottom sheet — all 11 sections reachable without frustration
@@ -66,7 +66,7 @@
 - [ ] Watch status has a ● indicator and Refresh is an `OutlinedButton`
 - [ ] Every `Text` with `maxLines` has matching `overflow = TextOverflow.Ellipsis`
 - [ ] All compact Buttons have at minimum `PaddingValues(horizontal = 8.dp)`
-- [ ] Duplicate imports removed from `ActiveSessionScreen.kt`
+- [x] Duplicate imports removed from `ActiveSessionScreen.kt`
 
 ---
 

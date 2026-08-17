@@ -81,7 +81,10 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
@@ -398,17 +401,25 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
                     originalWorkoutId = session.workoutId
                 )
             }
-            // Pulse current XP and effects to party so they see "ghost damage" and status
-            val currentXp = exercises.sumOf { ex -> ex.loggedSets.sumOf { it.xp } }
-            if (!demoMode && currentXp > 0) {
-                val s = _uiState.value
+        }.launchIn(viewModelScope)
+
+        _uiState
+            .map { s -> 
+                if (s.loading || s.finish != null || demoMode) return@map null
+                
                 val effects = mutableListOf<String>()
                 if (s.hasPrAchievement) effects += "\u26A1" // CRIT
                 if (s.heatStreak >= 3) effects += "\uD83E\uDE78" // BLEED
                 if ((s.heartRateBpm ?: 0) > s.maxHeartRate * 0.9) effects += "\uD83D\uDD25" // BURN
-                container.party.sendActivePulse(currentXp, effects)
+                
+                s.totalXp to effects
             }
-        }.launchIn(viewModelScope)
+            .filterNotNull()
+            .distinctUntilChanged()
+            .onEach { (xp, effects) ->
+                container.party.sendActivePulse(xp, effects)
+            }
+            .launchIn(viewModelScope)
 
         viewModelScope.launch {
             while (isActive) {
@@ -1135,6 +1146,9 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
 
     override fun onCleared() {
         super.onCleared()
+        if (!demoMode) {
+            viewModelScope.launch { container.party.clearActivePulse() }
+        }
         wearBridge.unbind()
         workoutNotification.cancel()
         container.music.stop()

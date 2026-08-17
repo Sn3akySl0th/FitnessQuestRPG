@@ -235,7 +235,7 @@ class PartyService(
                 @Suppress("UNCHECKED_CAST")
                 val effects = (d["effects"] as? List<String>).orEmpty()
                 // Safety: Show all pulses regardless of local clock sync
-                if (xp > 0) {
+                if (xp > 0 || effects.isNotEmpty()) {
                     PartyPulse(uid = d.id, xp = xp, updatedAt = updated, effects = effects)
                 } else null
             }
@@ -315,31 +315,62 @@ class PartyService(
         targetPartyId: String? = null,
         targetUid: String? = null
     ): OutboxSyncResult {
-        if (xp <= 0) return OutboxSyncResult.NOT_APPLICABLE
-        val partyId = targetPartyId ?: _partyId.value ?: return OutboxSyncResult.NOT_APPLICABLE
-        val uid = targetUid ?: auth.state.value.uid ?: return OutboxSyncResult.NOT_APPLICABLE
+        if (xp <= 0) {
+            Log.d("PartyService", "reportSessionXp: XP is <= 0 ($xp), skipping.")
+            return OutboxSyncResult.NOT_APPLICABLE
+        }
+        
+        // Fallback resolution: Outbox payload -> Local StateFlow -> Repository fallback (Issue 3.2)
+        val partyId = targetPartyId ?: _partyId.value ?: repository.getCharacter().partyId
+        val uid = targetUid ?: auth.state.value.uid
+
+        if (partyId == null) {
+            Log.d("PartyService", "reportSessionXp: partyId is null, retrying later.")
+            return OutboxSyncResult.RETRYABLE_FAILURE // Issue 3.3
+        }
+        if (uid == null) {
+            Log.d("PartyService", "reportSessionXp: uid is null, retrying later.")
+            return OutboxSyncResult.RETRYABLE_FAILURE // Issue 3.3
+        }
         
         val doc = partyDoc(partyId)
         val eventDoc = doc.collection("processedEvents").document(eventId)
         
         return try {
             val result = firestore.runTransaction { transaction ->
-                // Ensure the party document exists and is in the transaction
                 val partySnap = transaction.get(doc)
-                if (!partySnap.exists()) return@runTransaction OutboxSyncResult.NOT_APPLICABLE
+                if (!partySnap.exists()) {
+                    Log.d("PartyService", "reportSessionXp: Party doc $partyId missing.")
+                    return@runTransaction OutboxSyncResult.NOT_APPLICABLE
+                }
 
                 val snapshot = transaction.get(eventDoc)
                 if (snapshot.exists()) {
                     OutboxSyncResult.ALREADY_PROCESSED
                 } else {
-                    transaction.set(eventDoc, mapOf("processedAt" to FieldValue.serverTimestamp(), "xp" to xp, "uid" to uid))
-                    transaction.update(
-                        doc,
-                        mapOf(
-                            "bossHp" to FieldValue.increment(-xp.toLong()),
-                            "bossDamage.$uid" to FieldValue.increment(xp.toLong())
-                        )
+                    // Issue 4.1: Verify bossHp exists and is > 0
+                    val currentHp = partySnap.getLong("bossHp")
+                    if (currentHp == null || currentHp <= 0) {
+                        Log.d("PartyService", "reportSessionXp: Boss missing or already at 0 HP.")
+                        transaction.set(eventDoc, mapOf("processedAt" to FieldValue.serverTimestamp(), "xp" to xp, "uid" to uid))
+                        return@runTransaction OutboxSyncResult.DELIVERED
+                    }
+
+                    // Issue 4.2: Clamp bossHp to 0 after damage
+                    val newHp = (currentHp - xp).coerceAtLeast(0L)
+                    
+                    val updates = mutableMapOf<String, Any>(
+                        "bossHp" to newHp,
+                        "bossDamage.$uid" to FieldValue.increment(xp.toLong())
                     )
+
+                    // Issue 4.3: Initialize bossDamage map if missing
+                    if (partySnap.get("bossDamage") == null) {
+                        transaction.update(doc, "bossDamage", emptyMap<String, Long>())
+                    }
+
+                    transaction.set(eventDoc, mapOf("processedAt" to FieldValue.serverTimestamp(), "xp" to xp, "uid" to uid))
+                    transaction.update(doc, updates)
                     OutboxSyncResult.DELIVERED
                 }
             }.await()
@@ -459,8 +490,10 @@ class PartyService(
     suspend fun sendActivePulse(xp: Int, effects: List<String> = emptyList()) = runCatching {
         val partyId = _partyId.value ?: return@runCatching
         val uid = auth.state.value.uid ?: return@runCatching
-        Log.d("PartyService", "Sending pulse: $xp XP, effects: $effects to party $partyId")
-        if (xp <= 0) {
+        
+        Log.d("PartyService", "Attempting pulse: xp=$xp, effects=$effects, party=$partyId, uid=$uid")
+
+        if (xp <= 0 && effects.isEmpty()) {
             clearActivePulse()
             return@runCatching
         }
