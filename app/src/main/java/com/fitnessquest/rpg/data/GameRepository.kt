@@ -807,7 +807,8 @@ class GameRepository(
             val endedAt = System.currentTimeMillis()
             val durationMs = endedAt - startedAt
             val currentActive = db.activeSessionDao().getActiveSession()
-            var withXp = logs.map { it.copy(xp = GameMath.xpForSet(it)) }
+            // Preserve the original set XP (calculated with multipliers during the session) if present
+            var withXp = logs.map { if (it.xp > 0) it else it.copy(xp = GameMath.xpForSet(it)) }
             if ((strengthXpMultiplier != 1f) && (strengthXpMultiplier > 0f)) {
                 withXp = withXp.map { log ->
                     if (log.category == ExerciseCategory.STRENGTH) {

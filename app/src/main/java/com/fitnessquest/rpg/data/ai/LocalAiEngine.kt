@@ -1,6 +1,7 @@
 package com.fitnessquest.rpg.data.ai
 
 import android.content.Context
+import android.util.Log
 import com.fitnessquest.rpg.domain.CharacterClass
 import com.fitnessquest.rpg.data.db.ExerciseCategory
 import com.fitnessquest.rpg.data.db.WorkoutExerciseEntity
@@ -33,10 +34,14 @@ object LocalAiEngine {
 
     private fun ensureLoaded(context: Context, modelFile: File?) {
         val path = modelFile?.absolutePath ?: return
-        if (!modelFile.exists()) return
+        if (!modelFile.exists()) {
+            Log.e("LocalAiEngine", "Model file does not exist: $path")
+            return
+        }
         if (llmInference != null && loadedModelPath == path) return
         
         try {
+            Log.d("LocalAiEngine", "Loading model: $path")
             llmInference?.close()
             // MediaPipe GenAI 0.10.x builder
             val options = LlmInference.LlmInferenceOptions.builder()
@@ -45,8 +50,9 @@ object LocalAiEngine {
                 .build()
             llmInference = LlmInference.createFromOptions(context, options)
             loadedModelPath = path
+            Log.d("LocalAiEngine", "Model loaded successfully.")
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("LocalAiEngine", "Failed to load model: ${e.message}", e)
             llmInference = null
         }
     }

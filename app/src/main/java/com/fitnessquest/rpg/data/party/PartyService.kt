@@ -1,6 +1,7 @@
 package com.fitnessquest.rpg.data.party
 
 import android.app.Application
+import android.util.Log
 import android.content.Context
 import com.fitnessquest.rpg.data.GameRepository
 import com.fitnessquest.rpg.data.auth.AuthService
@@ -31,6 +32,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.math.absoluteValue
 import kotlin.time.Duration.Companion.milliseconds
 
 data class PartyMember(
@@ -72,6 +74,13 @@ data class SharedWorkout(
     val exercises: List<SharedExercise>
 )
 
+data class PartyPulse(
+    val uid: String,
+    val xp: Int,
+    val updatedAt: Long,
+    val effects: List<String> = emptyList()
+)
+
 data class PartyState(
     val loading: Boolean = true,
     val partyId: String? = null,
@@ -79,7 +88,8 @@ data class PartyState(
     val inviteCode: String = "",
     val members: List<PartyMember> = emptyList(),
     val boss: PartyBoss? = null,
-    val sharedWorkouts: List<SharedWorkout> = emptyList()
+    val sharedWorkouts: List<SharedWorkout> = emptyList(),
+    val activePulses: List<PartyPulse> = emptyList()
 ) {
     val inParty: Boolean get() = partyId != null
 }
@@ -216,6 +226,22 @@ class PartyService(
             }.sortedBy { it.name }
             _state.update { it.copy(sharedWorkouts = workouts) }
         }
+        listeners += doc.collection("pulses").addSnapshotListener { snap, _ ->
+            if (snap == null) return@addSnapshotListener
+            val now = System.currentTimeMillis()
+            val pulses = snap.documents.mapNotNull { d ->
+                val xp = (d.getLong("xp") ?: 0L).toInt()
+                val updated = d.getTimestamp("updatedAt")?.toDate()?.time ?: now
+                @Suppress("UNCHECKED_CAST")
+                val effects = (d["effects"] as? List<String>).orEmpty()
+                // Safety: Show all pulses regardless of local clock sync
+                if (xp > 0) {
+                    PartyPulse(uid = d.id, xp = xp, updatedAt = updated, effects = effects)
+                } else null
+            }
+            Log.d("PartyService", "Received ${pulses.size} active pulses from Firestore")
+            _state.update { it.copy(activePulses = pulses) }
+        }
     }
 
     private fun detach() {
@@ -298,6 +324,10 @@ class PartyService(
         
         return try {
             val result = firestore.runTransaction { transaction ->
+                // Ensure the party document exists and is in the transaction
+                val partySnap = transaction.get(doc)
+                if (!partySnap.exists()) return@runTransaction OutboxSyncResult.NOT_APPLICABLE
+
                 val snapshot = transaction.get(eventDoc)
                 if (snapshot.exists()) {
                     OutboxSyncResult.ALREADY_PROCESSED
@@ -387,8 +417,8 @@ class PartyService(
         ).await()
     }
 
-    /** Copies a shared workout into the local quest list. */
-    suspend fun importWorkout(shared: SharedWorkout): Result<Unit> = runCatching {
+    /** Copies a shared workout into the local quest list. Returns the new local ID. */
+    suspend fun importWorkout(shared: SharedWorkout): Result<Long> = runCatching {
         repository.saveWorkout(
             name = shared.name,
             exercises = shared.exercises.map {
@@ -401,7 +431,54 @@ class PartyService(
                 )
             }
         )
-        Unit
+    }
+
+    /** Deletes a shared workout from the party. Only the author can delete. */
+    suspend fun deleteSharedWorkout(sharedWorkoutId: String): Result<Unit> = runCatching {
+        val partyId = _partyId.value ?: error("Not in a party.")
+        val uid = auth.state.value.uid ?: error("Not signed in.")
+        
+        val doc = partyDoc(partyId).collection("workouts").document(sharedWorkoutId)
+        val snap = doc.get().await()
+        if (!snap.exists()) return@runCatching // Already gone
+        
+        val authorUid = snap.getString("authorUid")
+        if (authorUid != uid) {
+            error("Only the hero who shared this quest can remove it.")
+        }
+        
+        doc.delete().await()
+    }
+
+    // ---- Active Pulses (Ghost Damage) ----
+
+    /**
+     * Publishes current session XP to the party so others can see "ghost damage" 
+     * on the boss. This is transient and cleared when the workout finishes.
+     */
+    suspend fun sendActivePulse(xp: Int, effects: List<String> = emptyList()) = runCatching {
+        val partyId = _partyId.value ?: return@runCatching
+        val uid = auth.state.value.uid ?: return@runCatching
+        Log.d("PartyService", "Sending pulse: $xp XP, effects: $effects to party $partyId")
+        if (xp <= 0) {
+            clearActivePulse()
+            return@runCatching
+        }
+        partyDoc(partyId).collection("pulses").document(uid).set(
+            mapOf(
+                "xp" to xp,
+                "effects" to effects,
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+        ).await()
+    }.onFailure {
+        Log.e("PartyService", "Failed to send pulse", it)
+    }
+
+    suspend fun clearActivePulse() = runCatching {
+        val partyId = _partyId.value ?: return@runCatching
+        val uid = auth.state.value.uid ?: return@runCatching
+        partyDoc(partyId).collection("pulses").document(uid).delete().await()
     }
 
     // ---- Member card ----

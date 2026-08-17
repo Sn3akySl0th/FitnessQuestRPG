@@ -1,5 +1,7 @@
 package com.fitnessquest.rpg.ui.screens
 
+import android.content.res.Configuration
+import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
@@ -34,6 +36,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -52,6 +55,7 @@ import com.fitnessquest.rpg.ui.appContainer
 import com.fitnessquest.rpg.ui.components.*
 import com.fitnessquest.rpg.ui.theme.*
 import androidx.compose.material.icons.outlined.FitnessCenter
+import androidx.compose.ui.platform.LocalConfiguration
 import com.fitnessquest.rpg.domain.mastery.CanonicalMovement
 import com.fitnessquest.rpg.domain.mastery.MasteryProgression
 import kotlin.math.roundToInt
@@ -133,30 +137,7 @@ class HeroViewModel(private val container: AppContainer) : ViewModel() {
     val wearPresence: StateFlow<WearPresenceState> = container.wearPresence.state
     val isPremium: StateFlow<Boolean> = container.prefs.isPremium
 
-
-    fun refreshCharacter() {
-        viewModelScope.launch {
-            container.repository.getCharacter()
-        }
-    }
-
-    val bountyResetLabel: StateFlow<String> = clockTick.map { now ->
-        val zone = ZoneId.systemDefault()
-        val tomorrow = LocalDate.now().plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
-        val diff = (tomorrow - now).coerceAtLeast(0)
-        val hours = diff / (1000 * 60 * 60)
-        val mins = (diff / (1000 * 60)) % 60
-        "Resets in %dh %dm".format(hours, mins)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "...")
-
-    val campaignResetLabel: StateFlow<String> = clockTick.map { now ->
-        val zone = ZoneId.systemDefault()
-        val nextWeek = weekStart(LocalDate.now().plusWeeks(1)).atStartOfDay(zone).toInstant().toEpochMilli()
-        val diff = (nextWeek - now).coerceAtLeast(0)
-        val days = diff / (1000 * 60 * 60 * 24)
-        val hours = (diff / (1000 * 60 * 60)) % 24
-        "New quests in %dd %dh".format(days, hours)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "...")
+    val imperial: StateFlow<Boolean> = container.prefs.imperial
 
     val bounties: StateFlow<List<Bounty>> = combine(
         uiState.map { it.character }.filterNotNull(),
@@ -256,6 +237,37 @@ class HeroViewModel(private val container: AppContainer) : ViewModel() {
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val hasClaimableSaga: StateFlow<Boolean> = combine(
+        bounties,
+        weeklyCampaigns
+    ) { bList, cList ->
+        bList.any { it.isCompleted && !it.isClaimed } || cList.any { it.isCompleted && !it.isClaimed }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val bountyResetLabel: StateFlow<String> = clockTick.map { now ->
+        val zone = ZoneId.systemDefault()
+        val tomorrow = LocalDate.now().plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+        val diff = (tomorrow - now).coerceAtLeast(0)
+        val hours = diff / (1000 * 60 * 60)
+        val mins = (diff / (1000 * 60)) % 60
+        "Resets in ${hours}h ${mins}m"
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "...")
+
+    val campaignResetLabel: StateFlow<String> = clockTick.map { now ->
+        val zone = ZoneId.systemDefault()
+        val nextWeek = weekStart(LocalDate.now().plusWeeks(1)).atStartOfDay(zone).toInstant().toEpochMilli()
+        val diff = (nextWeek - now).coerceAtLeast(0)
+        val d = diff / (1000 * 60 * 60 * 24)
+        val h = (diff / (1000 * 60 * 60)) % 24
+        "New quests in ${d}d ${h}h"
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "...")
+
+    fun refreshCharacter() {
+        viewModelScope.launch {
+            container.repository.getCharacter()
+        }
+    }
+
     fun claimBounty(bounty: Bounty) {
         viewModelScope.launch {
             val (g, x, e) = when(bounty.id) {
@@ -288,11 +300,9 @@ class HeroViewModel(private val container: AppContainer) : ViewModel() {
     fun logBountyProgress(bounty: Bounty) {
         if (bounty.id == "b_water") container.prefs.logWaterGlass()
         if (bounty.id == "b_stretch") container.prefs.markStretchDone()
-        // b_weight is handled via showWeightDialog in the Composable
     }
 
     val claimedTrophies: StateFlow<Set<String>> = container.prefs.claimedTrophies
-    val imperial: StateFlow<Boolean> = container.prefs.imperial
     val lifetimeCardioKm: StateFlow<Double> = container.repository.allSetLogs.map { logs ->
         logs.filter { it.category == ExerciseCategory.CARDIO }.sumOf { it.distanceKm }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
@@ -309,12 +319,6 @@ class HeroViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
-    fun claimWellnessEnergy() {
-        viewModelScope.launch {
-            container.repository.claimWellnessEnergy()
-        }
-    }
-
     fun logWeight(weight: Double) {
         viewModelScope.launch {
             container.repository.logWeight(weight)
@@ -324,24 +328,6 @@ class HeroViewModel(private val container: AppContainer) : ViewModel() {
     private fun weekStart(date: LocalDate): LocalDate =
         date.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
 
-    val usernameSet: StateFlow<Boolean> = container.prefs.usernameSet
-
-    private val _usernameBusy = MutableStateFlow(false)
-    val usernameBusy: StateFlow<Boolean> = _usernameBusy
-
-    private val _usernameError = MutableStateFlow<String?>(null)
-    val usernameError: StateFlow<String?> = _usernameError
-
-    fun clearUsernameError() { _usernameError.value = null }
-    fun tryClaimExistingName() {
-        viewModelScope.launch {
-            val name = container.repository.getCharacter().name
-            if (name.isNotBlank() && name != "Hero") {
-                claimUsername(name)
-            }
-        }
-    }
-
     fun handleDayChange(todayEpochDay: Long) {
         viewModelScope.launch {
             val wonAtStart = container.repository.getCharacter().battlesWon
@@ -350,23 +336,6 @@ class HeroViewModel(private val container: AppContainer) : ViewModel() {
                 val weekStartDay = weekStart(LocalDate.now()).toEpochDay()
                 container.prefs.ensureCampaignWeek(weekStartDay, wonAtStart)
             }
-        }
-    }
-
-    fun claimUsername(name: String, onDone: () -> Unit = {}) {
-        if (name.isBlank()) return
-        _usernameBusy.value = true
-        _usernameError.value = null
-        viewModelScope.launch {
-            val result = container.usernames.claim(name)
-            if (result.isSuccess) {
-                container.prefs.setUsernameClaim(result.getOrThrow())
-                container.repository.updateCharacter(container.repository.getCharacter().copy(name = name))
-                onDone()
-            } else {
-                _usernameError.value = result.exceptionOrNull()?.message ?: "Name unavailable"
-            }
-            _usernameBusy.value = false
         }
     }
 
@@ -412,24 +381,95 @@ class HeroViewModel(private val container: AppContainer) : ViewModel() {
 @Composable
 fun HeroScreen(viewModel: HeroViewModel = viewModel(factory = HeroViewModel.Factory)) {
     val state by viewModel.uiState.collectAsState()
-    val character = state.character ?: return
-    val usernameSet by viewModel.usernameSet.collectAsState()
     val isPremium by viewModel.isPremium.collectAsState()
     val imperial by viewModel.imperial.collectAsState()
+    val sagaReady by viewModel.hasClaimableSaga.collectAsState()
+    val bounties by viewModel.bounties.collectAsState()
+    val bountyResetLabel by viewModel.bountyResetLabel.collectAsState()
+    val campaigns by viewModel.weeklyCampaigns.collectAsState()
+    val campaignResetLabel by viewModel.campaignResetLabel.collectAsState()
+    val claimedTrophies by viewModel.claimedTrophies.collectAsState()
+    val lifetimeCardioKm by viewModel.lifetimeCardioKm.collectAsState()
+    val wear by viewModel.wearPresence.collectAsState()
 
+    HeroScreenContent(
+        state = state,
+        isPremium = isPremium,
+        imperial = imperial,
+        sagaReady = sagaReady,
+        bounties = bounties,
+        bountyResetLabel = bountyResetLabel,
+        campaigns = campaigns,
+        campaignResetLabel = campaignResetLabel,
+        claimedTrophies = claimedTrophies,
+        lifetimeCardioKm = lifetimeCardioKm,
+        wearLinked = wear.watchLinked,
+        actions = HeroActions(
+            onRefreshCharacter = viewModel::refreshCharacter,
+            onDruidFormChange = viewModel::setDruidForm,
+            onClaimIdleRewards = viewModel::claimIdleRewards,
+            onLogWeight = viewModel::logWeight,
+            onClaimTrophyReward = viewModel::claimTrophyReward,
+            onSwitchJob = viewModel::switchJob,
+            onAllocateStat = viewModel::allocateStat,
+            onEquipItem = viewModel::equip,
+            onSocketRune = viewModel::socketRune,
+            onClearRune = viewModel::clearRune,
+            onClaimBounty = viewModel::claimBounty,
+            onLogBountyProgress = viewModel::logBountyProgress,
+            onClaimCampaign = viewModel::claimCampaign,
+            updateAppearance = viewModel::updateAppearance
+        )
+    )
+}
+
+data class HeroActions(
+    val onRefreshCharacter: () -> Unit = {},
+    val onAvatarClick: () -> Unit = {},
+    val onDruidFormChange: (String) -> Unit = {},
+    val onClaimIdleRewards: ((RewardBatch?) -> Unit) -> Unit = {},
+    val onLogWeight: (Double) -> Unit = {},
+    val onClaimTrophyReward: (Trophy) -> Unit = {},
+    val onSwitchJob: (CharacterClass) -> Unit = {},
+    val onAllocateStat: (String) -> Unit = {},
+    val onEquipItem: (Long) -> Unit = {},
+    val onSocketRune: (Long, Int, Long) -> Unit = { _, _, _ -> },
+    val onClearRune: (Long, Int) -> Unit = { _, _ -> },
+    val onClaimBounty: (Bounty) -> Unit = {},
+    val onLogBountyProgress: (Bounty) -> Unit = {},
+    val onClaimCampaign: (WeeklyCampaign) -> Unit = {},
+    val updateAppearance: (Long, Long, Long, Long, String, String, Long, String) -> Unit = { _, _, _, _, _, _, _, _ -> }
+)
+
+@Composable
+fun HeroScreenContent(
+    state: HeroUiState,
+    isPremium: Boolean,
+    imperial: Boolean,
+    sagaReady: Boolean,
+    bounties: List<Bounty>,
+    bountyResetLabel: String,
+    campaigns: List<WeeklyCampaign>,
+    campaignResetLabel: String,
+    claimedTrophies: Set<String>,
+    lifetimeCardioKm: Double,
+    wearLinked: Boolean,
+    actions: HeroActions
+) {
+    val character = state.character ?: return
     var selectedTab by remember { mutableIntStateOf(0) }
     var pickerSlot by remember { mutableStateOf<ItemSlot?>(null) }
     var showAvatarDialog by remember { mutableStateOf(false) }
     var rewardReveal by remember { mutableStateOf<RewardBatch?>(null) }
     var showWeightDialog by remember { mutableStateOf(false) }
 
-    val cls = character.characterClass ?: return // ClassPicker handled in Nav
+    val cls = character.characterClass ?: return
 
     if (character.idleKills > 0) {
         IdleRewardsModal(
             character = character, 
             onClaim = {
-                viewModel.claimIdleRewards { batch ->
+                actions.onClaimIdleRewards { batch ->
                     rewardReveal = batch
                 }
             }
@@ -442,7 +482,7 @@ fun HeroScreen(viewModel: HeroViewModel = viewModel(factory = HeroViewModel.Fact
             imperial = imperial,
             onDismiss = { showWeightDialog = false },
             onSave = { weight: Double ->
-                viewModel.logWeight(weight)
+                actions.onLogWeight(weight)
                 showWeightDialog = false
             }
         )
@@ -457,9 +497,9 @@ fun HeroScreen(viewModel: HeroViewModel = viewModel(factory = HeroViewModel.Fact
             character = character,
             isPremium = isPremium,
             onDismiss = { showAvatarDialog = false },
-            onClassChange = { viewModel.chooseClass(it) },
+            onClassChange = { actions.onSwitchJob(it) },
             onSave = { skinColor, hairColor, underwearColor, eyeColor, hairStyle, gender, braColor, race ->
-                viewModel.updateAppearance(
+                actions.updateAppearance(
                     skinColor, hairColor, underwearColor, eyeColor, hairStyle, gender, braColor, race
                 )
                 showAvatarDialog = false
@@ -469,13 +509,11 @@ fun HeroScreen(viewModel: HeroViewModel = viewModel(factory = HeroViewModel.Fact
 
     val snackbar = LocalSnackbarHostState.current
     val scope = rememberCoroutineScope()
-
-    val isLandscape = androidx.compose.ui.platform.LocalConfiguration.current.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+    val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
 
     EmbersOverlay(modifier = Modifier.fillMaxSize()) {
         if (isLandscape) {
             Row(Modifier.fillMaxSize()) {
-                // Left Pane (42%): Avatar Banner & Currency Bar
                 Column(
                     modifier = Modifier
                         .weight(0.42f)
@@ -487,14 +525,14 @@ fun HeroScreen(viewModel: HeroViewModel = viewModel(factory = HeroViewModel.Fact
                         cls = cls,
                         gear = state.gear,
                         onAvatarClick = { showAvatarDialog = true },
-                        onDruidFormChange = viewModel::setDruidForm
+                        onDruidFormChange = actions.onDruidFormChange,
+                        onAllocateClick = { selectedTab = 0 }
                     )
-                    HeroCurrencyBar(character, viewModel)
+                    HeroCurrencyBarContent(character, wearLinked)
                 }
 
                 VerticalDivider(color = Color.White.copy(alpha = 0.1f))
 
-                // Right Pane (58%): Tab Navigation & Tab Content
                 Column(
                     modifier = Modifier
                         .weight(0.58f)
@@ -513,7 +551,17 @@ fun HeroScreen(viewModel: HeroViewModel = viewModel(factory = HeroViewModel.Fact
                             Text("⚔️ Gear", modifier = Modifier.padding(10.dp))
                         }
                         Tab(selected = selectedTab == 2, onClick = { selectedTab = 2 }) {
-                            Text("📜 Saga", modifier = Modifier.padding(10.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("📜 Saga", modifier = Modifier.padding(10.dp))
+                                if (sagaReady) {
+                                    Box(
+                                        Modifier
+                                            .size(8.dp)
+                                            .background(Color.Red, CircleShape)
+                                            .offset(x = (-4).dp, y = (-8).dp)
+                                    )
+                                }
+                            }
                         }
                         Tab(selected = selectedTab == 3, onClick = { selectedTab = 3 }) {
                             Text("🥋 Mastery", modifier = Modifier.padding(10.dp))
@@ -526,31 +574,28 @@ fun HeroScreen(viewModel: HeroViewModel = viewModel(factory = HeroViewModel.Fact
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         when (selectedTab) {
-                            0 -> statsTab(this, character, cls, state, viewModel, isPremium, snackbar, scope)
+                            0 -> statsTabContent(this, character, cls, state, isPremium, snackbar, scope, actions)
                             1 -> gearTab(this, state, cls, onEquipClick = { pickerSlot = it })
-                            2 -> sagaTab(this, viewModel, onLogWeight = { showWeightDialog = true })
+                            2 -> sagaTabContent(this, character, bounties, bountyResetLabel, campaigns, campaignResetLabel, claimedTrophies, lifetimeCardioKm, imperial, actions, onLogWeight = { showWeightDialog = true })
                             3 -> masteryTab(this, state.movementMastery, imperial)
                         }
-                        
                         item { Spacer(Modifier.height(24.dp)) }
                     }
                 }
             }
         } else {
             Column(Modifier.fillMaxSize()) {
-                // Immersive Full-Body Hero Banner
                 HeroHeaderBanner(
                     character = character,
                     cls = cls,
                     gear = state.gear,
                     onAvatarClick = { showAvatarDialog = true },
-                    onDruidFormChange = viewModel::setDruidForm
+                    onDruidFormChange = actions.onDruidFormChange,
+                    onAllocateClick = { selectedTab = 0 }
                 )
 
-                // Dynamic Currency Bar
-                HeroCurrencyBar(character, viewModel)
+                HeroCurrencyBarContent(character, wearLinked)
 
-                // Main Tab Navigation
                 PrimaryTabRow(
                     selectedTabIndex = selectedTab,
                     containerColor = Color.Transparent,
@@ -564,27 +609,35 @@ fun HeroScreen(viewModel: HeroViewModel = viewModel(factory = HeroViewModel.Fact
                         Text("⚔️ Gear", modifier = Modifier.padding(12.dp))
                     }
                     Tab(selected = selectedTab == 2, onClick = { selectedTab = 2 }) {
-                        Text("📜 Saga", modifier = Modifier.padding(12.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("📜 Saga", modifier = Modifier.padding(12.dp))
+                            if (sagaReady) {
+                                Box(
+                                    Modifier
+                                        .size(8.dp)
+                                        .background(Color.Red, CircleShape)
+                                        .offset(x = (-4).dp, y = (-8).dp)
+                                )
+                            }
+                        }
                     }
                     Tab(selected = selectedTab == 3, onClick = { selectedTab = 3 }) {
                         Text("🥋 Mastery", modifier = Modifier.padding(12.dp))
                     }
                 }
 
-                // Scrollable Content per Tab
                 LazyColumn(
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     when (selectedTab) {
-                        0 -> statsTab(this, character, cls, state, viewModel, isPremium, snackbar, scope)
+                        0 -> statsTabContent(this, character, cls, state, isPremium, snackbar, scope, actions)
                         1 -> gearTab(this, state, cls, onEquipClick = { pickerSlot = it })
-                        2 -> sagaTab(this, viewModel, onLogWeight = { showWeightDialog = true })
+                        2 -> sagaTabContent(this, character, bounties, bountyResetLabel, campaigns, campaignResetLabel, claimedTrophies, lifetimeCardioKm, imperial, actions, onLogWeight = { showWeightDialog = true })
                         3 -> masteryTab(this, state.movementMastery, imperial)
                     }
-                    
-                    item { Spacer(Modifier.height(80.dp)) } // Dock clearance
+                    item { Spacer(Modifier.height(80.dp)) }
                 }
             }
         }
@@ -598,9 +651,9 @@ fun HeroScreen(viewModel: HeroViewModel = viewModel(factory = HeroViewModel.Fact
             owned = state.ownedGear.filter { it.catalog.slot == slot },
             equippedId = state.gear[slot]?.id,
             runes = state.runes,
-            onEquip = viewModel::equip,
-            onSocketRune = viewModel::socketRune,
-            onClearRune = viewModel::clearRune,
+            onEquip = actions.onEquipItem,
+            onSocketRune = actions.onSocketRune,
+            onClearRune = actions.onClearRune,
             onDismiss = { pickerSlot = null }
         )
     }
@@ -612,10 +665,20 @@ private fun HeroHeaderBanner(
     cls: CharacterClass,
     gear: Map<ItemSlot, ItemEntity>,
     onAvatarClick: () -> Unit,
-    onDruidFormChange: (String) -> Unit
+    onDruidFormChange: (String) -> Unit,
+    onAllocateClick: () -> Unit = {}
 ) {
-    val brush = remember {
-        Brush.verticalGradient(listOf(Color(0xFF2A1F3D), Color(0xFF12131F)))
+    val biome = Biome.fromName(character.currentBiome)
+    val colors = when (biome) {
+        Biome.MEADOWLANDS -> listOf(Color(0xFF2D5A27), Color(0xFF1B3518))
+        Biome.DARKWOOD -> listOf(Color(0xFF1B263B), Color(0xFF0D1321))
+        Biome.CRYSTAL_CAVES -> listOf(Color(0xFF4A148C), Color(0xFF1A237E))
+        Biome.EMBER_PEAKS -> listOf(Color(0xFFBF360C), Color(0xFF3E2723))
+        Biome.FROZEN_WASTES -> listOf(Color(0xFF01579B), Color(0xFF002171))
+        Biome.SHADOWFEN -> listOf(Color(0xFF263238), Color(0xFF000000))
+    }
+    val brush = remember(character.currentBiome) {
+        Brush.verticalGradient(colors)
     }
     
     Box(
@@ -687,15 +750,15 @@ private fun HeroHeaderBanner(
                     TextButton(
                         onClick = {
                             scope.launch {
-                                android.widget.Toast.makeText(context, "⏳ Generating Hero Wallpaper...", android.widget.Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "⏳ Generating Hero Wallpaper...", Toast.LENGTH_SHORT).show()
                                 val res = AvatarExporter.exportAvatarGraphic(context, character, cls, ExportFormat.WALLPAPER, gear)
                                 res.fold(
                                     onSuccess = { uri ->
-                                        android.widget.Toast.makeText(context, "✅ Wallpaper saved to Pictures/FitQuest gallery!", android.widget.Toast.LENGTH_LONG).show()
+                                        Toast.makeText(context, "✅ Wallpaper saved to Pictures/FitQuest gallery!", Toast.LENGTH_LONG).show()
                                         AvatarExporter.launchSetWallpaperIntent(context, uri)
                                     },
                                     onFailure = { err ->
-                                        android.widget.Toast.makeText(context, "❌ Export failed: ${err.message}", android.widget.Toast.LENGTH_LONG).show()
+                                        Toast.makeText(context, "❌ Export failed: ${err.message}", Toast.LENGTH_LONG).show()
                                     }
                                 )
                             }
@@ -708,15 +771,15 @@ private fun HeroHeaderBanner(
                     TextButton(
                         onClick = {
                             scope.launch {
-                                android.widget.Toast.makeText(context, "⏳ Generating Watch Face Graphic...", android.widget.Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "⏳ Generating Watch Face Graphic...", Toast.LENGTH_SHORT).show()
                                 val res = AvatarExporter.exportAvatarGraphic(context, character, cls, ExportFormat.WATCH_FACE, gear)
                                 res.fold(
                                     onSuccess = { uri ->
-                                        android.widget.Toast.makeText(context, "✅ Watch Face saved to gallery & synced to watch!", android.widget.Toast.LENGTH_LONG).show()
+                                        Toast.makeText(context, "✅ Watch Face saved to gallery & synced to watch!", Toast.LENGTH_LONG).show()
                                         AvatarExporter.launchSetWallpaperIntent(context, uri)
                                     },
                                     onFailure = { err ->
-                                        android.widget.Toast.makeText(context, "❌ Export failed: ${err.message}", android.widget.Toast.LENGTH_LONG).show()
+                                        Toast.makeText(context, "❌ Export failed: ${err.message}", Toast.LENGTH_LONG).show()
                                     }
                                 )
                             }
@@ -792,12 +855,13 @@ private fun HeroHeaderBanner(
                 if (character.freeStatPoints > 0) {
                     Spacer(Modifier.height(12.dp))
                     Button(
-                        onClick = { /* Could scroll to stats tab */ },
-                        colors = ButtonDefaults.buttonColors(containerColor = Gold.copy(alpha = 0.2f)),
+                        onClick = onAllocateClick,
+                        colors = ButtonDefaults.buttonColors(containerColor = Gold),
                         modifier = Modifier.height(32.dp),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                        shape = RoundedCornerShape(16.dp)
                     ) {
-                        Text("${character.freeStatPoints} Points Ready", color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Black)
+                        Text("${character.freeStatPoints} Points Ready", color = NightBg, fontSize = 11.sp, fontWeight = FontWeight.Black)
                     }
                 }
             }
@@ -828,9 +892,7 @@ private fun HeroHeaderBanner(
 }
 
 @Composable
-private fun HeroCurrencyBar(character: CharacterEntity, viewModel: HeroViewModel) {
-    val wear by viewModel.wearPresence.collectAsState()
-    
+private fun HeroCurrencyBarContent(character: CharacterEntity, wearLinked: Boolean) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -850,23 +912,23 @@ private fun HeroCurrencyBar(character: CharacterEntity, viewModel: HeroViewModel
             FantasyToken(emoji = "🔥", text = "${character.streak}d")
         }
         FantasyToken(
-            emoji = if (wear.watchLinked) "⌚" else "🚫",
-            text = if (wear.watchLinked) "Linked" else "Offline",
-            color = if (wear.watchLinked) Color(0xFF35C46A) else Color(0xFFE34D59)
+            emoji = if (wearLinked) "⌚" else "🚫",
+            text = if (wearLinked) "Linked" else "Offline",
+            color = if (wearLinked) Color(0xFF35C46A) else Color(0xFFE34D59)
         )
         Spacer(Modifier.width(16.dp))
     }
 }
 
-private fun statsTab(
+private fun statsTabContent(
     listScope: LazyListScope,
     character: CharacterEntity,
     cls: CharacterClass,
     state: HeroUiState,
-    viewModel: HeroViewModel,
     isPremium: Boolean,
     snackbar: SnackbarHostState,
-    scope: CoroutineScope
+    scope: CoroutineScope,
+    actions: HeroActions
 ) {
     listScope.item { ReadinessCard(character = character) }
 
@@ -882,20 +944,20 @@ private fun statsTab(
             }
             
             Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                sortedJobs.forEach { cls ->
-                    val progress = state.allClassProgress.find { it.clazz == cls }
+                sortedJobs.forEach { clsItem ->
+                    val progress = state.allClassProgress.find { it.clazz == clsItem }
                     val level = progress?.level ?: 1
-                    val isActive = character.characterClass == cls
-                    val isLocked = cls.requiresPremium && !isPremium
+                    val isActive = character.characterClass == clsItem
+                    val isLocked = clsItem.requiresPremium && !isPremium
                     
                     Surface(
                         onClick = { 
                             if (isLocked) {
                                 scope.launch {
-                                    snackbar.showSnackbar("✦ Unlock Premium to access the ${cls.label} job.")
+                                    snackbar.showSnackbar("✦ Unlock Premium to access the ${clsItem.label} job.")
                                 }
                             } else {
-                                viewModel.switchJob(cls) 
+                                actions.onSwitchJob(clsItem) 
                             }
                         },
                         color = if (isActive) Gold.copy(alpha = 0.2f) else Color.White.copy(alpha = 0.05f),
@@ -906,12 +968,12 @@ private fun statsTab(
                     ) {
                         Column(modifier = Modifier.padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                             Box(contentAlignment = Alignment.BottomEnd) {
-                                Text(cls.emoji, fontSize = 24.sp, modifier = Modifier.scale(if (isLocked) 0.8f else 1f).then(if (isLocked) Modifier.alpha(0.5f) else Modifier))
+                                Text(clsItem.emoji, fontSize = 24.sp, modifier = Modifier.scale(if (isLocked) 0.8f else 1f).then(if (isLocked) Modifier.alpha(0.5f) else Modifier))
                                 if (isLocked) {
                                     Text("✦", color = Gold, fontSize = 12.sp, fontWeight = FontWeight.Black)
                                 }
                             }
-                            Text(cls.label, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, maxLines = 1)
+                            Text(clsItem.label, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, maxLines = 1)
                             Text(if (isLocked) "Premium" else "Lv $level", style = MaterialTheme.typography.labelMedium, color = if (isLocked) Color.Gray else Gold)
                         }
                     }
@@ -928,7 +990,7 @@ private fun statsTab(
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf("STR", "END", "AGI", "WIL").forEach { stat ->
                         Button(
-                            onClick = { viewModel.allocateStat(stat) },
+                            onClick = { actions.onAllocateStat(stat) },
                             modifier = Modifier.weight(1f),
                             contentPadding = PaddingValues(0.dp)
                         ) { Text("+$stat", fontSize = 12.sp) }
@@ -1014,82 +1076,57 @@ private fun gearTab(
     }
 }
 
-@Composable
-private fun SagaTabContent(
-    viewModel: HeroViewModel,
+private fun sagaTabContent(
+    listScope: LazyListScope,
+    character: CharacterEntity,
+    bounties: List<Bounty>,
+    bountyResetLabel: String,
+    campaigns: List<WeeklyCampaign>,
+    campaignResetLabel: String,
+    claimedTrophies: Set<String>,
+    lifetimeCardioKm: Double,
+    imperial: Boolean,
+    actions: HeroActions,
     onLogWeight: () -> Unit
 ) {
-    val bounties by viewModel.bounties.collectAsState()
-    val resetLabel by viewModel.bountyResetLabel.collectAsState()
-    val campaigns by viewModel.weeklyCampaigns.collectAsState()
-    val campResetLabel by viewModel.campaignResetLabel.collectAsState()
-    val characterState by viewModel.uiState.collectAsState()
-    val c = characterState.character
-    val claimedTrophies by viewModel.claimedTrophies.collectAsState()
-    val lifetimeCardioKm by viewModel.lifetimeCardioKm.collectAsState()
-    val imperial by viewModel.imperial.collectAsState()
-
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        if (bounties.isNotEmpty()) {
-            DailyBountyCard(
-                bounties = bounties,
-                resetLabel = resetLabel,
-                onClaim = viewModel::claimBounty,
-                onLogProgress = { bounty ->
-                    if (bounty.id == "b_weight") {
-                        onLogWeight()
-                    } else {
-                        viewModel.logBountyProgress(bounty)
+    listScope.item {
+        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            if (bounties.isNotEmpty()) {
+                DailyBountyCard(
+                    bounties = bounties,
+                    resetLabel = bountyResetLabel,
+                    onClaim = actions.onClaimBounty,
+                    onLogProgress = { bounty ->
+                        if (bounty.id == "b_weight") {
+                            onLogWeight()
+                        } else {
+                            actions.onLogBountyProgress(bounty)
+                        }
                     }
-                }
-            )
-        }
+                )
+            }
 
-        if (campaigns.isNotEmpty()) {
-            WeeklyCampaignCard(
-                campaigns = campaigns,
-                resetLabel = campResetLabel,
-                onClaim = viewModel::claimCampaign
-            )
-        }
+            if (campaigns.isNotEmpty()) {
+                WeeklyCampaignCard(
+                    campaigns = campaigns,
+                    resetLabel = campaignResetLabel,
+                    onClaim = actions.onClaimCampaign
+                )
+            }
 
-        if (c != null) {
             TrophyVaultCard(
-                character = c,
+                character = character,
                 claimedIds = claimedTrophies,
                 lifetimeCardioKm = lifetimeCardioKm,
                 imperial = imperial,
-                onClaimReward = viewModel::claimTrophyReward
+                onClaimReward = actions.onClaimTrophyReward
             )
-        }
 
-        FantasyCard {
-            Text("Recent Adventures", style = MaterialTheme.typography.titleMedium, color = Gold)
-            if (characterState.recentSessions.isEmpty()) {
+            FantasyCard {
+                Text("Recent Adventures", style = MaterialTheme.typography.titleMedium, color = Gold)
                 Text("No adventures yet.", color = Color.White.copy(alpha = 0.5f))
-            } else {
-                val fmt = remember { SimpleDateFormat("EEE, MMM d", Locale.getDefault()) }
-                characterState.recentSessions.forEach { s ->
-                    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Column {
-                            Text(s.name, fontWeight = FontWeight.Bold)
-                            Text(fmt.format(Date(s.endedAt)), style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.5f))
-                        }
-                        Text("+${s.xpEarned} XP", color = Gold, fontWeight = FontWeight.Black)
-                    }
-                }
             }
         }
-    }
-}
-
-private fun sagaTab(
-    scope: LazyListScope,
-    viewModel: HeroViewModel,
-    onLogWeight: () -> Unit
-) {
-    scope.item {
-        SagaTabContent(viewModel, onLogWeight)
     }
 }
 
@@ -1472,6 +1509,42 @@ private fun masteryTab(
                     }
                 }
             }
+        }
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFF12131F)
+@Composable
+fun HeroScreenPreview() {
+    FitQuestTheme {
+        CompositionLocalProvider(
+            LocalSnackbarHostState provides remember { SnackbarHostState() }
+        ) {
+            HeroScreenContent(
+                state = HeroUiState(
+                    character = CharacterEntity(
+                        name = "Preview Hero",
+                        level = 10,
+                        currentBiome = Biome.MEADOWLANDS.name,
+                        gold = 1250,
+                        energy = 80,
+                        streak = 5,
+                        characterClass = CharacterClass.WARRIOR
+                    ),
+                    combat = CombatStats(maxHp = 100, atk = 15, def = 12, spd = 8, critPercent = 5)
+                ),
+                isPremium = true,
+                imperial = true,
+                sagaReady = true,
+                bounties = emptyList(),
+                bountyResetLabel = "12h 30m",
+                campaigns = emptyList(),
+                campaignResetLabel = "5d 4h",
+                claimedTrophies = emptySet(),
+                lifetimeCardioKm = 0.0,
+                wearLinked = true,
+                actions = HeroActions()
+            )
         }
     }
 }

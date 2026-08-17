@@ -1,22 +1,28 @@
 package com.fitnessquest.rpg.ui.components
 
 import androidx.compose.foundation.layout.Arrangement
+import com.fitnessquest.rpg.domain.Units
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -43,6 +49,9 @@ fun ActiveQuestBanner(
     accumulatedPausedMs: Long = 0L,
     setCount: Int,
     provisionalXp: Int,
+    provisionalVolumeKg: Double = 0.0,
+    provisionalDistanceKm: Double = 0.0,
+    imperial: Boolean = false,
     onResume: () -> Unit,
     onDiscard: () -> Unit,
     modifier: Modifier = Modifier
@@ -96,23 +105,25 @@ fun ActiveQuestBanner(
     Surface(
         color = MaterialTheme.colorScheme.primaryContainer,
         contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-        tonalElevation = 6.dp,
+        tonalElevation = 8.dp,
+        shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
         modifier = modifier.fillMaxWidth()
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                .padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Icon(
                 imageVector = Icons.Filled.FitnessCenter,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(24.dp)
             )
 
-            Column(modifier = Modifier.weight(1f)) {
+            Column(modifier = Modifier.weight(1f).padding(horizontal = 4.dp)) {
                 Text(
                     text = title,
                     style = MaterialTheme.typography.titleSmall,
@@ -122,51 +133,87 @@ fun ActiveQuestBanner(
                 )
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
+                    Icon(
+                        Icons.Default.Timer,
+                        contentDescription = null,
+                        modifier = Modifier.size(10.dp),
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                    )
                     Text(
                         text = timeFormatted,
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.SemiBold
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1
                     )
-                    Text(
-                        text = "•",
-                        style = MaterialTheme.typography.labelSmall
-                    )
+                    
+                    Text("•", style = MaterialTheme.typography.labelSmall)
+                    
                     Text(
                         text = "$setCount sets",
-                        style = MaterialTheme.typography.labelMedium
+                        style = MaterialTheme.typography.labelSmall,
+                        maxLines = 1
                     )
+
+                    if (provisionalVolumeKg > 0) {
+                        Text("•", style = MaterialTheme.typography.labelSmall)
+                        val displayVolume = Units.toDisplay(provisionalVolumeKg, imperial)
+                        Text(
+                            text = "${displayVolume.toInt()}${Units.label(imperial)}",
+                            style = MaterialTheme.typography.labelSmall,
+                            maxLines = 1
+                        )
+                    }
+
+                    if (provisionalDistanceKm > 0) {
+                        Text("•", style = MaterialTheme.typography.labelSmall)
+                        val displayDist = Units.kmToDisplay(provisionalDistanceKm, imperial)
+                        Text(
+                            text = "%.1f%s".format(displayDist, Units.distLabel(imperial)),
+                            style = MaterialTheme.typography.labelSmall,
+                            maxLines = 1
+                        )
+                    }
+
                     if (provisionalXp > 0) {
-                        Text(
-                            text = "•",
-                            style = MaterialTheme.typography.labelSmall
-                        )
-                        Text(
-                            text = "+$provisionalXp XP",
-                            style = MaterialTheme.typography.labelMedium,
+                        Spacer(Modifier.width(2.dp))
+                        Surface(
                             color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Bold
-                        )
+                            contentColor = MaterialTheme.colorScheme.onPrimary,
+                            shape = RoundedCornerShape(4.dp)
+                        ) {
+                            Text(
+                                text = "+$provisionalXp",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.ExtraBold,
+                                modifier = Modifier.padding(horizontal = 3.dp, vertical = 1.dp),
+                                maxLines = 1
+                            )
+                        }
                     }
                 }
             }
 
-            OutlinedButton(
-                onClick = { showDiscardConfirm = true },
-                modifier = Modifier.height(36.dp)
-            ) {
-                Text("Discard", style = MaterialTheme.typography.labelMedium)
+            IconButton(onClick = { showDiscardConfirm = true }) {
+                Icon(
+                    Icons.Default.Close,
+                    contentDescription = "Discard",
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f)
+                )
             }
 
             Button(
                 onClick = onResume,
-                modifier = Modifier.height(36.dp)
+                modifier = Modifier.height(40.dp).padding(end = 8.dp),
+                shape = RoundedCornerShape(20.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp)
             ) {
                 Icon(
                     imageVector = Icons.Filled.PlayArrow,
                     contentDescription = null,
-                    modifier = Modifier.height(16.dp)
+                    modifier = Modifier.size(18.dp)
                 )
                 Spacer(Modifier.width(4.dp))
                 Text("Resume", style = MaterialTheme.typography.labelMedium)

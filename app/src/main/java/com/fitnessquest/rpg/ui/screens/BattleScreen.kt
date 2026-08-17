@@ -22,6 +22,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
@@ -156,18 +157,63 @@ fun BattleScreen(
     val biomeRequirement by viewModel.biomeRequirement.collectAsState()
     val allProgress by viewModel.allBiomeProgress.collectAsState()
     val currentProgress by viewModel.currentBiomeProgress.collectAsState()
-    val c = battleState.character ?: return
-    val combat = battleState.combat
+    val stepsToday by viewModel.stepsToday.collectAsState()
+    val stepTracking by viewModel.stepTracking.collectAsState()
+
+    BattleScreenContent(
+        state = battleState,
+        imperial = imperial,
+        encounterClaimed = encounterClaimed,
+        biomeRequirement = biomeRequirement,
+        allBiomeProgress = allProgress,
+        currentBiomeProgress = currentProgress,
+        stepsToday = stepsToday,
+        stepTracking = stepTracking,
+        stepSensorAvailable = viewModel.stepSensorAvailable,
+        actions = BattleActions(
+            onFight = onFight,
+            onStartStepTracking = viewModel::startStepTracking,
+            onStartTravel = viewModel::startTravel,
+            onCancelTravel = viewModel::cancelTravel,
+            onClaimEncounter = viewModel::claimEncounterBonus,
+            onRefreshCharacter = viewModel::refreshCharacter
+        )
+    )
+}
+
+data class BattleActions(
+    val onFight: (Int) -> Unit = {},
+    val onStartStepTracking: () -> Unit = {},
+    val onStartTravel: (Biome) -> Unit = {},
+    val onCancelTravel: () -> Unit = {},
+    val onClaimEncounter: () -> Unit = {},
+    val onRefreshCharacter: () -> Unit = {}
+)
+
+@Composable
+fun BattleScreenContent(
+    state: BattleSelectUiState,
+    imperial: Boolean,
+    encounterClaimed: Boolean,
+    biomeRequirement: ProgressionRules.BiomeRequirement,
+    allBiomeProgress: List<BiomeProgressEntity>,
+    currentBiomeProgress: BiomeProgressEntity?,
+    stepsToday: Int,
+    stepTracking: Boolean,
+    stepSensorAvailable: Boolean,
+    actions: BattleActions
+) {
+    val c = state.character ?: return
+    val combat = state.combat
     val canFight = c.energy >= GameMath.BATTLE_ENERGY_COST
     val biome = Biome.fromName(c.currentBiome)
     val boss = MonsterCatalog.bossForBiome(biome)
     val travelTarget = c.travelTarget?.let { Biome.fromName(it) }
 
-    // Periodically refresh to recoup energy while selecting battle
     LaunchedEffect(Unit) {
         while (true) {
             delay(1.minutes)
-            viewModel.refreshCharacter()
+            actions.onRefreshCharacter()
         }
     }
 
@@ -190,37 +236,34 @@ fun BattleScreen(
                     imperial = imperial,
                     encounterClaimed = encounterClaimed,
                     biomeRequirement = biomeRequirement,
-                    allProgress = allProgress,
-                    onStartTravel = viewModel::startTravel,
-                    onCancelTravel = viewModel::cancelTravel,
-                    onClaimEncounter = viewModel::claimEncounterBonus
+                    allProgress = allBiomeProgress,
+                    onStartTravel = actions.onStartTravel,
+                    onCancelTravel = actions.onCancelTravel,
+                    onClaimEncounter = actions.onClaimEncounter
                 )
             }
 
-            if (viewModel.stepSensorAvailable) {
+            if (stepSensorAvailable) {
                 item {
-                    val stepsToday by viewModel.stepsToday.collectAsState()
-                    val tracking by viewModel.stepTracking.collectAsState()
                     StepsCard(
                         steps = stepsToday,
-                        tracking = tracking,
+                        tracking = stepTracking,
                         traveling = travelTarget != null,
                         imperial = imperial,
-                        onEnabled = viewModel::startStepTracking
+                        onEnabled = actions.onStartStepTracking
                     )
                 }
             }
 
-            // Prominent Biome Boss Progress Card
             item {
                 BossProgressCard(
                     biome = biome,
                     boss = boss,
-                    biomeProgress = currentProgress,
+                    biomeProgress = currentBiomeProgress,
                     combat = combat,
                     playerLevel = c.level,
                     enabled = canFight,
-                    onChallenge = onFight,
+                    onChallenge = actions.onFight,
                 )
             }
 
@@ -256,7 +299,7 @@ fun BattleScreen(
                     playerLevel = c.level,
                     combat = combat,
                     enabled = canFight
-                ) { onFight(monster.id) }
+                ) { actions.onFight(monster.id) }
             }
         }
     }
@@ -428,4 +471,26 @@ private fun difficultyColor(monsterLevel: Int, playerLevel: Int) = when {
     monsterLevel <= playerLevel + 1 -> MaterialTheme.colorScheme.primary
     monsterLevel <= playerLevel + 4 -> MaterialTheme.colorScheme.tertiary
     else -> MaterialTheme.colorScheme.error
+}
+
+@androidx.compose.ui.tooling.preview.Preview(showBackground = true, backgroundColor = 0xFF12131F)
+@androidx.compose.runtime.Composable
+fun BattleScreenPreview() {
+    com.fitnessquest.rpg.ui.theme.FitQuestTheme {
+        BattleScreenContent(
+            state = BattleSelectUiState(
+                character = CharacterEntity(name = "Preview Hero", level = 10, currentBiome = Biome.MEADOWLANDS.name, energy = 100),
+                combat = CombatStats(maxHp = 100, atk = 15, def = 12, spd = 8, critPercent = 5)
+            ),
+            imperial = true,
+            encounterClaimed = false,
+            biomeRequirement = ProgressionRules.BiomeRequirement.MaxBiome,
+            allBiomeProgress = emptyList(),
+            currentBiomeProgress = null,
+            stepsToday = 5000,
+            stepTracking = true,
+            stepSensorAvailable = true,
+            actions = BattleActions()
+        )
+    }
 }

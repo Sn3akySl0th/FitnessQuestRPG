@@ -1,3 +1,11 @@
+1.0.7
+- Added Real-time "Ghost Damage" visualization to party raid bosses.
+- Added ability to delete shared party quests.
+- Redesigned Active Quest Banner with improved stats (Volume, Distance) and cleaner layout.
+- Hidden quest banners during battles to prevent UI obstruction.
+- Added unit preference (Metric/Imperial) support to the Active Quest Banner.
+
+1.0.6
 - Improved update reliability for players restoring data from older FitQuest versions.
 - Strengthened database recovery safeguards to protect workout history during app upgrades.
 - Expanded automated migration and active-workout restoration coverage across every supported database version.

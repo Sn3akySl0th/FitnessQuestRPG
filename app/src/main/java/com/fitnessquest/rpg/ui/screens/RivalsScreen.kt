@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -20,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -42,11 +44,13 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.ViewModel
@@ -54,6 +58,8 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import com.fitnessquest.rpg.AppContainer
 import com.fitnessquest.rpg.data.db.WorkoutEntity
 import com.fitnessquest.rpg.data.guild.GuildMember
@@ -61,13 +67,16 @@ import com.fitnessquest.rpg.data.guild.GuildRaid
 import com.fitnessquest.rpg.data.guild.GuildState
 import com.fitnessquest.rpg.data.party.PartyBoss
 import com.fitnessquest.rpg.data.party.PartyMember
+import com.fitnessquest.rpg.data.party.PartyPulse
 import com.fitnessquest.rpg.data.party.PartyState
 import com.fitnessquest.rpg.data.party.SharedWorkout
 import com.fitnessquest.rpg.domain.CharacterClass
 import com.fitnessquest.rpg.domain.RewardBatch
+import com.fitnessquest.rpg.domain.isDemoUser
 import com.fitnessquest.rpg.ui.appContainer
 import com.fitnessquest.rpg.ui.components.AlliesHubCard
 import com.fitnessquest.rpg.ui.components.BarMeter
+import com.fitnessquest.rpg.ui.components.GhostBarMeter
 import com.fitnessquest.rpg.ui.components.GuildRaidBossCard
 import com.fitnessquest.rpg.ui.components.RewardRevealDialog
 import com.fitnessquest.rpg.ui.components.SceneBanner
@@ -76,6 +85,7 @@ import com.fitnessquest.rpg.ui.components.SectionCard
 import com.fitnessquest.rpg.ui.components.SettingsIconButton
 import com.fitnessquest.rpg.ui.effects.AudioEffects
 import com.fitnessquest.rpg.ui.rememberDockContentPadding
+import com.fitnessquest.rpg.ui.theme.FitQuestTheme
 import com.fitnessquest.rpg.ui.theme.Gold
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
@@ -160,7 +170,7 @@ class RivalsViewModel(private val container: AppContainer) : ViewModel() {
                 val myUid = container.auth.state.value.uid
                 val rawEntries = snapshot.documents.mapNotNull { doc ->
                     val name = doc.getString("name") ?: "Hero"
-                    if (com.fitnessquest.rpg.domain.isDemoUser(name) && doc.id != myUid) {
+                    if (isDemoUser(name) && doc.id != myUid) {
                         return@mapNotNull null
                     }
                     val cls = doc.getString("characterClass")
@@ -194,8 +204,6 @@ class RivalsViewModel(private val container: AppContainer) : ViewModel() {
             }
         }
     }
-
-    // ---- Party actions ----
 
     fun createParty(name: String) = partyAction {
         container.party.createParty(name).getOrThrow()
@@ -242,6 +250,17 @@ class RivalsViewModel(private val container: AppContainer) : ViewModel() {
         "\u201C${shared.name}\u201D added to your quests."
     }
 
+    fun startPartyWorkout(shared: SharedWorkout, onNavigate: (Long) -> Unit) = partyAction {
+        val id = container.party.importWorkout(shared).getOrThrow()
+        viewModelScope.launch(Dispatchers.Main) { onNavigate(id) }
+        "Starting ${shared.name}..."
+    }
+
+    fun deleteSharedWorkout(shared: SharedWorkout) = partyAction {
+        container.party.deleteSharedWorkout(shared.id).getOrThrow()
+        "Removed ${shared.name} from shared quests."
+    }
+
     fun dismissPartyMessage() {
         _partyMessage.value = null
     }
@@ -257,8 +276,6 @@ class RivalsViewModel(private val container: AppContainer) : ViewModel() {
             _partyBusy.value = false
         }
     }
-
-    // ---- Guild actions ----
 
     fun createGuild(name: String) = guildAction {
         container.guild.createGuild(name).getOrThrow()
@@ -317,30 +334,106 @@ class RivalsViewModel(private val container: AppContainer) : ViewModel() {
     }
 }
 
-private enum class AlliesSection { Hub, Party, Guild, Rivals }
-
 @Composable
-fun RivalsScreen(viewModel: RivalsViewModel = viewModel(factory = RivalsViewModel.Factory)) {
+fun RivalsScreen(
+    onStartWorkout: (Long) -> Unit,
+    viewModel: RivalsViewModel = viewModel(factory = RivalsViewModel.Factory)
+) {
     val state by viewModel.uiState.collectAsState()
     val party by viewModel.party.collectAsState()
     val guild by viewModel.guild.collectAsState()
     val rewardBatch by viewModel.rewardBatch.collectAsState()
-    var section by rememberSaveable { mutableStateOf(AlliesSection.Hub.name) }
-    val current = AlliesSection.entries.find { it.name == section } ?: AlliesSection.Hub
+    val myWorkouts by viewModel.myWorkouts.collectAsState()
+    val partyBusy by viewModel.partyBusy.collectAsState()
+    val partyMessage by viewModel.partyMessage.collectAsState()
+    val guildBusy by viewModel.guildBusy.collectAsState()
+    val guildMessage by viewModel.guildMessage.collectAsState()
+
+    RivalsScreenContent(
+        state = state,
+        party = party,
+        guild = guild,
+        rewardBatch = rewardBatch,
+        myWorkouts = myWorkouts,
+        myUid = viewModel.myUid,
+        partyBusy = partyBusy,
+        partyMessage = partyMessage,
+        guildBusy = guildBusy,
+        guildMessage = guildMessage,
+        actions = RivalsActions(
+            onStartWorkout = onStartWorkout,
+            onRefresh = viewModel::refresh,
+            onCreateParty = viewModel::createParty,
+            onJoinParty = viewModel::joinParty,
+            onLeaveParty = viewModel::leaveParty,
+            onClaimBossReward = viewModel::claimBossReward,
+            onSummonNextBoss = viewModel::summonNextBoss,
+            onShareWorkout = viewModel::shareWorkout,
+            onImportWorkout = viewModel::importWorkout,
+            onStartPartyWorkout = viewModel::startPartyWorkout,
+            onDeleteSharedWorkout = viewModel::deleteSharedWorkout,
+            onDismissPartyMessage = viewModel::dismissPartyMessage,
+            onCreateGuild = viewModel::createGuild,
+            onJoinGuild = viewModel::joinGuild,
+            onLeaveGuild = viewModel::leaveGuild,
+            onClaimGuildRaidReward = viewModel::claimGuildRaidReward,
+            onDismissRewardReveal = viewModel::dismissRewardReveal,
+            onDismissGuildMessage = viewModel::dismissGuildMessage
+        )
+    )
+}
+
+data class RivalsActions(
+    val onStartWorkout: (Long) -> Unit = {},
+    val onRefresh: () -> Unit = {},
+    val onCreateParty: (String) -> Unit = {},
+    val onJoinParty: (String) -> Unit = {},
+    val onLeaveParty: () -> Unit = {},
+    val onClaimBossReward: () -> Unit = {},
+    val onSummonNextBoss: () -> Unit = {},
+    val onShareWorkout: (Long) -> Unit = {},
+    val onImportWorkout: (SharedWorkout) -> Unit = {},
+    val onStartPartyWorkout: (SharedWorkout, (Long) -> Unit) -> Unit = { _, _ -> },
+    val onDeleteSharedWorkout: (SharedWorkout) -> Unit = {},
+    val onDismissPartyMessage: () -> Unit = {},
+    val onCreateGuild: (String) -> Unit = {},
+    val onJoinGuild: (String) -> Unit = {},
+    val onLeaveGuild: () -> Unit = {},
+    val onClaimGuildRaidReward: () -> Unit = {},
+    val onDismissRewardReveal: () -> Unit = {},
+    val onDismissGuildMessage: () -> Unit = {}
+)
+
+@Composable
+fun RivalsScreenContent(
+    state: RivalsUiState,
+    party: PartyState,
+    guild: GuildState,
+    rewardBatch: RewardBatch?,
+    myWorkouts: List<WorkoutEntity>,
+    myUid: String?,
+    partyBusy: Boolean,
+    partyMessage: String?,
+    guildBusy: Boolean,
+    guildMessage: String?,
+    actions: RivalsActions
+) {
+    var section by rememberSaveable { mutableStateOf(AllSection.Hub.name) }
+    val current = AllSection.entries.find { it.name == section } ?: AllSection.Hub
 
     Column(Modifier.fillMaxSize()) {
         SceneBanner(
             kind = SceneKind.ALLIES,
             title = "ALLIES",
             tagline = when (current) {
-                AlliesSection.Hub -> "Stronger together"
-                AlliesSection.Party -> "Small crew. Shared raids."
-                AlliesSection.Guild -> "Weekly guild colossus"
-                AlliesSection.Rivals -> "Ranked by XP this week"
+                AllSection.Hub -> "Stronger together"
+                AllSection.Party -> "Small crew. Shared raids."
+                AllSection.Guild -> "Weekly guild colossus"
+                AllSection.Rivals -> "Ranked by XP this week"
             }
         ) {
-            if (current == AlliesSection.Rivals) {
-                IconButton(onClick = viewModel::refresh, enabled = !state.loading) {
+            if (current == AllSection.Rivals) {
+                IconButton(onClick = actions.onRefresh, enabled = !state.loading) {
                     Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
                 }
             }
@@ -348,36 +441,38 @@ fun RivalsScreen(viewModel: RivalsViewModel = viewModel(factory = RivalsViewMode
         }
 
         when (current) {
-            AlliesSection.Hub -> AlliesHub(
+            AllSection.Hub -> AlliesHub(
                 party = party,
                 guild = guild,
-                myUid = viewModel.myUid,
+                myUid = myUid,
                 myRank = state.myRank,
                 boardSize = state.entries.size,
-                onParty = { section = AlliesSection.Party.name },
-                onGuild = { section = AlliesSection.Guild.name },
-                onRivals = { section = AlliesSection.Rivals.name },
-                onClaimRaidLoot = viewModel::claimGuildRaidReward
+                onParty = { section = AllSection.Party.name },
+                onGuild = { section = AllSection.Guild.name },
+                onRivals = { section = AllSection.Rivals.name },
+                onClaimRaidLoot = actions.onClaimGuildRaidReward
             )
-            AlliesSection.Party -> Column(Modifier.fillMaxSize()) {
-                AlliesBackRow(label = "Party") { section = AlliesSection.Hub.name }
-                PartyTab(viewModel)
+            AllSection.Party -> Column(Modifier.fillMaxSize()) {
+                AlliesBackRow(label = "Party") { section = AllSection.Hub.name }
+                PartyTabContent(state, party, partyBusy, partyMessage, myWorkouts, myUid, actions)
             }
-            AlliesSection.Guild -> Column(Modifier.fillMaxSize()) {
-                AlliesBackRow(label = "Guild") { section = AlliesSection.Hub.name }
-                GuildTab(viewModel)
+            AllSection.Guild -> Column(Modifier.fillMaxSize()) {
+                AlliesBackRow(label = "Guild") { section = AllSection.Hub.name }
+                GuildTabContent(guild, guildBusy, guildMessage, myUid, actions)
             }
-            AlliesSection.Rivals -> Column(Modifier.fillMaxSize()) {
-                AlliesBackRow(label = "Rivals board") { section = AlliesSection.Hub.name }
-                LeaderboardTab(state)
+            AllSection.Rivals -> Column(Modifier.fillMaxSize()) {
+                AlliesBackRow(label = "Rivals board") { section = AllSection.Hub.name }
+                LeaderboardTab(state, myUid)
             }
         }
     }
 
     rewardBatch?.let { batch ->
-        RewardRevealDialog(batch = batch, onDismiss = viewModel::dismissRewardReveal)
+        RewardRevealDialog(batch = batch, onDismiss = actions.onDismissRewardReveal)
     }
 }
+
+private enum class AllSection { Hub, Party, Guild, Rivals }
 
 @Composable
 private fun AlliesBackRow(label: String, onBack: () -> Unit) {
@@ -464,10 +559,8 @@ private fun AlliesHub(
     }
 }
 
-// ---- Leaderboard tab ----
-
 @Composable
-private fun LeaderboardTab(state: RivalsUiState) {
+private fun LeaderboardTab(state: RivalsUiState, myUid: String?) {
     var query by remember { mutableStateOf("") }
     val filtered = remember(state.entries, query) {
         val q = query.trim()
@@ -542,7 +635,7 @@ private fun LeaderboardTab(state: RivalsUiState) {
                 RivalRow(
                     rank = rank,
                     entry = entry,
-                    isMe = entry.uid == state.myUid
+                    isMe = entry.uid == myUid
                 )
             }
         }
@@ -618,14 +711,16 @@ private fun RivalRow(rank: Int, entry: RivalEntry, isMe: Boolean) {
     }
 }
 
-// ---- Party tab ----
-
 @Composable
-private fun PartyTab(viewModel: RivalsViewModel) {
-    val party by viewModel.party.collectAsState()
-    val busy by viewModel.partyBusy.collectAsState()
-    val message by viewModel.partyMessage.collectAsState()
-
+private fun PartyTabContent(
+    state: RivalsUiState,
+    party: PartyState,
+    busy: Boolean,
+    message: String?,
+    myWorkouts: List<WorkoutEntity>,
+    myUid: String?,
+    actions: RivalsActions
+) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = rememberDockContentPadding(),
@@ -640,7 +735,7 @@ private fun PartyTab(viewModel: RivalsViewModel) {
                             style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier.weight(1f)
                         )
-                        TextButton(onClick = viewModel::dismissPartyMessage) { Text("OK") }
+                        TextButton(onClick = actions.onDismissPartyMessage) { Text("OK") }
                     }
                 }
             }
@@ -653,17 +748,18 @@ private fun PartyTab(viewModel: RivalsViewModel) {
                 }
             }
         } else if (!party.inParty) {
-            item { PartyLobby(busy = busy, onCreate = viewModel::createParty, onJoin = viewModel::joinParty) }
+            item { PartyLobby(busy = busy, onCreate = actions.onCreateParty, onJoin = actions.onJoinParty) }
         } else {
             item { PartyHeaderCard(party) }
             party.boss?.let { boss ->
                 item {
                     RaidBossCard(
                         boss = boss,
-                        myUid = viewModel.myUid,
+                        pulses = party.activePulses,
+                        myUid = myUid,
                         busy = busy,
-                        onClaim = viewModel::claimBossReward,
-                        onSummon = viewModel::summonNextBoss
+                        onClaim = actions.onClaimBossReward,
+                        onSummon = actions.onSummonNextBoss
                     )
                 }
             }
@@ -671,25 +767,102 @@ private fun PartyTab(viewModel: RivalsViewModel) {
                 Text("Party members", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             }
             items(party.members.size) { index ->
-                PartyMemberRow(party.members[index], isMe = party.members[index].uid == viewModel.myUid)
+                val member = party.members[index]
+                val pulse = party.activePulses.find { it.uid == member.uid }
+                PartyMemberRow(
+                    member = member,
+                    isMe = member.uid == myUid,
+                    activeEffects = pulse?.effects.orEmpty()
+                )
             }
             item {
                 SharedWorkoutsCard(
                     party = party,
-                    myUid = viewModel.myUid,
-                    myWorkouts = viewModel.myWorkouts.collectAsState().value,
+                    myUid = myUid,
+                    myWorkouts = myWorkouts,
                     busy = busy,
-                    onShare = viewModel::shareWorkout,
-                    onImport = viewModel::importWorkout
+                    onShare = actions.onShareWorkout,
+                    onImport = actions.onImportWorkout,
+                    onStart = { shared -> actions.onStartPartyWorkout(shared, actions.onStartWorkout) },
+                    onDelete = actions.onDeleteSharedWorkout
                 )
             }
             item {
                 TextButton(
-                    onClick = viewModel::leaveParty,
+                    onClick = actions.onLeaveParty,
                     enabled = !busy,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text("Leave party", color = MaterialTheme.colorScheme.error)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun GuildTabContent(
+    guild: GuildState,
+    busy: Boolean,
+    message: String?,
+    myUid: String?,
+    actions: RivalsActions
+) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = rememberDockContentPadding(),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        message?.let { msg ->
+            item {
+                SectionCard {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            msg,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.weight(1f)
+                        )
+                        TextButton(onClick = actions.onDismissGuildMessage) { Text("OK") }
+                    }
+                }
+            }
+        }
+
+        if (guild.loading) {
+            item {
+                Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+            }
+        } else if (!guild.inGuild) {
+            item {
+                GuildLobby(busy = busy, onCreate = actions.onCreateGuild, onJoin = actions.onJoinGuild)
+            }
+        } else {
+            item { GuildHeaderCard(guild) }
+            guild.raid?.let { raid ->
+                item {
+                    GuildRaidCard(
+                        raid = raid,
+                        myUid = myUid,
+                        busy = busy,
+                        onClaim = actions.onClaimGuildRaidReward
+                    )
+                }
+            }
+            item {
+                Text("Guild members", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            }
+            items(guild.members.size) { index ->
+                GuildMemberRow(guild.members[index], isMe = guild.members[index].uid == myUid)
+            }
+            item {
+                TextButton(
+                    onClick = actions.onLeaveGuild,
+                    enabled = !busy,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Leave guild", color = MaterialTheme.colorScheme.error)
                 }
             }
         }
@@ -804,6 +977,7 @@ private fun PartyHeaderCard(party: PartyState) {
 @Composable
 private fun RaidBossCard(
     boss: PartyBoss,
+    pulses: List<PartyPulse>,
     myUid: String?,
     busy: Boolean,
     onClaim: () -> Unit,
@@ -811,6 +985,9 @@ private fun RaidBossCard(
 ) {
     val myDamage = myUid?.let { boss.damageByUid[it] } ?: 0L
     val claimed = myUid != null && myUid in boss.claimedBy
+    val activeDamage = pulses.sumOf { it.xp }.toLong()
+    val ghostHp = (boss.hp - activeDamage).coerceAtLeast(0L)
+
     SectionCard {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(boss.emoji, style = MaterialTheme.typography.displaySmall)
@@ -844,12 +1021,29 @@ private fun RaidBossCard(
                 ) { Text("Summon next") }
             }
         } else {
-            BarMeter(
+            val activeDamage = pulses.sumOf { it.xp }.toLong()
+            val ghostHp = (boss.hp - activeDamage).coerceAtLeast(0L)
+            GhostBarMeter(
                 label = "Boss HP",
-                valueText = "${boss.hp.coerceAtLeast(0)} / ${boss.maxHp}",
-                progress = (boss.hp.toFloat() / boss.maxHp).coerceIn(0f, 1f),
-                color = MaterialTheme.colorScheme.error
+                valueText = if (activeDamage > 0) "${ghostHp} / ${boss.hp} HP" else "${boss.hp} / ${boss.maxHp}",
+                actualProgress = (boss.hp.toFloat() / boss.maxHp).coerceIn(0f, 1f),
+                ghostProgress = (ghostHp.toFloat() / boss.maxHp).coerceIn(0f, 1f),
+                color = MaterialTheme.colorScheme.error,
+                ghostColor = Color.White.copy(alpha = 0.25f)
             )
+            if (pulses.isNotEmpty()) {
+                val pulseEffects = pulses.flatMap { it.effects }.distinct().joinToString(" ")
+                Text(
+                    text = buildString {
+                        append("\u2694\uFE0F ${pulses.size} hero${if (pulses.size > 1) "es" else ""} striking!")
+                        if (pulseEffects.isNotEmpty()) append(" Status: $pulseEffects")
+                        append(" Pending: $activeDamage XP")
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold
+                )
+            }
             Text(
                 "Every XP point your party earns from workouts strikes the boss. " +
                     "Its health scales with your roster - everyone must fight!",
@@ -869,7 +1063,11 @@ private fun RaidBossCard(
 }
 
 @Composable
-private fun PartyMemberRow(member: PartyMember, isMe: Boolean) {
+private fun PartyMemberRow(
+    member: PartyMember,
+    isMe: Boolean,
+    activeEffects: List<String> = emptyList()
+) {
     val scheme = MaterialTheme.colorScheme
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -881,21 +1079,36 @@ private fun PartyMemberRow(member: PartyMember, isMe: Boolean) {
             Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
-                Modifier
-                    .size(38.dp)
-                    .background(scheme.surfaceVariant, CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(member.classEmoji)
+            Box(contentAlignment = Alignment.BottomEnd) {
+                Box(
+                    Modifier
+                        .size(38.dp)
+                        .background(scheme.surfaceVariant, CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(member.classEmoji)
+                }
+                if (activeEffects.isNotEmpty()) {
+                    Text(
+                        activeEffects.first(),
+                        modifier = Modifier.offset(x = 4.dp, y = 4.dp),
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                }
             }
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
-                Text(if (isMe) "${member.name} (you)" else member.name, fontWeight = FontWeight.SemiBold)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(if (isMe) "${member.name} (you)" else member.name, fontWeight = FontWeight.SemiBold)
+                    if (activeEffects.size > 1) {
+                        Spacer(Modifier.width(4.dp))
+                        Text(activeEffects.drop(1).joinToString(" "), style = MaterialTheme.typography.labelSmall)
+                    }
+                }
                 Text(
                     "Lv ${member.level} \u00B7 ${member.weeklyXp} XP this week",
                     style = MaterialTheme.typography.labelSmall,
-                    color = scheme.onSurfaceVariant
+                    color = if (isMe) scheme.onPrimaryContainer.copy(alpha = 0.8f) else scheme.onSurfaceVariant
                 )
             }
             if (member.bossDamage > 0) {
@@ -916,7 +1129,9 @@ private fun SharedWorkoutsCard(
     myWorkouts: List<WorkoutEntity>,
     busy: Boolean,
     onShare: (Long) -> Unit,
-    onImport: (SharedWorkout) -> Unit
+    onImport: (SharedWorkout) -> Unit,
+    onStart: (SharedWorkout) -> Unit,
+    onDelete: (SharedWorkout) -> Unit
 ) {
     var showPicker by remember { mutableStateOf(false) }
 
@@ -952,7 +1167,17 @@ private fun SharedWorkoutsCard(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
+                    TextButton(onClick = { onStart(shared) }, enabled = !busy) { Text("Start") }
                     TextButton(onClick = { onImport(shared) }, enabled = !busy) { Text("Import") }
+                    if (shared.authorUid == myUid) {
+                        IconButton(onClick = { onDelete(shared) }, enabled = !busy) {
+                            Icon(
+                                Icons.Default.Delete,
+                                contentDescription = "Delete",
+                                tint = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -986,75 +1211,6 @@ private fun SharedWorkoutsCard(
                 }
                 TextButton(onClick = { showPicker = false }, modifier = Modifier.fillMaxWidth()) {
                     Text("Cancel")
-                }
-            }
-        }
-    }
-}
-
-// ---- Guild tab ----
-
-@Composable
-private fun GuildTab(viewModel: RivalsViewModel) {
-    val guild by viewModel.guild.collectAsState()
-    val busy by viewModel.guildBusy.collectAsState()
-    val message by viewModel.guildMessage.collectAsState()
-
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = rememberDockContentPadding(),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        message?.let { msg ->
-            item {
-                SectionCard {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            msg,
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.weight(1f)
-                        )
-                        TextButton(onClick = viewModel::dismissGuildMessage) { Text("OK") }
-                    }
-                }
-            }
-        }
-
-        if (guild.loading) {
-            item {
-                Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
-                }
-            }
-        } else if (!guild.inGuild) {
-            item {
-                GuildLobby(busy = busy, onCreate = viewModel::createGuild, onJoin = viewModel::joinGuild)
-            }
-        } else {
-            item { GuildHeaderCard(guild) }
-            guild.raid?.let { raid ->
-                item {
-                    GuildRaidCard(
-                        raid = raid,
-                        myUid = viewModel.myUid,
-                        busy = busy,
-                        onClaim = viewModel::claimGuildRaidReward
-                    )
-                }
-            }
-            item {
-                Text("Guild members", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            }
-            items(guild.members.size) { index ->
-                GuildMemberRow(guild.members[index], isMe = guild.members[index].uid == viewModel.myUid)
-            }
-            item {
-                TextButton(
-                    onClick = viewModel::leaveGuild,
-                    enabled = !busy,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Leave guild", color = MaterialTheme.colorScheme.error)
                 }
             }
         }
@@ -1262,5 +1418,31 @@ private fun GuildMemberRow(member: GuildMember, isMe: Boolean) {
                 )
             }
         }
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFF12131F)
+@Composable
+fun RivalsScreenPreview() {
+    FitQuestTheme {
+        RivalsScreenContent(
+            state = RivalsUiState(
+                loading = false,
+                entries = listOf(
+                    RivalEntry("1", "Rival 1", "⚔️", 15, 500, 5000, 7),
+                    RivalEntry("2", "Rival 2", "🏹", 12, 300, 3000, 3)
+                )
+            ),
+            party = PartyState(loading = false, partyId = "P1", name = "Preview Party", inviteCode = "ABCDEF"),
+            guild = GuildState(loading = false, guildId = null),
+            rewardBatch = null,
+            myWorkouts = emptyList(),
+            myUid = "1",
+            partyBusy = false,
+            partyMessage = null,
+            guildBusy = false,
+            guildMessage = null,
+            actions = RivalsActions()
+        )
     }
 }

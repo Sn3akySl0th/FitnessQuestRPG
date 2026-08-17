@@ -12,6 +12,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalInspectionMode
 import kotlin.math.abs
 
 /**
@@ -23,9 +24,18 @@ import kotlin.math.abs
 fun rememberDeviceTilt(): State<Offset> {
     val context = LocalContext.current
     val tiltState = remember { mutableStateOf(Offset.Zero) }
+    val isPreview = LocalInspectionMode.current
 
-    DisposableEffect(context) {
-        val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+    DisposableEffect(context, isPreview) {
+        if (isPreview) {
+            return@DisposableEffect onDispose {}
+        }
+        
+        val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as? SensorManager
+        if (sensorManager == null) {
+            return@DisposableEffect onDispose {}
+        }
+
         // TYPE_GRAVITY is best for tilt without linear acceleration noise, but fallback to ACCELEROMETER.
         val sensor = sensorManager.getDefaultSensor(Sensor.TYPE_GRAVITY)
             ?: sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)

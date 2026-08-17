@@ -2,6 +2,7 @@ package com.fitnessquest.rpg.ui.screens
 
 import android.view.WindowManager
 import androidx.activity.compose.LocalActivity
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
@@ -9,6 +10,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -32,45 +34,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Bolt
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.FitnessCenter
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.LocalFireDepartment
-import androidx.compose.material.icons.filled.North
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.SkipNext
-import androidx.compose.material.icons.filled.SkipPrevious
-import androidx.compose.material.icons.filled.Timer
-import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LocalMinimumInteractiveComponentSize
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -85,9 +53,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -138,6 +108,8 @@ import com.fitnessquest.rpg.domain.RewardBatch
 import com.fitnessquest.rpg.domain.SessionPr
 import com.fitnessquest.rpg.domain.SessionResult
 import com.fitnessquest.rpg.domain.SetType
+import com.fitnessquest.rpg.data.party.PartyBoss
+import com.fitnessquest.rpg.data.party.PartyPulse
 import com.fitnessquest.rpg.domain.StatGains
 import com.fitnessquest.rpg.domain.Units
 import com.fitnessquest.rpg.notifications.WorkoutNotificationController
@@ -149,6 +121,7 @@ import com.fitnessquest.rpg.ui.components.ConfettiOverlay
 import com.fitnessquest.rpg.ui.components.ExerciseDetailDialog
 import com.fitnessquest.rpg.ui.components.ExercisePickerDialog
 import com.fitnessquest.rpg.ui.components.FloatingBurst
+import com.fitnessquest.rpg.ui.components.GhostBarMeter
 import com.fitnessquest.rpg.ui.components.FloatingTextBurst
 import com.fitnessquest.rpg.ui.components.LevelUpModal
 import com.fitnessquest.rpg.ui.components.PlateCalculatorDialog
@@ -265,7 +238,10 @@ data class ActiveSessionUiState(
     val currentExerciseIndex: Int = 0,
     val isDemo: Boolean = false,
     val media: MediaState = MediaState(),
-    val originalWorkoutId: Long? = null
+    val originalWorkoutId: Long? = null,
+    val partyBoss: PartyBoss? = null,
+    val partyPulses: List<PartyPulse> = emptyList(),
+    val hasPrAchievement: Boolean = false,
 ) {
     val totalSets: Int get() = exercises.sumOf { it.loggedSets.size }
     val totalXp: Int get() = exercises.sumOf { ex -> ex.loggedSets.sumOf { it.xp } }
@@ -274,7 +250,7 @@ data class ActiveSessionUiState(
 
 class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(ActiveSessionUiState(hasAi = container.gemini.hasKey))
+    private val _uiState = MutableStateFlow(ActiveSessionUiState(hasAi = container.gemini.isAvailable))
     val uiState: StateFlow<ActiveSessionUiState> = _uiState
 
     val imperial: StateFlow<Boolean> = container.prefs.imperial
@@ -422,7 +398,16 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
                     originalWorkoutId = session.workoutId
                 )
             }
-            publishWearState()
+            // Pulse current XP and effects to party so they see "ghost damage" and status
+            val currentXp = exercises.sumOf { ex -> ex.loggedSets.sumOf { it.xp } }
+            if (!demoMode && currentXp > 0) {
+                val s = _uiState.value
+                val effects = mutableListOf<String>()
+                if (s.hasPrAchievement) effects += "\u26A1" // CRIT
+                if (s.heatStreak >= 3) effects += "\uD83E\uDE78" // BLEED
+                if ((s.heartRateBpm ?: 0) > s.maxHeartRate * 0.9) effects += "\uD83D\uDD25" // BURN
+                container.party.sendActivePulse(currentXp, effects)
+            }
         }.launchIn(viewModelScope)
 
         viewModelScope.launch {
@@ -433,6 +418,10 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
                 delay(1000L)
             }
         }
+
+        container.party.state.onEach { party ->
+            _uiState.update { it.copy(partyBoss = party.boss, partyPulses = party.activePulses) }
+        }.launchIn(viewModelScope)
     }
 
     fun toggleMusic() = container.music.togglePlayPause()
@@ -636,10 +625,13 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
                     heatStreak = heatStreak,
                     restDurationSec = prior.restDurationSec
                 )
+                // Trigger auto-coach after DB write to ensure uiState picks up the new set
+                maybeAutoCoach(index)
             }
         }
 
-        maybeAutoCoach(index)
+        if (demoMode) maybeAutoCoach(index)
+        
         maybeMomentLoot(index, effectiveWeight, reps, rir)
         maybeAmbushOffer()
         if (fromWatch) wearBridge.noteSetLogged()
@@ -724,7 +716,8 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
             _uiState.update {
                 it.copy(
                     momentSpoil = MomentSpoil(labels = labels, storyPending = it.hasAi, isPr = isPr),
-                    momentSpoilsUsed = it.momentSpoilsUsed + 1
+                    momentSpoilsUsed = it.momentSpoilsUsed + 1,
+                    hasPrAchievement = it.hasPrAchievement || isPr
                 )
             }
             if (isPr) {
@@ -836,25 +829,41 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
         val s = _uiState.value
         if (!s.hasAi || s.coachLoading) return
         val ex = s.exercises.getOrNull(index) ?: return
-        if (ex.loggedSets.size < ex.targetSets) return
-        if (!coachedExercises.add(ex.name)) return
+        // Auto-coach after every set of a new exercise to keep the loop tight,
+        // or when an exercise is fully completed.
+        if (ex.loggedSets.isEmpty()) return
+        
+        // Use a unique key to prevent spamming the same exercise coaching too often
+        val coachingKey = "${ex.name}_${ex.loggedSets.size}"
+        if (!coachedExercises.add(coachingKey)) return
+        
         if (s.exercises.none { it.loggedSets.isEmpty() }) return
         askCoach()
     }
 
-    fun askCoach() {
+    fun askCoach(manual: Boolean = false, simulateHighPerf: Boolean = false) {
         val s = _uiState.value
-        if (!s.hasAi || s.coachLoading || s.totalSets == 0) return
+        if (!s.hasAi || s.coachLoading) return
+        if (!manual && s.totalSets == 0) return
+        
         _uiState.update { it.copy(coachLoading = true, coach = null, coachError = null) }
+
         viewModelScope.launch {
             try {
-                val performed = s.exercises.filter { it.loggedSets.isNotEmpty() }.joinToString("\n") { ex ->
-                    val sets = ex.loggedSets.joinToString(", ") { set ->
-                        val effort = set.rir?.let { " @$it RIR" }.orEmpty()
-                        "${set.weightKg}kg x ${set.reps}$effort"
+                val performed = if (simulateHighPerf) {
+                    s.exercises.firstOrNull()?.let { ex ->
+                        "- ${ex.name}: ${ex.targetWeightKg ?: 100.0}kg x ${ex.targetReps + 5} @0 RIR (Exceeded target!)"
+                    } ?: "Squat: 100kg x 20 @0 RIR"
+                } else {
+                    s.exercises.filter { it.loggedSets.isNotEmpty() }.joinToString("\n") { ex ->
+                        val sets = ex.loggedSets.joinToString(", ") { set ->
+                            val effort = set.rir?.let { " @$it RIR" }.orEmpty()
+                            "${set.weightKg}kg x ${set.reps}$effort"
+                        }
+                        "- ${ex.name}: $sets"
                     }
-                    "- ${ex.name}: $sets"
                 }
+                
                 val remaining = s.exercises.filter { it.loggedSets.isEmpty() }
                     .joinToString("\n") { "- ${it.name} (${it.targetSets}x${it.targetReps})" }
                     .ifBlank { "(none)" }
@@ -862,7 +871,9 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
                 val hrContext = s.heartRateBpm?.let { "\nHR: $it bpm" }.orEmpty()
                 val history = container.repository.recentWorkoutsSummary(limit = 5)
 
-                container.gemini.coachSession(performed, remaining, container.prefs.profile.value, history + hrContext)
+                val contextPrefix = if (simulateHighPerf) "CRITICAL: The player just SMASHED their targets. You MUST increase intensity significantly for remaining exercises.\n" else ""
+
+                container.gemini.coachSession(performed, remaining, container.prefs.profile.value, contextPrefix + history + hrContext)
                     .onSuccess { advice ->
                         val valid = advice.changes.filter { change ->
                             _uiState.value.exercises.any { it.loggedSets.isEmpty() && it.name.equals(change.exercise, true) }
@@ -870,10 +881,10 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
                         _uiState.update { it.copy(coachLoading = false, coach = advice.copy(changes = valid)) }
                     }
                     .onFailure { e ->
-                        _uiState.update { it.copy(coachLoading = false, coachError = "Coach is unavailable right now.") }
+                        _uiState.update { it.copy(coachLoading = false, coachError = e.message ?: "Coach is unavailable right now.") }
                     }
             } catch (e: Exception) {
-                _uiState.update { it.copy(coachLoading = false, coachError = "Coach check-in failed.") }
+                _uiState.update { it.copy(coachLoading = false, coachError = e.message ?: "Coach check-in failed.") }
             }
         }
     }
@@ -1039,7 +1050,10 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
 
     fun abandon() {
         viewModelScope.launch {
-            if (!demoMode) container.repository.discardActiveSession()
+            if (!demoMode) {
+                container.repository.discardActiveSession()
+                container.party.clearActivePulse()
+            }
             wearBridge.unbind()
             workoutNotification.cancel()
         }
@@ -1080,6 +1094,7 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
                     distanceMeters = state.wearDistanceMeters,
                     activeDurationMs = state.wearActiveDurationMs
                 )
+                container.party.clearActivePulse()
                 OutboxWorker.enqueue(container.app)
 
                 val summaryItems = state.exercises.map { ex ->
@@ -1096,7 +1111,7 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
                     )
                 }
 
-                val wantPraise = container.gemini.hasKey
+                val wantPraise = container.gemini.isAvailable
                 _uiState.update {
                     it.copy(finish = SessionFinish(result, praisePending = wantPraise, caloriesKcal = state.wearCaloriesKcal?.toInt(), activeDurationMs = state.wearActiveDurationMs, zoneWorkSec = state.wearZoneWorkSec, zoneHighSec = state.wearZoneHighSec, steps = state.wearSteps, distanceMeters = state.wearDistanceMeters, summaryItems = summaryItems))
                 }
@@ -1157,6 +1172,97 @@ fun ActiveSessionScreen(
     }
     val state by viewModel.uiState.collectAsState()
     val imperial by viewModel.imperial.collectAsState()
+    val effortMethod by viewModel.effortMethod.collectAsState()
+    val sessionDurationMs by viewModel.sessionDurationMs.collectAsState()
+    val customCardioPrograms by viewModel.customCardioPrograms.collectAsState()
+
+    ActiveSessionScreenContent(
+        state = state,
+        imperial = imperial,
+        effortMethod = effortMethod,
+        sessionDurationMs = sessionDurationMs,
+        customCardioPrograms = customCardioPrograms,
+        onDone = onDone,
+        onAmbushFight = onAmbushFight,
+        onFinished = onFinished ?: onDone,
+        actions = ActiveSessionActions(
+            onToggleMusic = viewModel::toggleMusic,
+            onSkipMusic = viewModel::skipMusic,
+            onPrevMusic = viewModel::prevMusic,
+            onSetManualDuration = viewModel::setManualDuration,
+            onAddExercise = viewModel::addExercise,
+            onRemoveExercise = viewModel::removeExercise,
+            onMoveExercise = viewModel::moveExercise,
+            onSwapExercise = viewModel::swapExercise,
+            onAiSwap = viewModel::aiSwap,
+            onLogSet = viewModel::logSet,
+            onRemoveLastSet = viewModel::removeLastSet,
+            onSkipRest = viewModel::skipRest,
+            onExtendRest = viewModel::extendRest,
+            onSetRestDuration = viewModel::setRestDuration,
+            onAbandon = viewModel::abandon,
+            onFinish = viewModel::finish,
+            onAskCoach = viewModel::askCoach,
+            onApplyCoachChanges = viewModel::applyCoachChanges,
+            onDismissCoach = viewModel::dismissCoach,
+            onDismissSwapNote = viewModel::dismissSwapNote,
+            onDismissWearBanner = viewModel::dismissWearBanner,
+            onDismissFinishError = viewModel::dismissFinishError,
+            onDismissCoachError = viewModel::dismissCoachError,
+            onDismissMomentSpoil = viewModel::dismissMomentSpoil,
+            onDeclineAmbush = viewModel::declineAmbush,
+            onAcceptAmbush = viewModel::acceptAmbush,
+            onAddCustomCardioProgram = viewModel::addCustomCardioProgram,
+            getPreviousPerformance = viewModel::getPreviousPerformance,
+            bodyWeightKgOrNull = viewModel::bodyWeightKgOrNull
+        )
+    )
+}
+
+data class ActiveSessionActions(
+    val onToggleMusic: () -> Unit = {},
+    val onSkipMusic: () -> Unit = {},
+    val onPrevMusic: () -> Unit = {},
+    val onSetManualDuration: (Int) -> Unit = {},
+    val onAddExercise: (String, ExerciseCategory) -> Unit = { _, _ -> },
+    val onRemoveExercise: (Int) -> Unit = {},
+    val onMoveExercise: (Int, Int) -> Unit = { _, _ -> },
+    val onSwapExercise: (Int, String, ExerciseCategory, Boolean) -> Unit = { _, _, _, _ -> },
+    val onAiSwap: (Int, Boolean) -> Unit = { _, _ -> },
+    val onLogSet: (Int, Double, Int, Double, Double, Int?, Int?, Int?, Double, Double, String, SetType, Boolean) -> Unit = { _, _, _, _, _, _, _, _, _, _, _, _, _ -> },
+    val onRemoveLastSet: (Int) -> Unit = {},
+    val onSkipRest: () -> Unit = {},
+    val onExtendRest: (Int) -> Unit = {},
+    val onSetRestDuration: (Int) -> Unit = {},
+    val onAbandon: () -> Unit = {},
+    val onFinish: () -> Unit = {},
+    val onAskCoach: (Boolean, Boolean) -> Unit = { _, _ -> },
+    val onApplyCoachChanges: () -> Unit = {},
+    val onDismissCoach: () -> Unit = {},
+    val onDismissSwapNote: () -> Unit = {},
+    val onDismissWearBanner: () -> Unit = {},
+    val onDismissFinishError: () -> Unit = {},
+    val onDismissCoachError: () -> Unit = {},
+    val onDismissMomentSpoil: () -> Unit = {},
+    val onDeclineAmbush: () -> Unit = {},
+    val onAcceptAmbush: ((Int) -> Unit) -> Unit = {},
+    val onAddCustomCardioProgram: (String) -> Unit = {},
+    val getPreviousPerformance: suspend (String) -> List<SetLogEntity> = { emptyList() },
+    val bodyWeightKgOrNull: () -> Double? = { null }
+)
+
+@Composable
+fun ActiveSessionScreenContent(
+    state: ActiveSessionUiState,
+    imperial: Boolean,
+    effortMethod: EffortMethod,
+    sessionDurationMs: Long,
+    customCardioPrograms: Set<String>,
+    onDone: () -> Unit,
+    onAmbushFight: (Int) -> Unit,
+    onFinished: () -> Unit,
+    actions: ActiveSessionActions
+) {
     val listState = rememberLazyListState()
     var showPicker by remember { mutableStateOf(false) }
     var swapFor by remember { mutableStateOf<Int?>(null) }
@@ -1166,7 +1272,7 @@ fun ActiveSessionScreen(
     data class PendingSwap(val index: Int, val name: String, val category: ExerciseCategory, val isAi: Boolean = false)
     var pendingSwap by remember { mutableStateOf<PendingSwap?>(null) }
 
-    if (pendingSwap != null && state.originalWorkoutId != null && state.originalWorkoutId!! > 0) {
+    if (pendingSwap != null && state.originalWorkoutId != null && state.originalWorkoutId > 0) {
         AlertDialog(
             onDismissRequest = { pendingSwap = null },
             title = { Text("Update Routine?") },
@@ -1174,14 +1280,14 @@ fun ActiveSessionScreen(
             confirmButton = {
                 TextButton(onClick = {
                     val p = pendingSwap!!
-                    if (p.isAi) viewModel.aiSwap(p.index, true) else viewModel.swapExercise(p.index, p.name, p.category, true)
+                    if (p.isAi) actions.onAiSwap(p.index, true) else actions.onSwapExercise(p.index, p.name, p.category, true)
                     pendingSwap = null
                 }) { Text("Make Permanent") }
             },
             dismissButton = {
                 TextButton(onClick = {
                     val p = pendingSwap!!
-                    if (p.isAi) viewModel.aiSwap(p.index, false) else viewModel.swapExercise(p.index, p.name, p.category, false)
+                    if (p.isAi) actions.onAiSwap(p.index, false) else actions.onSwapExercise(p.index, p.name, p.category, false)
                     pendingSwap = null
                 }) { Text("Session Only") }
             }
@@ -1197,7 +1303,7 @@ fun ActiveSessionScreen(
                 TextButton(
                     onClick = {
                         showDiscardConfirm = false
-                        viewModel.abandon()
+                        actions.onAbandon()
                         onDone()
                     }
                 ) { Text("Discard", color = MaterialTheme.colorScheme.error) }
@@ -1210,7 +1316,7 @@ fun ActiveSessionScreen(
 
     state.coach?.let { coach ->
         AlertDialog(
-            onDismissRequest = viewModel::dismissCoach,
+            onDismissRequest = actions.onDismissCoach,
             title = { Text("\uD83E\uDDD9 Coach's Counsel") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -1225,17 +1331,17 @@ fun ActiveSessionScreen(
                 }
             },
             confirmButton = {
-                Button(onClick = viewModel::applyCoachChanges) { Text("Apply Changes") }
+                Button(onClick = actions.onApplyCoachChanges) { Text("Apply Changes") }
             },
             dismissButton = {
-                TextButton(onClick = viewModel::dismissCoach) { Text("Keep Plan") }
+                TextButton(onClick = actions.onDismissCoach) { Text("Keep Plan") }
             }
         )
     }
 
     LaunchedEffect(state.currentExerciseIndex) {
         if (state.exercises.isNotEmpty()) {
-            listState.animateScrollToItem(state.currentExerciseIndex + 2) // +2 to account for headers
+            listState.animateScrollToItem(state.currentExerciseIndex + 2)
         }
     }
 
@@ -1282,7 +1388,7 @@ fun ActiveSessionScreen(
                         Icon(Icons.Default.Delete, contentDescription = "Discard", tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f))
                     }
                     Button(
-                        onClick = { viewModel.finish() },
+                        onClick = { actions.onFinish() },
                         enabled = state.totalSets > 0,
                         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
                         modifier = Modifier.height(36.dp)
@@ -1313,15 +1419,17 @@ fun ActiveSessionScreen(
                         }
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                             Box(Modifier.size(10.dp).clip(CircleShape).background(zoneColor))
-                            Text("${state.heartRateBpm} bpm", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                            Text("${state.heartRateBpm}", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                            Text("bpm", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
-                    val kcal = state.wearCaloriesKcal
+                    val kcal = state.wearCaloriesKcal ?: (state.totalXp.toDouble() * 0.4).takeIf { it > 0 }
                     if (kcal != null) {
-                        Spacer(Modifier.width(8.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Icon(Icons.Filled.LocalFireDepartment, contentDescription = null, tint = Color(0xFFFF9800), modifier = Modifier.size(14.dp))
-                            Text("${kcal.toInt()} kcal", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.width(6.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Icon(Icons.Filled.LocalFireDepartment, contentDescription = null, tint = Color(0xFFFF9800), modifier = Modifier.size(12.dp))
+                            Text("${kcal.toInt()}", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                            Text("kcal", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
@@ -1329,9 +1437,9 @@ fun ActiveSessionScreen(
                 if (state.media.packageName != null) {
                     MediaControllerCard(
                         state = state.media,
-                        onToggle = viewModel::toggleMusic,
-                        onNext = viewModel::skipMusic,
-                        onPrev = viewModel::prevMusic
+                        onToggle = actions.onToggleMusic,
+                        onNext = actions.onSkipMusic,
+                        onPrev = actions.onPrevMusic
                     )
                 }
 
@@ -1339,14 +1447,13 @@ fun ActiveSessionScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    val durationMs by viewModel.sessionDurationMs.collectAsState()
                     var showDurationEdit by remember { mutableStateOf(false) }
                     if (showDurationEdit) {
                         DurationEditDialog(
-                            initialMinutes = (durationMs / 60000L).toInt(),
+                            initialMinutes = (sessionDurationMs / 60000L).toInt(),
                             onDismiss = { showDurationEdit = false },
                             onConfirm = { mins ->
-                                viewModel.setManualDuration(mins)
+                                actions.onSetManualDuration(mins)
                                 showDurationEdit = false
                             }
                         )
@@ -1354,114 +1461,155 @@ fun ActiveSessionScreen(
 
                     MetricItem(
                         label = "Time", 
-                        value = formatDuration(durationMs),
+                        value = formatDuration(sessionDurationMs),
                         modifier = Modifier.clickable { showDurationEdit = true }
                     )
                     MetricItem("Volume", "${Units.toDisplay(state.totalVolumeKg, imperial).toInt()} ${Units.label(imperial)}")
                     MetricItem("Sets", state.totalSets.toString())
+                    MetricItem("XP", "+${state.totalXp}")
+                }
+
+                state.partyBoss?.let { boss ->
+                    val activeDamage = state.partyPulses.sumOf { it.xp }.toLong()
+                    val ghostHp = (boss.hp - activeDamage).coerceAtLeast(0L)
+                    
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        GhostBarMeter(
+                            label = "${boss.emoji} Party Raid: ${boss.name}",
+                            valueText = if (activeDamage > 0) "${ghostHp} / ${boss.hp} HP" else "${boss.hp} / ${boss.maxHp}",
+                            actualProgress = (boss.hp.toFloat() / boss.maxHp).coerceIn(0f, 1f),
+                            ghostProgress = (ghostHp.toFloat() / boss.maxHp).coerceIn(0f, 1f),
+                            color = MaterialTheme.colorScheme.error,
+                            ghostColor = Color.White.copy(alpha = 0.25f)
+                        )
+                        if (state.partyPulses.isNotEmpty()) {
+                            val pulseEffects = state.partyPulses.flatMap { it.effects }.distinct().joinToString(" ")
+                            Text(
+                                text = buildString {
+                                    append("\u2694\uFE0F ${state.partyPulses.size} hero${if (state.partyPulses.size > 1) "es" else ""} striking!")
+                                    if (pulseEffects.isNotEmpty()) append(" Status: $pulseEffects")
+                                    append(" Pending: $activeDamage XP")
+                                },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
                 }
             }
         }
 
-        LazyColumn(
-            state = listState,
-            modifier = Modifier.weight(1f).fillMaxWidth(),
-            contentPadding = PaddingValues(12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            state.wearBanner?.let { banner ->
-                item {
-                    SectionCard {
-                        Text(banner, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.tertiary)
-                        TextButton(onClick = viewModel::dismissWearBanner) { Text("Got it") }
-                    }
-                }
-            }
-
-            if (state.coachLoading) {
-                item {
-                    SectionCard {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                            Text("\uD83E\uDDD9 Coaching...", style = MaterialTheme.typography.bodyMedium)
+        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(12.dp, 12.dp, 12.dp, 80.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                state.wearBanner?.let { banner ->
+                    item {
+                        SectionCard {
+                            Text(banner, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.tertiary)
+                            TextButton(onClick = actions.onDismissWearBanner) { Text("Got it") }
                         }
                     }
                 }
-            }
 
-            state.coachError?.let { error ->
-                item {
-                    SectionCard {
-                        Text("\uD83E\uDDD9 $error", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            TextButton(onClick = viewModel::askCoach) { Text("Try again") }
-                            TextButton(onClick = viewModel::dismissCoachError) { Text("Dismiss") }
+                if (state.coachLoading) {
+                    item {
+                        SectionCard {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                                Text("\uD83E\uDDD9 Coaching...", style = MaterialTheme.typography.bodyMedium)
+                            }
                         }
                     }
                 }
-            }
 
-            state.finishError?.let { error ->
-                item {
-                    SectionCard {
-                        Text(error, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            TextButton(onClick = viewModel::finish) { Text("Try again") }
-                            TextButton(onClick = viewModel::dismissFinishError) { Text("Dismiss") }
+                state.coachError?.let { error ->
+                    item {
+                        SectionCard {
+                            Text("\uD83E\uDDD9 $error", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                TextButton(onClick = { actions.onAskCoach(false, false) }) { Text("Try again") }
+                                TextButton(onClick = actions.onDismissCoachError) { Text("Dismiss") }
+                            }
                         }
                     }
                 }
-            }
 
-            state.swapNote?.let { note ->
+                state.finishError?.let { error ->
+                    item {
+                        SectionCard {
+                            Text(error, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                TextButton(onClick = actions.onFinish) { Text("Try again") }
+                                TextButton(onClick = actions.onDismissFinishError) { Text("Dismiss") }
+                            }
+                        }
+                    }
+                }
+
+                state.swapNote?.let { note ->
+                    item {
+                        SectionCard {
+                            Text("\u2728 $note", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.tertiary)
+                            TextButton(onClick = actions.onDismissSwapNote) { Text("Got it") }
+                        }
+                    }
+                }
+
+                itemsIndexed(state.exercises, key = { _, ex -> ex.name }) { index, exercise ->
+                    ExerciseLogCard(
+                        exercise = exercise,
+                        imperial = imperial,
+                        effortMethod = effortMethod,
+                        bodyWeightKg = actions.bodyWeightKgOrNull(),
+                        showCardioIntensity = false,
+                        onToggleCardioIntensity = {},
+                        aiSwapping = state.aiSwapIndex == index,
+                        canMoveUp = index > 0,
+                        canMoveDown = index < state.exercises.lastIndex,
+                        canRemove = state.exercises.size > 1,
+                        onMove = { d -> actions.onMoveExercise(index, d) },
+                        onSwap = { swapFor = index },
+                        onRemove = { actions.onRemoveExercise(index) },
+                        onLogSet = { w, r, dur, dist, rir, speed, incline, program, st ->
+                            actions.onLogSet(index, w, r, dur, dist, rir, null, null, speed, incline, program, st, false)
+                        },
+                        onUndo = { actions.onRemoveLastSet(index) },
+                        getPreviousPerformance = actions.getPreviousPerformance,
+                        customPrograms = customCardioPrograms,
+                        onAddCustomProgram = actions.onAddCustomCardioProgram
+                    )
+                }
+
                 item {
-                    SectionCard {
-                        Text("\u2728 $note", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.tertiary)
-                        TextButton(onClick = viewModel::dismissSwapNote) { Text("Got it") }
+                    OutlinedButton(
+                        onClick = { showPicker = true },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Filled.Add, contentDescription = null)
+                        Text("Add Exercise")
                     }
                 }
             }
 
-            itemsIndexed(state.exercises, key = { _, ex -> ex.name }) { index, exercise ->
-                val effortMethod by viewModel.effortMethod.collectAsState()
-                ExerciseLogCard(
-                    exercise = exercise,
-                    imperial = imperial,
-                    effortMethod = effortMethod,
-                    bodyWeightKg = viewModel.bodyWeightKgOrNull(),
-                    showCardioIntensity = false,
-                    onToggleCardioIntensity = {},
-                    aiSwapping = state.aiSwapIndex == index,
-                    canMoveUp = index > 0,
-                    canMoveDown = index < state.exercises.lastIndex,
-                    canRemove = state.exercises.size > 1,
-                    onMove = { d -> viewModel.moveExercise(index, d) },
-                    onSwap = { swapFor = index },
-                    onRemove = { viewModel.removeExercise(index) },
-                    onLogSet = { w, r, dur, dist, rir, speed, incline, program, st ->
-                        viewModel.logSet(index, w, r, dur, dist, rir, null, null, speed, incline, program, st)
-                    },
-                    onUndo = { viewModel.removeLastSet(index) },
-                    getPreviousPerformance = viewModel::getPreviousPerformance,
-                    customPrograms = viewModel.customCardioPrograms.collectAsState().value,
-                    onAddCustomProgram = viewModel::addCustomCardioProgram
-                )
-            }
-
-            item {
-                OutlinedButton(
-                    onClick = { showPicker = true },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(Icons.Filled.Add, contentDescription = null)
-                    Text("Add Exercise")
-                }
-            }
-
-            if (state.hasAi && state.totalSets > 0 && !state.coachLoading) {
-                item {
-                    OutlinedButton(onClick = viewModel::askCoach, modifier = Modifier.fillMaxWidth()) {
-                        Text("\uD83E\uDDD9 Coach check-in")
+            if (state.hasAi && !state.coachLoading) {
+                Box(modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)) {
+                    FloatingActionButton(
+                        onClick = { actions.onAskCoach(true, false) },
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.combinedClickable(
+                            onClick = { actions.onAskCoach(true, false) },
+                            onLongClick = { actions.onAskCoach(true, true) }
+                        )
+                    ) {
+                        Row(Modifier.padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text("\uD83E\uDDD9 Coach", style = MaterialTheme.typography.labelLarge)
+                        }
                     }
                 }
             }
@@ -1469,9 +1617,9 @@ fun ActiveSessionScreen(
         state.restEndsAt?.let { endsAt ->
             RestTimerBar(
                 endsAt = endsAt,
-                onExtend = { viewModel.extendRest(15) },
-                onSkip = viewModel::skipRest,
-                onFinish = viewModel::skipRest
+                onExtend = { actions.onExtendRest(15) },
+                onSkip = actions.onSkipRest,
+                onFinish = actions.onSkipRest
             )
         }
     }
@@ -1479,7 +1627,7 @@ fun ActiveSessionScreen(
     if (showPicker) {
         ExercisePickerDialog(
             onDismiss = { showPicker = false },
-            onPick = { n, c -> viewModel.addExercise(n, c) }
+            onPick = { n, c -> actions.onAddExercise(n, c) }
         )
     }
 
@@ -1492,10 +1640,10 @@ fun ActiveSessionScreen(
                         Button(
                             onClick = {
                                 swapFor = null
-                                if (state.originalWorkoutId != null && state.originalWorkoutId!! > 0) {
+                                if (state.originalWorkoutId != null && state.originalWorkoutId > 0) {
                                     pendingSwap = PendingSwap(index, "", exercise.category, true)
                                 } else {
-                                    viewModel.aiSwap(index)
+                                    actions.onAiSwap(index, false)
                                 }
                             },
                             modifier = Modifier.fillMaxWidth()
@@ -1509,10 +1657,10 @@ fun ActiveSessionScreen(
                 onDismiss = { swapFor = null },
                 onPick = { n, c ->
                     swapFor = null
-                    if (state.originalWorkoutId != null && state.originalWorkoutId!! > 0) {
+                    if (state.originalWorkoutId != null && state.originalWorkoutId > 0) {
                         pendingSwap = PendingSwap(index, n, c, false)
                     } else {
-                        viewModel.swapExercise(index, n, c)
+                        actions.onSwapExercise(index, n, c, false)
                     }
                 }
             )
@@ -1521,7 +1669,7 @@ fun ActiveSessionScreen(
 
     state.momentSpoil?.let { spoil ->
         AlertDialog(
-            onDismissRequest = viewModel::dismissMomentSpoil,
+            onDismissRequest = actions.onDismissMomentSpoil,
             title = { Text(if (spoil.isPr) "\uD83C\uDFC6 Record!" else "\uD83C\uDF81 Spoils!") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1534,21 +1682,21 @@ fun ActiveSessionScreen(
                 }
             },
             confirmButton = {
-                TextButton(onClick = viewModel::dismissMomentSpoil) { Text("Claim") }
+                TextButton(onClick = actions.onDismissMomentSpoil) { Text("Claim") }
             }
         )
     }
 
     state.ambushOffer?.let { offer ->
         AlertDialog(
-            onDismissRequest = viewModel::declineAmbush,
+            onDismissRequest = actions.onDeclineAmbush,
             title = { Text("${offer.monsterEmoji} Ambush!") },
             text = { Text("A ${offer.monsterName} stalks your rest.") },
             confirmButton = {
-                TextButton(onClick = { viewModel.acceptAmbush(onAmbushFight) }) { Text("Fight") }
+                TextButton(onClick = { actions.onAcceptAmbush(onAmbushFight) }) { Text("Fight") }
             },
             dismissButton = {
-                TextButton(onClick = { viewModel.declineAmbush() }) { Text("Keep resting") }
+                TextButton(onClick = actions.onDeclineAmbush) { Text("Keep resting") }
             }
         )
     }
@@ -1566,7 +1714,7 @@ fun ActiveSessionScreen(
                 onDismiss = { showLevelUp = false }
             )
         } else {
-            SessionResultDialog(finish = finish, imperial = imperial, onDismiss = { (onFinished ?: onDone)() })
+            SessionResultDialog(finish = finish, imperial = imperial, onDismiss = { onFinished() })
         }
     }
 }
@@ -2153,5 +2301,30 @@ private fun MediaControllerCard(state: MediaState, onToggle: () -> Unit, onNext:
                 IconButton(onClick = onNext) { Icon(Icons.Default.SkipNext, "Next") }
             }
         }
+    }
+}
+
+@androidx.compose.ui.tooling.preview.Preview(showBackground = true, backgroundColor = 0xFF12131F)
+@androidx.compose.runtime.Composable
+fun ActiveSessionScreenPreview() {
+    com.fitnessquest.rpg.ui.theme.FitQuestTheme {
+        ActiveSessionScreenContent(
+            state = ActiveSessionUiState(
+                title = "Preview Quest",
+                exercises = listOf(
+                    SessionExercise(name = "Pushups", category = ExerciseCategory.BODYWEIGHT),
+                    SessionExercise(name = "Squats", category = ExerciseCategory.STRENGTH)
+                ),
+                loading = false
+            ),
+            imperial = true,
+            effortMethod = EffortMethod.RIR,
+            sessionDurationMs = 1200000,
+            customCardioPrograms = emptySet(),
+            onDone = {},
+            onAmbushFight = {},
+            onFinished = {},
+            actions = ActiveSessionActions()
+        )
     }
 }

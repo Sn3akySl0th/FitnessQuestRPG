@@ -223,6 +223,68 @@ class ShopViewModel(private val container: AppContainer) : ViewModel() {
 fun ShopScreen(viewModel: ShopViewModel = viewModel(factory = ShopViewModel.Factory)) {
     val state by viewModel.uiState.collectAsState()
     val character = state.character ?: return
+    val snackbar = LocalSnackbarHostState.current
+    val scope = rememberCoroutineScope()
+    val haptic = LocalHapticFeedback.current
+    val context = LocalContext.current
+
+    fun notify(message: String) {
+        scope.launch { snackbar.showSnackbar(message) }
+    }
+
+    ShopScreenContent(
+        state = state,
+        actions = ShopActions(
+            onBuy = { itemId, onResult ->
+                viewModel.buy(itemId) { ok ->
+                    if (ok) {
+                        AudioEffects.playCoinJingle()
+                        HapticEffects.performSetLogged(haptic, context)
+                    }
+                    onResult(ok)
+                }
+            },
+            onEquip = viewModel::equip,
+            onUse = viewModel::use,
+            onOpenChest = viewModel::openChest,
+            onSellMaterial = viewModel::sellMaterial,
+            onSellGear = viewModel::sellGear,
+            onSalvageGear = viewModel::salvageGear,
+            onUpgradeGear = viewModel::upgradeGear,
+            onFuseGear = { ids, onResult ->
+                viewModel.fuseGear(ids) { msg ->
+                    if (msg != null) {
+                        AudioEffects.playLevelUp()
+                        HapticEffects.performSetLogged(haptic, context)
+                    }
+                    onResult(msg)
+                }
+            },
+            onNotify = ::notify
+        )
+    )
+}
+
+data class ShopActions(
+    val onBuy: (Long, (Boolean) -> Unit) -> Unit = { _, _ -> },
+    val onEquip: (Long) -> Unit = {},
+    val onUse: (Long, (String?) -> Unit) -> Unit = { _, _ -> },
+    val onOpenChest: (Long, (RewardBatch?) -> Unit) -> Unit = { _, _ -> },
+    val onSellMaterial: (Long, (Boolean) -> Unit) -> Unit = { _, _ -> },
+    val onSellGear: (Long, (Boolean) -> Unit) -> Unit = { _, _ -> },
+    val onSalvageGear: (Long, (RewardBatch?) -> Unit) -> Unit = { _, _ -> },
+    val onUpgradeGear: (Long, (Boolean) -> Unit) -> Unit = { _, _ -> },
+    val onFuseGear: (List<Long>, (String?) -> Unit) -> Unit = { _, _ -> },
+    val onNotify: (String) -> Unit = {}
+)
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ShopScreenContent(
+    state: ShopUiState,
+    actions: ShopActions
+) {
+    val character = state.character ?: return
     var tab by remember { mutableStateOf(MarketTab.Inventory) }
     var filter by remember { mutableStateOf(ItemFilter.All) }
     var sort by remember { mutableStateOf(ItemSort.Tier) }
@@ -232,17 +294,9 @@ fun ShopScreen(viewModel: ShopViewModel = viewModel(factory = ShopViewModel.Fact
     var selectedItem by remember { mutableStateOf<DisplayItem?>(null) }
     var rewardReveal by remember { mutableStateOf<RewardBatch?>(null) }
     var selectedFuseIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
-    val snackbar = LocalSnackbarHostState.current
-    val scope = rememberCoroutineScope()
-    val haptic = LocalHapticFeedback.current
-    val context = LocalContext.current
 
     fun usable(item: ItemEntity): Boolean =
         item.classAffinity == null || item.classAffinity == character.characterClass
-
-    fun notify(message: String) {
-        scope.launch { snackbar.showSnackbar(message) }
-    }
 
     val equippedIds = character.equippedIds().values.filterNotNull().toSet()
     val ownedRows = remember(state.ownedGear, equippedIds) {
@@ -314,13 +368,11 @@ fun ShopScreen(viewModel: ShopViewModel = viewModel(factory = ShopViewModel.Fact
                             ForgeActionBar(
                                 selectedCount = selectedFuseIds.size,
                                 onFuse = {
-                                    viewModel.fuseGear(selectedFuseIds.toList()) { msg ->
+                                    actions.onFuseGear(selectedFuseIds.toList()) { msg ->
                                         if (msg != null) {
                                             selectedFuseIds = emptySet()
-                                            AudioEffects.playLevelUp()
-                                            HapticEffects.performSetLogged(haptic, context)
                                         }
-                                        notify(msg ?: "Fusion failed.")
+                                        actions.onNotify(msg ?: "Fusion failed.")
                                     }
                                 }
                             )
@@ -380,49 +432,45 @@ fun ShopScreen(viewModel: ShopViewModel = viewModel(factory = ShopViewModel.Fact
                 tab = tab,
                 usable = usable(row.item),
                 onBuy = {
-                    viewModel.buy(row.item.id) { ok ->
-                        if (ok) {
-                            AudioEffects.playCoinJingle()
-                            HapticEffects.performSetLogged(haptic, context)
-                        }
-                        notify(if (ok) "${row.item.name} added." else "Not enough gold.")
+                    actions.onBuy(row.item.id) { ok ->
+                        actions.onNotify(if (ok) "${row.item.name} added." else "Not enough gold.")
                     }
                 },
                 onEquip = {
-                    row.instance?.id?.let(viewModel::equip)
+                    row.instance?.id?.let(actions.onEquip)
                     selectedItem = null
                 },
                 onUse = {
-                    viewModel.use(row.item.id) { notify(it ?: "Nothing happened.") }
+                    actions.onUse(row.item.id) { actions.onNotify(it ?: "Nothing happened.") }
                     selectedItem = null
                 },
                 onOpen = {
-                    viewModel.openChest(row.item.id) { batch ->
+                    actions.onOpenChest(row.item.id) { batch ->
                         if (batch != null) {
                             rewardReveal = batch
                         } else {
-                            notify("The chest was empty.")
+                            actions.onNotify("The chest was empty.")
                         }
                     }
                     selectedItem = null
                 },
                 onSellMaterial = {
-                    viewModel.sellMaterial(row.item.id) { ok -> notify(if (ok) "Sold ${row.item.name}." else "Could not sell.") }
+                    actions.onSellMaterial(row.item.id) { ok -> actions.onNotify(if (ok) "Sold ${row.item.name}." else "Could not sell.") }
                     selectedItem = null
                 },
                 onSellGear = {
                     row.instance?.id?.let { id ->
-                        viewModel.sellGear(id) { ok -> notify(if (ok) "Sold ${row.item.name}." else "Could not sell.") }
+                        actions.onSellGear(id) { ok -> actions.onNotify(if (ok) "Sold ${row.item.name}." else "Could not sell.") }
                     }
                     selectedItem = null
                 },
                 onSalvage = {
                     row.instance?.id?.let { id ->
-                        viewModel.salvageGear(id) { batch ->
+                        actions.onSalvageGear(id) { batch ->
                             if (batch != null) {
                                 rewardReveal = batch
                             } else {
-                                notify("Could not salvage.")
+                                actions.onNotify("Could not salvage.")
                             }
                         }
                     }
@@ -430,7 +478,7 @@ fun ShopScreen(viewModel: ShopViewModel = viewModel(factory = ShopViewModel.Fact
                 },
                 onUpgrade = {
                     row.instance?.id?.let { id ->
-                        viewModel.upgradeGear(id) { ok -> notify(if (ok) "Upgraded ${row.item.name}." else "Need more gold/materials or max level reached.") }
+                        actions.onUpgradeGear(id) { ok -> actions.onNotify(if (ok) "Upgraded ${row.item.name}." else "Need more gold/materials or max level reached.") }
                     }
                     selectedItem = null
                 }
@@ -917,4 +965,19 @@ private fun ItemSlot.icon(): ImageVector = when (this) {
     ItemSlot.RUNE -> Icons.Filled.AutoFixHigh
     ItemSlot.MATERIAL -> Icons.Filled.Category
     ItemSlot.LOOT_CHEST -> Icons.Filled.Inventory2
+}
+
+@androidx.compose.ui.tooling.preview.Preview(showBackground = true, backgroundColor = 0xFF12131F)
+@androidx.compose.runtime.Composable
+fun ShopScreenPreview() {
+    com.fitnessquest.rpg.ui.theme.FitQuestTheme {
+        ShopScreenContent(
+            state = ShopUiState(
+                character = CharacterEntity(name = "Preview Hero", gold = 5000),
+                items = emptyList(),
+                ownedGear = emptyList()
+            ),
+            actions = ShopActions()
+        )
+    }
 }

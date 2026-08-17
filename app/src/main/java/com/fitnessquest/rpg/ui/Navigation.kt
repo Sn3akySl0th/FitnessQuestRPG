@@ -258,7 +258,9 @@ fun FitQuestNav() {
                 composable(Routes.BATTLE) {
                     BattleScreen(onFight = { id -> navController.navigate(Routes.fight(id)) })
                 }
-                composable(Routes.ALLIES) { RivalsScreen() }
+                composable(Routes.ALLIES) {
+                    RivalsScreen(onStartWorkout = { id -> navController.navigate(Routes.session(id)) })
+                }
                 composable(Routes.SHOP) { ShopScreen() }
                 composable(Routes.EDITOR) {
                     WorkoutEditorScreen(onDone = { navController.popBackStack() })
@@ -358,16 +360,19 @@ fun FitQuestNav() {
                     .align(if (isLandscape) Alignment.BottomEnd else Alignment.BottomCenter)
                     .padding(bottom = if (showBottomBar && !isLandscape) 80.dp else 0.dp)
             ) {
-                if (updateStatus is InAppUpdateStatus.Downloaded) {
-                    InAppUpdateBanner(
-                        onRestartToUpdate = {
-                            container.inAppUpdate.completeUpdate()
-                        }
-                    )
-                }
+                val hideBanners = currentRoute == Routes.SESSION || currentRoute?.startsWith("battle/fight") == true
+                
+                if (!hideBanners) {
+                    if (updateStatus is InAppUpdateStatus.Downloaded) {
+                        InAppUpdateBanner(
+                            onRestartToUpdate = {
+                                container.inAppUpdate.completeUpdate()
+                            }
+                        )
+                    }
 
-                activeSessionDetails?.let { details ->
-                    if (currentRoute != Routes.SESSION) {
+                    activeSessionDetails?.let { details ->
+                        val imperialPref by container.prefs.imperial.collectAsState()
                         com.fitnessquest.rpg.ui.components.ActiveQuestBanner(
                             title = details.session.title,
                             startedAt = details.session.startedAt,
@@ -375,6 +380,9 @@ fun FitQuestNav() {
                             accumulatedPausedMs = details.session.accumulatedPausedMs,
                             setCount = details.exercises.sumOf { it.sets.size },
                             provisionalXp = details.exercises.sumOf { ex -> ex.sets.sumOf { it.xp } },
+                            provisionalVolumeKg = details.exercises.sumOf { ex -> ex.sets.sumOf { it.weightKg * it.reps } },
+                            provisionalDistanceKm = details.exercises.sumOf { ex -> ex.sets.sumOf { it.distanceKm } },
+                            imperial = imperialPref,
                             onResume = {
                                 navController.navigate(Routes.session(details.session.workoutId ?: -1L))
                             },

@@ -4,6 +4,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -107,6 +108,74 @@ fun BarMeter(
                         .fillMaxWidth(animated)
                         .height(10.dp)
                         .clip(RoundedCornerShape(5.dp))
+                        .background(color)
+                )
+            }
+        }
+    }
+}
+
+/** A progress bar that shows a "ghost" fill for active/pending damage. */
+@Composable
+fun GhostBarMeter(
+    label: String,
+    valueText: String,
+    actualProgress: Float,
+    ghostProgress: Float,
+    color: Color,
+    ghostColor: Color,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Row(Modifier.fillMaxWidth()) {
+            Text(
+                label,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+            Text(
+                valueText,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        val animActual by animateFloatAsState(
+            targetValue = actualProgress.coerceIn(0f, 1f),
+            animationSpec = tween(durationMillis = 600),
+            label = "barActual"
+        )
+        val animGhost by animateFloatAsState(
+            targetValue = ghostProgress.coerceIn(0f, 1f),
+            animationSpec = tween(durationMillis = 600),
+            label = "barGhost"
+        )
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(10.dp)
+                .clip(RoundedCornerShape(5.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+        ) {
+            // Draw current HP in faded/ghost color first
+            if (animActual > 0f) {
+                Spacer(
+                    Modifier
+                        .fillMaxWidth(animActual)
+                        .height(10.dp)
+                        .background(ghostColor)
+                )
+            }
+            // Draw future HP (after pending damage) in solid color on top
+            if (animGhost > 0f) {
+                Spacer(
+                    Modifier
+                        .fillMaxWidth(animGhost)
+                        .height(10.dp)
                         .background(color)
                 )
             }

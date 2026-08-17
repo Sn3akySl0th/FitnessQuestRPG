@@ -68,7 +68,7 @@ class AiGeneratorViewModel(private val container: AppContainer) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
         AiUiState(
-            hasKey = container.gemini.hasKey,
+            hasKey = container.gemini.isAvailable,
             localReady = container.gemini.isLocalModelReady()
         )
     )
@@ -86,7 +86,7 @@ class AiGeneratorViewModel(private val container: AppContainer) : ViewModel() {
 
     fun saveKey(key: String) {
         container.gemini.apiKey = key
-        _uiState.update { it.copy(hasKey = container.gemini.hasKey) }
+        _uiState.update { it.copy(hasKey = container.gemini.isAvailable) }
     }
 
     fun generate(request: String) {

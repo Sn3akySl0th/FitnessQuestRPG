@@ -227,7 +227,7 @@ class FightViewModel(private val container: AppContainer) : ViewModel() {
                 BattleOutcome.ONGOING -> return@launch
             }
 
-            if (container.gemini.hasKey) {
+            if (container.gemini.isAvailable) {
                 _uiState.update { it.copy(narrationPending = true) }
                 val hero = container.repository.getCharacter()
                 val text = container.gemini.battleNarration(

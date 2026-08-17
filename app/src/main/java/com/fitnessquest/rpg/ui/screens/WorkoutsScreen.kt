@@ -11,16 +11,20 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.fitnessquest.rpg.AppContainer
+import com.fitnessquest.rpg.FitQuestApp
 import com.fitnessquest.rpg.data.ai.LocalAiEngine
 import com.fitnessquest.rpg.data.ai.RoutineRecommendation
 import com.fitnessquest.rpg.data.ai.WorkoutRecommendationEngine
@@ -32,6 +36,7 @@ import com.fitnessquest.rpg.data.db.SessionEntity
 import com.fitnessquest.rpg.data.db.WorkoutEntity
 import com.fitnessquest.rpg.data.importexport.ImportPersistResult
 import com.fitnessquest.rpg.data.importexport.ImportedWorkout
+import com.fitnessquest.rpg.domain.CharacterClass
 import com.fitnessquest.rpg.domain.ClassWorkoutTemplate
 import com.fitnessquest.rpg.domain.ClassWorkoutTemplates
 import com.fitnessquest.rpg.domain.RewardBatch
@@ -234,6 +239,68 @@ fun WorkoutsScreen(
     viewModel: WorkoutsViewModel = viewModel(factory = WorkoutsViewModel.Factory)
 ) {
     val state by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
+    val container = (context.applicationContext as FitQuestApp).container
+    val activeSessionDetails by container.repository.activeSession.collectAsState(initial = null)
+    val coroutineScope = rememberCoroutineScope()
+
+    WorkoutsScreenContent(
+        state = state,
+        activeSessionDetails = activeSessionDetails,
+        actions = WorkoutsActions(
+            onNewWorkout = onNewWorkout,
+            onAiWorkout = onAiWorkout,
+            onExerciseLibrary = onExerciseLibrary,
+            onHistory = onHistory,
+            onRecords = onRecords,
+            onOpenWorkout = onOpenWorkout,
+            onStartWorkout = onStartWorkout,
+            onFreestyle = onFreestyle,
+            onSaveHevyApiKey = viewModel::saveHevyApiKey,
+            onToggleSoreMuscle = viewModel::toggleSoreMuscle,
+            onClearSoreMuscles = viewModel::clearSoreMuscles,
+            onCompleteSideQuest = viewModel::completeSideQuest,
+            onTriggerNotification = viewModel::triggerRandomSideQuestNotification,
+            onCreateClassTemplate = { viewModel.createClassTemplate(onOpenWorkout) },
+            onImportWorkouts = viewModel::importWorkouts,
+            onRenameWithAi = viewModel::renameWithAi,
+            onRenameAllWithAi = viewModel::renameAllWithAi,
+            onDiscardActiveSession = {
+                coroutineScope.launch {
+                    container.repository.discardActiveSession()
+                }
+            }
+        )
+    )
+}
+
+data class WorkoutsActions(
+    val onNewWorkout: () -> Unit = {},
+    val onAiWorkout: () -> Unit = {},
+    val onExerciseLibrary: () -> Unit = {},
+    val onHistory: () -> Unit = {},
+    val onRecords: () -> Unit = {},
+    val onOpenWorkout: (Long) -> Unit = {},
+    val onStartWorkout: (Long) -> Unit = {},
+    val onFreestyle: () -> Unit = {},
+    val onSaveHevyApiKey: (String) -> Unit = {},
+    val onToggleSoreMuscle: (String) -> Unit = {},
+    val onClearSoreMuscles: () -> Unit = {},
+    val onCompleteSideQuest: (String) -> Unit = {},
+    val onTriggerNotification: () -> Unit = {},
+    val onCreateClassTemplate: () -> Unit = {},
+    val onImportWorkouts: (List<ImportedWorkout>, (ImportPersistResult, RewardBatch?) -> Unit) -> Unit = { _, _ -> },
+    val onRenameWithAi: (Long) -> Unit = {},
+    val onRenameAllWithAi: () -> Unit = {},
+    val onDiscardActiveSession: () -> Unit = {}
+)
+
+@Composable
+fun WorkoutsScreenContent(
+    state: WorkoutsUiState,
+    activeSessionDetails: ActiveSessionWithDetails?,
+    actions: WorkoutsActions
+) {
     val workouts = state.workouts
     var showPlates by remember { mutableStateOf(false) }
     var showImportDialog by remember { mutableStateOf(false) }
@@ -241,10 +308,6 @@ fun WorkoutsScreen(
     var importRewardBatch by remember { mutableStateOf<RewardBatch?>(null) }
     var importSummary by remember { mutableStateOf<String?>(null) }
 
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val container = (context.applicationContext as com.fitnessquest.rpg.FitQuestApp).container
-    val activeSessionDetails by container.repository.activeSession.collectAsState(initial = null)
-    val coroutineScope = rememberCoroutineScope()
     var pendingStartWorkoutId by remember { mutableStateOf<Long?>(null) }
     var showActiveSessionPrompt by remember { mutableStateOf(false) }
 
@@ -253,7 +316,7 @@ fun WorkoutsScreen(
             pendingStartWorkoutId = workoutId
             showActiveSessionPrompt = true
         } else {
-            onStartWorkout(workoutId)
+            actions.onStartWorkout(workoutId)
         }
     }
 
@@ -267,7 +330,7 @@ fun WorkoutsScreen(
                     onClick = {
                         showActiveSessionPrompt = false
                         activeSessionDetails?.session?.let { s ->
-                            onStartWorkout(s.workoutId ?: -1L)
+                            actions.onStartWorkout(s.workoutId ?: -1L)
                         }
                     }
                 ) {
@@ -280,10 +343,8 @@ fun WorkoutsScreen(
                         onClick = {
                             showActiveSessionPrompt = false
                             val nextId = pendingStartWorkoutId ?: -1L
-                            coroutineScope.launch {
-                                container.repository.discardActiveSession()
-                                onStartWorkout(nextId)
-                            }
+                            actions.onDiscardActiveSession()
+                            actions.onStartWorkout(nextId)
                         },
                         colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
                     ) {
@@ -303,19 +364,19 @@ fun WorkoutsScreen(
     if (showSorenessDialog) {
         SorenessCheckInDialog(
             selectedMuscles = state.soreMuscles,
-            onToggleMuscle = viewModel::toggleSoreMuscle,
-            onClearAll = viewModel::clearSoreMuscles,
+            onToggleMuscle = actions.onToggleSoreMuscle,
+            onClearAll = actions.onClearSoreMuscles,
             onDismiss = { showSorenessDialog = false }
         )
     }
     if (showImportDialog) {
         WorkoutImportDialog(
             initialApiKey = state.hevyApiKey,
-            onApiKeyChange = viewModel::saveHevyApiKey,
+            onApiKeyChange = actions.onSaveHevyApiKey,
             existingWorkoutNames = workouts.map { it.name }.toSet(),
             onDismiss = { showImportDialog = false },
             onImportWorkouts = { toImport ->
-                viewModel.importWorkouts(toImport) { result, batch ->
+                actions.onImportWorkouts(toImport) { result, batch ->
                     importSummary = "Imported ${result.templatesAdded} training quests and ${result.sessionsAdded} history sessions."
                     importRewardBatch = batch
                 }
@@ -339,7 +400,7 @@ fun WorkoutsScreen(
             IconButton(onClick = { showPlates = true }) {
                 Icon(Icons.Filled.FitnessCenter, contentDescription = "Plate calculator")
             }
-            IconButton(onClick = onHistory) {
+            IconButton(onClick = actions.onHistory) {
                 Icon(Icons.Filled.History, contentDescription = "History")
             }
             SettingsIconButton()
@@ -354,11 +415,9 @@ fun WorkoutsScreen(
                     recommendation = state.recommendation,
                     wellRestedBuff = state.wellRestedBuff,
                     onStartWorkout = ::handleStartWorkout,
-                    onCompleteSideQuest = { title ->
-                        viewModel.completeSideQuest(title)
-                    },
+                    onCompleteSideQuest = actions.onCompleteSideQuest,
                     onOpenSorenessDialog = { showSorenessDialog = true },
-                    onTriggerNotification = { viewModel.triggerRandomSideQuestNotification() }
+                    onTriggerNotification = actions.onTriggerNotification
                 )
             }
 
@@ -367,19 +426,19 @@ fun WorkoutsScreen(
                     character = state.character,
                     freshnessMap = state.freshnessMap,
                     soreMuscles = state.soreMuscles,
-                    onToggleMuscle = viewModel::toggleSoreMuscle
+                    onToggleMuscle = actions.onToggleSoreMuscle
                 )
             }
 
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = onNewWorkout, modifier = Modifier.weight(1f)) {
+                        Button(onClick = actions.onNewWorkout, modifier = Modifier.weight(1f)) {
                             Icon(Icons.Filled.Add, contentDescription = null)
                             Spacer(Modifier.width(4.dp))
                             Text("New quest", maxLines = 1)
                         }
-                        Button(onClick = onAiWorkout, modifier = Modifier.weight(1f)) {
+                        Button(onClick = actions.onAiWorkout, modifier = Modifier.weight(1f)) {
                             Icon(Icons.Filled.AutoAwesome, contentDescription = null)
                             Spacer(Modifier.width(4.dp))
                             Text("AI Forge", maxLines = 1)
@@ -388,7 +447,7 @@ fun WorkoutsScreen(
                     OutlinedButton(onClick = { handleStartWorkout(-1L) }, modifier = Modifier.fillMaxWidth()) {
                         Text("🏃 Freestyle session — log anything")
                     }
-                    OutlinedButton(onClick = onExerciseLibrary, modifier = Modifier.fillMaxWidth()) {
+                    OutlinedButton(onClick = actions.onExerciseLibrary, modifier = Modifier.fillMaxWidth()) {
                         Icon(Icons.Filled.FitnessCenter, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
                         Text("Exercise Library", maxLines = 1)
@@ -401,7 +460,7 @@ fun WorkoutsScreen(
                     
                     if (workouts.any { it.name.lowercase().contains("routine") || it.name.lowercase().contains("trial") }) {
                         OutlinedButton(
-                            onClick = viewModel::renameAllWithAi,
+                            onClick = actions.onRenameAllWithAi,
                             enabled = !state.renaming,
                             modifier = Modifier.fillMaxWidth(),
                             colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.tertiary)
@@ -422,18 +481,18 @@ fun WorkoutsScreen(
                             Text("${state.character?.characterClass?.emoji.orEmpty()} ${template.name}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                             Text(template.tagline, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Text(template.exercises.joinToString(" · ") { it.exerciseName }, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
-                            Button(onClick = { viewModel.createClassTemplate(onOpenWorkout) }, modifier = Modifier.fillMaxWidth()) {
+                            Button(onClick = actions.onCreateClassTemplate, modifier = Modifier.fillMaxWidth()) {
                                 Text("Create class quest")
                             }
                         }
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = onHistory, modifier = Modifier.weight(1f)) {
+                        OutlinedButton(onClick = actions.onHistory, modifier = Modifier.weight(1f)) {
                             Icon(Icons.Filled.History, contentDescription = null)
                             Spacer(Modifier.width(4.dp))
                             Text("History", maxLines = 1)
                         }
-                        OutlinedButton(onClick = onRecords, modifier = Modifier.weight(1f)) {
+                        OutlinedButton(onClick = actions.onRecords, modifier = Modifier.weight(1f)) {
                             Icon(Icons.Filled.EmojiEvents, contentDescription = null)
                             Spacer(Modifier.width(4.dp))
                             Text("Records", maxLines = 1)
@@ -453,11 +512,11 @@ fun WorkoutsScreen(
             items(workouts, key = { it.id }) { workout ->
                 SectionCard {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f).clickable { onOpenWorkout(workout.id) }) {
+                        Column(Modifier.weight(1f).clickable { actions.onOpenWorkout(workout.id) }) {
                             Text(workout.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                             Text(if (workout.aiGenerated) "✨ AI-forged" else "Tap to view or edit", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                        IconButton(onClick = { viewModel.renameWithAi(workout.id) }, enabled = !state.renaming) {
+                        IconButton(onClick = { actions.onRenameWithAi(workout.id) }, enabled = !state.renaming) {
                             if (state.renaming) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
                             else Icon(Icons.Filled.AutoAwesome, contentDescription = "Rename with AI", tint = MaterialTheme.colorScheme.tertiary)
                         }
@@ -624,4 +683,23 @@ private fun SorenessCheckInDialog(
             }
         }
     )
+}
+
+@androidx.compose.ui.tooling.preview.Preview(showBackground = true, backgroundColor = 0xFF12131F)
+@androidx.compose.runtime.Composable
+fun WorkoutsScreenPreview() {
+    com.fitnessquest.rpg.ui.theme.FitQuestTheme {
+        WorkoutsScreenContent(
+            state = WorkoutsUiState(
+                workouts = listOf(
+                    WorkoutEntity(id = 1, name = "Dragon Slayer Strength", aiGenerated = true),
+                    WorkoutEntity(id = 2, name = "Meadowlands Cardio", aiGenerated = false)
+                ),
+                character = CharacterEntity(name = "Preview Hero", characterClass = CharacterClass.WARRIOR),
+                recommendation = RoutineRecommendation(routine = null, title = "Morning Drill", reason = "Time to level up!")
+            ),
+            activeSessionDetails = null,
+            actions = WorkoutsActions()
+        )
+    }
 }

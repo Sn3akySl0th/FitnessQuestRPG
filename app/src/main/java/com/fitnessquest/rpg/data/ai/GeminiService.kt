@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Base64
+import android.util.Log
 import com.fitnessquest.rpg.BuildConfig
 import com.fitnessquest.rpg.FitQuestApp
 import com.fitnessquest.rpg.data.db.ExerciseCategory
@@ -86,6 +87,7 @@ class GeminiService(private val context: Context) {
         }
 
     val hasKey: Boolean get() = apiKey.isNotBlank()
+    val isAvailable: Boolean get() = hasKey || isLocalModelReady()
 
     fun isLocalModelReady(): Boolean = getReadyModelFile() != null
 
@@ -112,14 +114,19 @@ class GeminiService(private val context: Context) {
         val useLocal = prefs.getBoolean("use_local_ai_by_default", false)
 
         if (useLocal && modelFile != null) {
+            Log.d("GeminiService", "Trying local AI...")
             LocalAiEngine.generateTextLocal(context, prompt, modelFile)?.let {
+                Log.d("GeminiService", "Local AI success.")
                 return@withContext Result.success(it)
             }
+            Log.d("GeminiService", "Local AI returned null.")
         }
 
+        Log.d("GeminiService", "Trying cloud AI...")
         val cloudResult = generateContent(listOf(textPart(prompt)))
         
         if (cloudResult.isFailure && modelFile != null) {
+            Log.w("GeminiService", "Cloud AI failed, retrying local...", cloudResult.exceptionOrNull())
             LocalAiEngine.generateTextLocal(context, prompt, modelFile)?.let {
                 return@withContext Result.success(it)
             }
@@ -195,7 +202,15 @@ class GeminiService(private val context: Context) {
                 val message = runCatching {
                     JSONObject(text).getJSONObject("error").getString("message")
                 }.getOrDefault("HTTP ${response.code}")
-                error("Gemini error: $status $message")
+
+                val cleanMessage = when (status) {
+                    "RESOURCE_EXHAUSTED" -> "Magic reserves depleted (Quota exceeded). Try again in a minute or switch to Local AI."
+                    "UNAVAILABLE" -> "The AI is currently overwhelmed by high demand. Please try again soon."
+                    "PERMISSION_DENIED" -> "Invalid API key or permission denied. Please check your settings."
+                    else -> "The Coach is busy or encountered an error ($status)."
+                }
+                Log.e("GeminiService", "Raw error from Gemini: $status - $message")
+                error(cleanMessage)
             }
             val json = JSONObject(text)
             val candidates = json.optJSONArray("candidates")
@@ -532,8 +547,12 @@ class GeminiService(private val context: Context) {
             $profileBlock
             $historyBlock
             Analyze the performance (e.g. reps far above/below target suggest adjusting difficulty,
-            fatigue late in a session suggests reducing volume) and, if useful, adjust the REMAINING
-            exercises only. Keep changes minimal and justified. It is fine to return no changes.
+            fatigue late in a session suggests reducing volume) and adjust the REMAINING
+            exercises. If the player is consistently hitting or exceeding targets, you MUST PUSH
+            them harder (more weight, sets, or reps). Be a demanding but fair Guildmaster.
+            Do not be afraid to substitute exercises for more challenging versions if they are maxing out.
+            If you decide NO changes are needed, your "message" must explicitly praise their 
+            perfect form and explain why the current plan is still optimal.
             Some sets may include "@N RIR" (reps in reserve): 0 = taken to failure, 4+ = far too easy.
             Use it to judge intensity: consistently high RIR means the player can push harder,
             RIR 0 on early sets means fatigue will build fast.
@@ -552,19 +571,36 @@ class GeminiService(private val context: Context) {
 
 
         return generateText(prompt).mapCatching { raw ->
-            val obj = JSONObject(stripFences(raw))
+            Log.d("GeminiService", "Raw AI response: $raw")
+            val stripped = stripFences(raw)
+            val obj = try {
+                JSONObject(stripped)
+            } catch (e: Exception) {
+                // If the model output a plain text message instead of JSON, we can still show it.
+                val msgMatch = Regex("\"message\"\\s*:\\s*\"([^\"]+)\"").find(raw)
+                val msg = msgMatch?.groupValues?.get(1) ?: raw.take(200)
+                return@mapCatching CoachAdvice(msg, emptyList())
+            }
             val changes = mutableListOf<CoachChange>()
             val arr = obj.optJSONArray("changes") ?: JSONArray()
             for (i in 0 until arr.length()) {
-                val c = arr.getJSONObject(i)
+                val c = arr.optJSONObject(i) ?: continue
+                val exerciseName = c.optString("exercise").takeIf { it.isNotBlank() } ?: continue
+
+                val catStr = c.optString("category").takeIf { it.isNotBlank() && it != "null" }
+                val category = catStr?.let { cat ->
+                    runCatching { ExerciseCategory.valueOf(cat.uppercase()) }
+                        .getOrElse { runCatching { ExerciseCategory.valueOf(cat) }.getOrNull() }
+                        ?: ExerciseCategories.coerce(cat, exerciseName)
+                }
+
                 changes += CoachChange(
-                    exercise = c.getString("exercise"),
+                    exercise = exerciseName,
                     sets = c.optInt("sets", -1).takeIf { it in 1..6 },
                     reps = c.optInt("reps", -1).takeIf { it in 1..60 },
                     replaceWith = c.optString("replaceWith").takeIf { it.isNotBlank() && it != "null" },
-                    replaceCategory = c.optString("category").takeIf { it.isNotBlank() && it != "null" }
-                        ?.let { runCatching { ExerciseCategory.valueOf(it) }.getOrNull() },
-                    reason = c.optString("reason")
+                    replaceCategory = category,
+                    reason = c.optString("reason", "Suggested tweak")
                 )
             }
             CoachAdvice(obj.optString("message", "Keep going, hero!"), changes)
@@ -609,9 +645,17 @@ class GeminiService(private val context: Context) {
         }
     }
 
-    private fun stripFences(raw: String): String = raw.trim()
-        .removePrefix("```json").removePrefix("```")
-        .removeSuffix("```").trim()
+    private fun stripFences(raw: String): String {
+        val trimmed = raw.trim()
+        val firstBrace = trimmed.indexOf('{')
+        val lastBrace = trimmed.lastIndexOf('}')
+        return if (firstBrace != -1 && lastBrace != -1 && lastBrace > firstBrace) {
+            trimmed.substring(firstBrace, lastBrace + 1)
+        } else {
+            trimmed.removePrefix("```json").removePrefix("```")
+                .removeSuffix("```").trim()
+        }
+    }
 
     suspend fun battleNarration(monsterName: String, victory: Boolean, playerName: String, level: Int): Result<String> {
         val outcome = if (victory) "defeated" else "was defeated by"

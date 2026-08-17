@@ -259,19 +259,32 @@ object GameMath {
         var end = character.endurance
         var agi = character.agility
         var wil = character.willpower
-        var strP = character.strProgress + logs.asSequence().filter { it.category == ExerciseCategory.STRENGTH }.sumOf { it.xp }
-        var endP = character.endProgress + logs.asSequence().filter { it.category == ExerciseCategory.CARDIO }.sumOf { it.xp }
-        var agiP = character.agiProgress + logs.asSequence().filter { it.category == ExerciseCategory.BODYWEIGHT }.sumOf { it.xp }
-        var wilP = character.wilProgress + logs.asSequence().filter { it.category == ExerciseCategory.FLEXIBILITY }.sumOf { it.xp }
+        
+        val sessionStrXp = logs.asSequence().filter { it.category == ExerciseCategory.STRENGTH }.sumOf { it.xp }
+        val sessionEndXp = logs.asSequence().filter { it.category == ExerciseCategory.CARDIO }.sumOf { it.xp }
+        val sessionAgiXp = logs.asSequence().filter { it.category == ExerciseCategory.BODYWEIGHT }.sumOf { it.xp }
+        val sessionWilXp = logs.asSequence().filter { it.category == ExerciseCategory.FLEXIBILITY }.sumOf { it.xp }
+        
+        // Distribute bonus XP (Elixirs, PRs) proportionally across active stats
+        val baseSessionXp = (sessionStrXp + sessionEndXp + sessionAgiXp + sessionWilXp).toDouble().coerceAtLeast(1.0)
+        val strP = character.strProgress + sessionStrXp + (bonusXp * (sessionStrXp / baseSessionXp)).toInt()
+        val endP = character.endProgress + sessionEndXp + (bonusXp * (sessionEndXp / baseSessionXp)).toInt()
+        val agiP = character.agiProgress + sessionAgiXp + (bonusXp * (sessionAgiXp / baseSessionXp)).toInt()
+        val wilP = character.wilProgress + sessionWilXp + (bonusXp * (sessionWilXp / baseSessionXp)).toInt()
+
+        var strProgress = strP
+        var endProgress = endP
+        var agiProgress = agiP
+        var wilProgress = wilP
 
         var strGain = 0
         var endGain = 0
         var agiGain = 0
         var wilGain = 0
-        while (strP >= statThreshold(str)) { strP -= statThreshold(str); str++; strGain++ }
-        while (endP >= statThreshold(end)) { endP -= statThreshold(end); end++; endGain++ }
-        while (agiP >= statThreshold(agi)) { agiP -= statThreshold(agi); agi++; agiGain++ }
-        while (wilP >= statThreshold(wil)) { wilP -= statThreshold(wil); wil++; wilGain++ }
+        while (strProgress >= statThreshold(str)) { strProgress -= statThreshold(str); str++; strGain++ }
+        while (endProgress >= statThreshold(end)) { endProgress -= statThreshold(end); end++; endGain++ }
+        while (agiProgress >= statThreshold(agi)) { agiProgress -= statThreshold(agi); agi++; agiGain++ }
+        while (wilProgress >= statThreshold(wil)) { wilProgress -= statThreshold(wil); wil++; wilGain++ }
 
         var level = character.level
         var xp = character.xp + totalXp
@@ -289,7 +302,7 @@ object GameMath {
             energy = min(character.energy + energyGain, maxEnergy),
             lastEnergyUpdate = now,
             strength = str, endurance = end, agility = agi, willpower = wil,
-            strProgress = strP, endProgress = endP, agiProgress = agiP, wilProgress = wilP,
+            strProgress = strProgress, endProgress = endProgress, agiProgress = agiProgress, wilProgress = wilProgress,
             sessionsCompleted = character.sessionsCompleted + 1
         )
 
