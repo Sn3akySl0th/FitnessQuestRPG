@@ -485,33 +485,31 @@ private fun SessionScreen(
                 textAlign = TextAlign.Center
             )
 
-            // 4. Bottom Action Bar (Hevy-style: [<] [ LOG ] [>])
+            // 4. Bottom Action Bar (Hevy-style: [<] [ ✓ LOG ] [>])
             Row(
                 modifier = Modifier
-                    .fillMaxWidth(0.88f)
+                    .wrapContentWidth()
                     .padding(bottom = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
+                horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally)
             ) {
                 Button(
                     enabled = idx > 0,
                     onClick = { onSelectExercise(idx - 1) },
-                    modifier = Modifier.size(32.dp),
+                    modifier = Modifier.size(34.dp),
                     shape = CircleShape,
                     colors = ButtonDefaults.secondaryButtonColors()
                 ) {
                     Icon(
                         Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "Previous Exercise",
-                        modifier = Modifier.size(14.dp)
+                        modifier = Modifier.size(16.dp)
                     )
                 }
 
                 Button(
                     onClick = onLogSet,
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(36.dp),
+                    modifier = Modifier.size(width = 68.dp, height = 36.dp),
                     shape = RoundedCornerShape(18.dp),
                     colors = ButtonDefaults.primaryButtonColors()
                 ) {
@@ -524,10 +522,10 @@ private fun SessionScreen(
                             contentDescription = "Log",
                             modifier = Modifier.size(16.dp)
                         )
-                        Spacer(Modifier.width(4.dp))
+                        Spacer(Modifier.width(3.dp))
                         Text(
                             text = "LOG",
-                            style = MaterialTheme.typography.button,
+                            fontSize = 12.sp,
                             fontWeight = FontWeight.Black
                         )
                     }
@@ -536,14 +534,14 @@ private fun SessionScreen(
                 Button(
                     enabled = idx < count - 1,
                     onClick = { onSelectExercise(idx + 1) },
-                    modifier = Modifier.size(32.dp),
+                    modifier = Modifier.size(34.dp),
                     shape = CircleShape,
                     colors = ButtonDefaults.secondaryButtonColors()
                 ) {
                     Icon(
                         Icons.AutoMirrored.Filled.ArrowForward,
                         contentDescription = "Next Exercise",
-                        modifier = Modifier.size(14.dp)
+                        modifier = Modifier.size(16.dp)
                     )
                 }
             }
