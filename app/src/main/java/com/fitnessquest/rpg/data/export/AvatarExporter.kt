@@ -46,6 +46,49 @@ enum class ExportFormat(val width: Int, val height: Int, val label: String) {
 
 object AvatarExporter {
 
+    fun generateAvatarBytes(
+        context: Context,
+        character: CharacterEntity,
+        cls: CharacterClass,
+        gear: Map<ItemSlot, ItemEntity> = emptyMap()
+    ): ByteArray {
+        val width = 360f
+        val height = 360f
+        val bitmap = Bitmap.createBitmap(width.toInt(), height.toInt(), Bitmap.Config.ARGB_8888)
+        val androidCanvas = Canvas(bitmap)
+
+        val density = context.resources.displayMetrics.density
+        val drawScope = CanvasDrawScope()
+        val frame = AvatarFrame(
+            u = width / 100f,
+            cls = cls,
+            look = lookFor(cls),
+            gear = gear,
+            costume = false,
+            highlightMuscles = emptySet(),
+            facingBack = false,
+            appearance = character.toAppearance(),
+            expression = AvatarExpression.BATTLE_READY,
+            detail = AvatarDetail.FULL,
+            phase = 0f
+        )
+
+        drawScope.draw(
+            density = Density(density),
+            layoutDirection = LayoutDirection.Ltr,
+            canvas = androidx.compose.ui.graphics.Canvas(androidCanvas),
+            size = Size(width, height)
+        ) {
+            with(AvatarPainter) {
+                draw(frame, focus = AvatarFocus.FULL_BODY)
+            }
+        }
+
+        val baos = ByteArrayOutputStream()
+        bitmap.compress(Bitmap.CompressFormat.PNG, 90, baos)
+        return baos.toByteArray()
+    }
+
     suspend fun syncAvatarToWear(
         context: Context,
         character: CharacterEntity,
@@ -53,48 +96,25 @@ object AvatarExporter {
         gear: Map<ItemSlot, ItemEntity> = emptyMap()
     ): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            val width = 450f
-            val height = 450f
-            val bitmap = Bitmap.createBitmap(width.toInt(), height.toInt(), Bitmap.Config.ARGB_8888)
-            val androidCanvas = Canvas(bitmap)
+            val bytes = generateAvatarBytes(context, character, cls, gear)
 
-            val density = context.resources.displayMetrics.density
-            val drawScope = CanvasDrawScope()
-            val frame = AvatarFrame(
-                u = width / 100f,
-                cls = cls,
-                look = lookFor(cls),
-                gear = gear,
-                costume = false,
-                highlightMuscles = emptySet(),
-                facingBack = false,
-                appearance = character.toAppearance(),
-                expression = AvatarExpression.BATTLE_READY,
-                detail = AvatarDetail.FULL,
-                phase = 0f
-            )
-
-            drawScope.draw(
-                density = Density(density),
-                layoutDirection = LayoutDirection.Ltr,
-                canvas = androidx.compose.ui.graphics.Canvas(androidCanvas),
-                size = Size(width, height)
-            ) {
-                with(AvatarPainter) {
-                    draw(frame, focus = AvatarFocus.FULL_BODY)
-                }
-            }
-
-            val baos = ByteArrayOutputStream()
-            bitmap.compress(Bitmap.CompressFormat.PNG, 90, baos)
-            val bytes = baos.toByteArray()
-
+            // 1. DataClient layer
             val dataMapReq = PutDataMapRequest.create(WearPaths.AVATAR_WATCH_FACE).apply {
                 dataMap.putByteArray("image", bytes)
                 dataMap.putLong("timestamp", System.currentTimeMillis())
             }
             val putDataReq = dataMapReq.asPutDataRequest().setUrgent()
             Wearable.getDataClient(context).putDataItem(putDataReq).await()
+
+            // 2. Direct instant MessageClient transmission to all connected watch nodes
+            val nodes = Wearable.getNodeClient(context).connectedNodes.await()
+            for (node in nodes) {
+                runCatching {
+                    Wearable.getMessageClient(context)
+                        .sendMessage(node.id, WearPaths.AVATAR_WATCH_FACE, bytes)
+                        .await()
+                }
+            }
             Unit
         }
     }

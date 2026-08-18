@@ -45,6 +45,7 @@ import com.google.android.gms.wearable.DataMapItem
 import com.google.android.gms.wearable.MessageClient
 import com.google.android.gms.wearable.MessageEvent
 import com.google.android.gms.wearable.Wearable
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -235,7 +236,19 @@ class WearSessionViewModel(private val app: Application) : ViewModel(),
     }
 
     private fun loadInitialAvatar() {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
+            // 1. Load instantly from local storage cache
+            runCatching {
+                val file = java.io.File(app.filesDir, "hero_avatar.png")
+                if (file.exists()) {
+                    val bytes = file.readBytes()
+                    val bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                    if (bmp != null) {
+                        _uiState.update { it.copy(avatarBitmap = bmp) }
+                    }
+                }
+            }
+            // 2. Query Wear Data Layer for latest
             runCatching {
                 val buffer = dataClient.dataItems.await()
                 for (item in buffer) {
@@ -244,7 +257,12 @@ class WearSessionViewModel(private val app: Application) : ViewModel(),
                         val bytes = dataMap.getByteArray("image")
                         if (bytes != null && bytes.isNotEmpty()) {
                             val bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                            _uiState.update { it.copy(avatarBitmap = bmp) }
+                            if (bmp != null) {
+                                _uiState.update { it.copy(avatarBitmap = bmp) }
+                                runCatching {
+                                    java.io.File(app.filesDir, "hero_avatar.png").writeBytes(bytes)
+                                }
+                            }
                         }
                     }
                 }
@@ -260,7 +278,12 @@ class WearSessionViewModel(private val app: Application) : ViewModel(),
                 val bytes = dataMap.getByteArray("image")
                 if (bytes != null && bytes.isNotEmpty()) {
                     val bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                    _uiState.update { it.copy(avatarBitmap = bmp) }
+                    if (bmp != null) {
+                        _uiState.update { it.copy(avatarBitmap = bmp) }
+                        runCatching {
+                            java.io.File(app.filesDir, "hero_avatar.png").writeBytes(bytes)
+                        }
+                    }
                 }
             }
         }
@@ -300,6 +323,17 @@ class WearSessionViewModel(private val app: Application) : ViewModel(),
 
     override fun onMessageReceived(event: MessageEvent) {
         when (event.path) {
+            WearPaths.AVATAR_WATCH_FACE -> {
+                if (event.data.isNotEmpty()) {
+                    val bmp = BitmapFactory.decodeByteArray(event.data, 0, event.data.size)
+                    if (bmp != null) {
+                        _uiState.update { it.copy(avatarBitmap = bmp) }
+                        runCatching {
+                            java.io.File(app.filesDir, "hero_avatar.png").writeBytes(event.data)
+                        }
+                    }
+                }
+            }
             WearPaths.HELLO_ACK -> {
                 _uiState.update {
                     it.copy(

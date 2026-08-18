@@ -82,15 +82,16 @@ fun WearApp(
                     contentDescription = "Avatar Backdrop",
                     modifier = Modifier
                         .fillMaxSize()
-                        .alpha(0.35f),
-                    contentScale = ContentScale.Crop
+                        .alpha(0.45f),
+                    contentScale = ContentScale.Fit,
+                    alignment = Alignment.Center
                 )
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .background(
                             Brush.radialGradient(
-                                colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.65f))
+                                colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.40f))
                             )
                         )
                 )
@@ -357,20 +358,27 @@ private fun SessionScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 10.dp)
+                    .padding(top = 8.dp, start = 14.dp, end = 14.dp)
             ) {
+                val nameLength = ex.name.length
+                val titleFontSize = when {
+                    nameLength > 24 -> 12.sp
+                    nameLength > 16 -> 13.5.sp
+                    else -> 15.sp
+                }
                 Text(
                     text = ex.name,
-                    style = MaterialTheme.typography.title3,
+                    fontSize = titleFontSize,
+                    lineHeight = (titleFontSize.value + 2).sp,
                     fontWeight = FontWeight.ExtraBold,
                     textAlign = TextAlign.Center,
-                    maxLines = 1,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     color = MaterialTheme.colors.primary,
-                    modifier = Modifier.fillMaxWidth(0.90f)
+                    modifier = Modifier.fillMaxWidth()
                 )
 
-                Spacer(Modifier.height(2.dp))
+                Spacer(Modifier.height(1.dp))
 
                 // Subtitle: "Set 1/4 • ❤️ 102 • 🔥 24 kcal" (or "✓ Done (4) • ❤️ 102")
                 Row(
