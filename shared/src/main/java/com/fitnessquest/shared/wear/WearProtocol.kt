@@ -63,7 +63,10 @@ data class WearExerciseState(
     val loggedSets: Int,
     val trackingType: String = "",
     val lastWeightDisplay: Double = 0.0,
-    val lastReps: Int = 0
+    val lastReps: Int = 0,
+    val suggestedWeightDisplay: Double? = null,
+    val suggestedReps: Int? = null,
+    val suggestionReason: String? = null
 )
 
 data class WearSessionState(

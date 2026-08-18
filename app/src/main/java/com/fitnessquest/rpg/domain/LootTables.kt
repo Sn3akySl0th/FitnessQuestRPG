@@ -11,7 +11,7 @@ enum class MomentTrigger { PERSONAL_RECORD, HEAVY_LIFT, MILESTONE }
 
 /** A single grant produced by a loot roll (before persistence). */
 sealed class LootGrant {
-    data class Gear(val catalog: ItemEntity) : LootGrant()
+    data class Gear(val catalog: ItemEntity, val rarity: GearRarity = GearRarity.COMMON) : LootGrant()
     data class Stack(val catalog: ItemEntity, val quantity: Int = 1) : LootGrant()
     data class Gold(val amount: Int) : LootGrant()
     data class Energy(val amount: Int) : LootGrant()
@@ -33,7 +33,13 @@ data class LootResult(
         if (xpBoostBonus > 0) add("+$xpBoostBonus XP boost")
         grants.forEach { g ->
             when (g) {
-                is LootGrant.Gear -> add(g.catalog.name)
+                is LootGrant.Gear -> {
+                    if (g.rarity != GearRarity.COMMON) {
+                        add("${g.catalog.name} (${g.rarity.displayName})")
+                    } else {
+                        add(g.catalog.name)
+                    }
+                }
                 is LootGrant.Stack -> add("${g.catalog.name} x${g.quantity}")
                 is LootGrant.Gold -> add("+${g.amount} gold")
                 is LootGrant.Energy -> add("+${g.amount} energy")
@@ -43,14 +49,21 @@ data class LootResult(
                     addAll(
                         g.contents.flatMap { nested ->
                             when (nested) {
-                            is LootGrant.Gear -> listOf(nested.catalog.name)
-                            is LootGrant.Stack -> listOf("${nested.catalog.name} x${nested.quantity}")
-                            is LootGrant.Gold -> listOf("+${nested.amount} gold")
-                            is LootGrant.Energy -> listOf("+${nested.amount} energy")
-                            is LootGrant.XpBoost -> listOf("+${nested.amount} XP boost")
-                            is LootGrant.ChestOpened -> emptyList()
+                                is LootGrant.Gear -> {
+                                    if (nested.rarity != GearRarity.COMMON) {
+                                        listOf("${nested.catalog.name} (${nested.rarity.displayName})")
+                                    } else {
+                                        listOf(nested.catalog.name)
+                                    }
+                                }
+                                is LootGrant.Stack -> listOf("${nested.catalog.name} x${nested.quantity}")
+                                is LootGrant.Gold -> listOf("+${nested.amount} gold")
+                                is LootGrant.Energy -> listOf("+${nested.amount} energy")
+                                is LootGrant.XpBoost -> listOf("+${nested.amount} XP boost")
+                                is LootGrant.ChestOpened -> emptyList()
+                            }
                         }
-                    })
+                    )
                 }
             }
         }
@@ -115,6 +128,43 @@ object LootChests {
 
 object LootTables {
 
+    fun rollRarity(
+        source: LootSource,
+        characterLevel: Int,
+        prCount: Int = 0,
+        rng: Random = Random.Default
+    ): GearRarity {
+        val roll = rng.nextInt(1000)
+        return when (source) {
+            LootSource.WORKOUT, LootSource.BATTLE, LootSource.MOMENT -> {
+                val prBonus = (prCount * 30).coerceAtMost(120)
+                when {
+                    characterLevel >= GearRarity.EPIC.minLevelGate && roll < (5 + prBonus / 10) -> GearRarity.EPIC
+                    characterLevel >= GearRarity.RARE.minLevelGate && roll < (45 + prBonus) -> GearRarity.RARE
+                    roll < (220 + prBonus) -> GearRarity.UNCOMMON
+                    else -> GearRarity.COMMON
+                }
+            }
+            LootSource.BOSS, LootSource.CAMPAIGN, LootSource.GUILD_RAID -> {
+                when {
+                    characterLevel >= GearRarity.LEGENDARY.minLevelGate && roll < 60 -> GearRarity.LEGENDARY
+                    characterLevel >= GearRarity.EPIC.minLevelGate && roll < 220 -> GearRarity.EPIC
+                    characterLevel >= GearRarity.RARE.minLevelGate && roll < 600 -> GearRarity.RARE
+                    else -> GearRarity.UNCOMMON
+                }
+            }
+            LootSource.AMBUSH, LootSource.CHEST -> {
+                when {
+                    characterLevel >= GearRarity.LEGENDARY.minLevelGate && roll < 25 -> GearRarity.LEGENDARY
+                    characterLevel >= GearRarity.EPIC.minLevelGate && roll < 120 -> GearRarity.EPIC
+                    characterLevel >= GearRarity.RARE.minLevelGate && roll < 400 -> GearRarity.RARE
+                    roll < 750 -> GearRarity.UNCOMMON
+                    else -> GearRarity.COMMON
+                }
+            }
+        }
+    }
+
     fun rollBattleLoot(
         monster: Monster,
         gearPool: List<ItemEntity>,
@@ -129,13 +179,16 @@ object LootTables {
             val chest = stackPool.find { it.id == LootChests.BIOME }
                 ?: stackPool.find { it.id == LootChests.WOODEN }
             if (chest != null) {
-                grants += LootGrant.ChestOpened(chest, openChest(chest.tier, gearPool, stackPool, rng))
+                grants += LootGrant.ChestOpened(chest, openChest(chest.tier, gearPool, stackPool, rng, monster.level))
                 return LootResult(grants = grants, goldBonus = gold)
             }
         }
         // Direct gear / rune / material
         when (rng.nextInt(100)) {
-            in 0 until 18 -> pickGear(gearPool, monster.tier, rng)?.let { grants += LootGrant.Gear(it) }
+            in 0 until 18 -> pickGear(gearPool, monster.tier, rng)?.let {
+                val rarity = rollRarity(LootSource.BATTLE, monster.level, rng = rng)
+                grants += LootGrant.Gear(it, rarity)
+            }
             in 18 until 35 -> pickStack(stackPool, ItemSlot.RUNE, monster.tier, rng)?.let {
                 grants += LootGrant.Stack(it)
             }
@@ -172,7 +225,7 @@ object LootTables {
         }
         if (setCount >= 8 && rng.nextInt(100) < 20) {
             stackPool.find { it.id == LootChests.WOODEN }?.let {
-                grants += LootGrant.ChestOpened(it, openChest(1, gearPool, stackPool, rng))
+                grants += LootGrant.ChestOpened(it, openChest(1, gearPool, stackPool, rng, level))
             }
         }
         if (rng.nextInt(100) < 25) xpBoost = 15 + prCount * 10
@@ -200,7 +253,10 @@ object LootTables {
                     in 0 until 25 -> pickStack(stackPool, ItemSlot.RUNE, tier, rng)?.let {
                         grants += LootGrant.Stack(it)
                     }
-                    in 25 until 45 -> pickGear(gearPool, tier, rng)?.let { grants += LootGrant.Gear(it) }
+                    in 25 until 45 -> pickGear(gearPool, tier, rng)?.let {
+                        val rarity = rollRarity(LootSource.MOMENT, level, prCount = 1, rng = rng)
+                        grants += LootGrant.Gear(it, rarity)
+                    }
                     else -> pickStack(stackPool, ItemSlot.MATERIAL, tier, rng)?.let {
                         grants += LootGrant.Stack(it, 2)
                     }
@@ -249,7 +305,7 @@ object LootTables {
         val tier = maxTier.coerceIn(1, ProgressionRules.MAX_GEAR_TIER)
         val grants = mutableListOf<LootGrant>()
         stackPool.find { it.id == LootChests.WAR_CACHE }?.let {
-            grants += LootGrant.ChestOpened(it, openChest(tier.coerceAtLeast(2), gearPool, stackPool, rng))
+            grants += LootGrant.ChestOpened(it, openChest(tier.coerceAtLeast(2), gearPool, stackPool, rng, level))
         }
         return LootResult(
             grants = grants,
@@ -275,13 +331,14 @@ object LootTables {
 
         val grants = mutableListOf<LootGrant>()
 
-        // 1. Guaranteed high-tier gear piece
+        // 1. Guaranteed high-tier gear piece with elevated boss rarity
         val filteredGear = ProgressionRules.filterGearPool(gearPool, targetTier, character)
             .filter { it.tier == targetTier }
             .ifEmpty { ProgressionRules.filterGearPool(gearPool, targetTier, character) }
         val guaranteedGear = filteredGear.randomOrNull(rng) ?: pickGear(gearPool, targetTier, rng)
         if (guaranteedGear != null) {
-            grants += LootGrant.Gear(guaranteedGear)
+            val rarity = rollRarity(LootSource.BOSS, character.level, rng = rng)
+            grants += LootGrant.Gear(guaranteedGear, rarity)
         }
 
         // 2. Guaranteed Biome Chest with contents
@@ -289,7 +346,7 @@ object LootTables {
             ?: stackPool.find { it.id == LootChests.WAR_CACHE }
             ?: stackPool.find { it.id == LootChests.WOODEN }
         if (biomeChest != null) {
-            grants += LootGrant.ChestOpened(biomeChest, openChest(targetTier, gearPool, stackPool, rng))
+            grants += LootGrant.ChestOpened(biomeChest, openChest(targetTier, gearPool, stackPool, rng, character.level))
         }
 
         // 3. Guaranteed Crafting Materials
@@ -310,13 +367,16 @@ object LootTables {
         tier: Int,
         gearPool: List<ItemEntity>,
         stackPool: List<ItemEntity>,
-        rng: Random = Random.Default
+        rng: Random = Random.Default,
+        characterLevel: Int = tier * 3
     ): List<LootGrant> {
         val rolls = 2 + rng.nextInt(3) // 2-4
         return List(rolls) {
             when (rng.nextInt(100)) {
-                in 0 until 12 -> pickGear(gearPool, tier, rng)?.let { LootGrant.Gear(it) }
-                    ?: LootGrant.Gold(8 + tier * 4)
+                in 0 until 12 -> pickGear(gearPool, tier, rng)?.let {
+                    val rarity = rollRarity(LootSource.CHEST, characterLevel, rng = rng)
+                    LootGrant.Gear(it, rarity)
+                } ?: LootGrant.Gold(8 + tier * 4)
                 in 12 until 30 -> pickStack(stackPool, ItemSlot.RUNE, tier, rng)?.let { LootGrant.Stack(it) }
                     ?: LootGrant.Gold(6 + tier * 3)
                 in 30 until 65 -> pickStack(stackPool, ItemSlot.MATERIAL, tier, rng)?.let {

@@ -133,6 +133,9 @@ interface SessionDao {
     @Query("SELECT COALESCE(MAX(weightKg), 0) FROM set_logs WHERE exerciseName = :exerciseName")
     suspend fun maxWeightFor(exerciseName: String): Double
 
+    @Query("SELECT COALESCE(MAX(weightKg), 0) FROM set_logs WHERE exerciseName IN (:names)")
+    suspend fun maxWeightForExercises(names: List<String>): Double
+
     @Query("SELECT * FROM set_logs WHERE exerciseName = :exerciseName")
     suspend fun logsForExercise(exerciseName: String): List<SetLogEntity>
 

@@ -270,9 +270,11 @@ class ExerciseInfoService(private val context: Context) {
     private fun normalize(name: String): String =
         name.lowercase()
             .replace(Regex("[^a-z0-9]+"), " ")
-            .trim()
             .split(' ')
-            .joinToString(" ") { it.removeSuffix("s").ifEmpty { it } }
+            .filter { it.isNotBlank() }
+            .map { it.removeSuffix("s") }
+            .sorted()
+            .joinToString(" ")
 
     private fun DocumentSnapshot.getStringList(field: String): List<String> =
         (get(field) as? List<*>).orEmpty().mapNotNull { it?.toString()?.takeIf(String::isNotBlank) }
@@ -334,12 +336,21 @@ class ExerciseInfoService(private val context: Context) {
         val aliases = mapOf(
             "bench pres" to "Barbell Bench Press - Medium Grip",
             "squat" to "Barbell Squat",
+            "barbell squat" to "Barbell Squat",
+            "barbell squat squat" to "Barbell Squat",
             "deadlift" to "Barbell Deadlift",
+            "barbell deadlift" to "Barbell Deadlift",
             "overhead pres" to "Standing Military Press",
             "barbell row" to "Bent Over Barbell Row",
             "dumbbell curl" to "Dumbbell Bicep Curl",
             "lat pulldown" to "Wide-Grip Lat Pulldown",
             "tricep pushdown" to "Triceps Pushdown",
+            "barbell bench pres" to "Barbell Bench Press - Medium Grip",
+            "dumbbell bench pres" to "Dumbbell Bench Press",
+            "incline barbell bench pres" to "Barbell Incline Bench Press",
+            "incline dumbbell bench pres" to "Dumbbell Incline Bench Press",
+            "shoulder pres dumbbell" to "Dumbbell Shoulder Press",
+            "dumbbell shoulder pres" to "Dumbbell Shoulder Press",
             "running" to "Running, Treadmill",
             "cycling" to "Bicycling",
             "rowing machine" to "Rowing, Stationary",

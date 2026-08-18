@@ -6,6 +6,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.os.Bundle
 import android.os.IBinder
 import android.view.WindowManager
@@ -34,6 +36,10 @@ import com.fitnessquest.shared.wear.WearRestAction
 import com.fitnessquest.shared.wear.WearRestCommand
 import com.fitnessquest.shared.wear.WearSessionState
 import com.google.android.gms.wearable.CapabilityClient
+import com.google.android.gms.wearable.DataClient
+import com.google.android.gms.wearable.DataEvent
+import com.google.android.gms.wearable.DataEventBuffer
+import com.google.android.gms.wearable.DataMapItem
 import com.google.android.gms.wearable.MessageClient
 import com.google.android.gms.wearable.MessageEvent
 import com.google.android.gms.wearable.Wearable
@@ -56,15 +62,14 @@ class WearMainActivity : FragmentActivity(), AmbientModeSupport.AmbientCallbackP
     override fun getAmbientCallback(): AmbientModeSupport.AmbientCallback = object : AmbientModeSupport.AmbientCallback() {
         override fun onEnterAmbient(ambientDetails: Bundle?) {
             super.onEnterAmbient(ambientDetails)
-            // Optional: update UI for ambient mode
-        }
-
-        override fun onExitAmbient() {
-            super.onExitAmbient()
         }
 
         override fun onUpdateAmbient() {
             super.onUpdateAmbient()
+        }
+
+        override fun onExitAmbient() {
+            super.onExitAmbient()
         }
     }
 
@@ -95,12 +100,14 @@ class WearMainActivity : FragmentActivity(), AmbientModeSupport.AmbientCallbackP
                 onAdjustReps = viewModel::adjustReps,
                 onAdjustDuration = viewModel::adjustDuration,
                 onAdjustDistance = viewModel::adjustDistance,
+                onToggleCardioTimer = viewModel::toggleCardioTimer,
+                onResetCardioTimer = viewModel::resetCardioTimer,
                 onRetryLink = viewModel::retryLink,
                 onRequestHrPermission = { ensurePermissions(force = true) }
             )
             // Keep the watch screen alive while a quest is active.
             if (state.session.active) {
-                DisposableEffect(Unit) {
+                DisposableEffect(state.session.active) {
                     window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                     onDispose { window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
                 }
@@ -152,28 +159,34 @@ data class WearUiState(
     val reps: Int = 8,
     val durationMin: Double = 10.0,
     val distanceDisplay: Double = 1.0,
+    val cardioTimerActive: Boolean = false,
+    val cardioTimerSeconds: Int = 0,
     val metrics: WearLiveMetrics = WearLiveMetrics(),
     val hrStatus: String = "HR off",
     val feedback: WearFeedbackEvent? = null,
     val phoneConnected: Boolean = false,
     val linkStatus: String = "Looking for phone…",
-    val lastLogFlash: String? = null
+    val lastLogFlash: String? = null,
+    val avatarBitmap: Bitmap? = null
 ) {
     val localBpm: Int? get() = metrics.bpm
 }
 
 class WearSessionViewModel(private val app: Application) : ViewModel(),
-    MessageClient.OnMessageReceivedListener {
+    MessageClient.OnMessageReceivedListener,
+    DataClient.OnDataChangedListener {
 
     private val _uiState = MutableStateFlow(WearUiState())
     val uiState: StateFlow<WearUiState> = _uiState
 
     private val messageClient by lazy { Wearable.getMessageClient(app) }
+    private val dataClient by lazy { Wearable.getDataClient(app) }
     private val nodeClient by lazy { Wearable.getNodeClient(app) }
     private val capabilityClient by lazy { Wearable.getCapabilityClient(app) }
 
     private var workoutService: WearWorkoutService? = null
     private var isBound = false
+    private var cardioTimerJob: Job? = null
 
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
@@ -208,37 +221,64 @@ class WearSessionViewModel(private val app: Application) : ViewModel(),
         }
     }
 
-    private var pollJob: Job? = null
-
-    fun onSensorPermissionResult(granted: Boolean) {
-        if (granted) {
-            _uiState.update { it.copy(hrStatus = "Reading HR…") }
-            if (_uiState.value.session.active) workoutService?.startWorkout()
-        } else {
-            _uiState.update { it.copy(hrStatus = "Allow heart rate") }
-        }
+    init {
+        messageClient.addListener(this)
+        dataClient.addListener(this)
+        refreshPhoneConnection(sendHello = true)
+        loadInitialAvatar()
     }
 
-    fun bind() {
-        messageClient.addListener(this)
-        
-        val intent = Intent(app, WearWorkoutService::class.java)
-        app.bindService(intent, connection, Context.BIND_AUTO_CREATE)
-
-        pollJob?.cancel()
-        pollJob = viewModelScope.launch {
-            while (isActive) {
-                refreshPhoneConnection(sendHello = true)
-                delay(4_000)
+    private fun loadInitialAvatar() {
+        viewModelScope.launch {
+            runCatching {
+                val buffer = dataClient.dataItems.await()
+                for (item in buffer) {
+                    if (item.uri.path == WearPaths.AVATAR_WATCH_FACE) {
+                        val dataMap = DataMapItem.fromDataItem(item).dataMap
+                        val bytes = dataMap.getByteArray("image")
+                        if (bytes != null && bytes.isNotEmpty()) {
+                            val bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                            _uiState.update { it.copy(avatarBitmap = bmp) }
+                        }
+                    }
+                }
+                buffer.release()
             }
         }
     }
 
+    override fun onDataChanged(dataEvents: DataEventBuffer) {
+        for (event in dataEvents) {
+            if (event.type == DataEvent.TYPE_CHANGED && event.dataItem.uri.path == WearPaths.AVATAR_WATCH_FACE) {
+                val dataMap = DataMapItem.fromDataItem(event.dataItem).dataMap
+                val bytes = dataMap.getByteArray("image")
+                if (bytes != null && bytes.isNotEmpty()) {
+                    val bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                    _uiState.update { it.copy(avatarBitmap = bmp) }
+                }
+            }
+        }
+    }
+
+    fun bind() {
+        if (!isBound) {
+            val intent = Intent(app, WearWorkoutService::class.java)
+            app.bindService(intent, connection, Context.BIND_AUTO_CREATE)
+        }
+    }
+
     fun unbind() {
-        pollJob?.cancel()
-        pollJob = null
+        if (isBound) {
+            app.unbindService(connection)
+            isBound = false
+        }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
         messageClient.removeListener(this)
-        
+        dataClient.removeListener(this)
+        cardioTimerJob?.cancel()
         if (isBound) {
             app.unbindService(connection)
             isBound = false
@@ -285,8 +325,7 @@ class WearSessionViewModel(private val app: Application) : ViewModel(),
                             else -> s.weightDisplay
                         },
                         reps = when {
-                            switching && (ex?.lastReps ?: 0) > 0 -> ex!!.lastReps
-                            switching -> (ex?.targetReps ?: 8).coerceAtLeast(1)
+                            switching -> ex?.suggestedReps ?: ex?.lastReps?.takeIf { it > 0 } ?: (ex?.targetReps ?: 8).coerceAtLeast(1)
                             else -> s.reps
                         },
                         durationMin = if (switching) defaultDuration(ex) else s.durationMin,
@@ -304,6 +343,7 @@ class WearSessionViewModel(private val app: Application) : ViewModel(),
             }
             WearPaths.SESSION_ENDED -> {
                 workoutService?.stopWorkout()
+                cardioTimerJob?.cancel()
                 _uiState.update {
                     it.copy(
                         session = it.session.copy(active = false, restEndsAt = null),
@@ -311,7 +351,9 @@ class WearSessionViewModel(private val app: Application) : ViewModel(),
                             WearFeedbackKind.REST_END,
                             "Quest complete — check your phone"
                         ),
-                        linkStatus = "Phone linked — start a quest"
+                        linkStatus = "Phone linked — start a quest",
+                        cardioTimerActive = false,
+                        cardioTimerSeconds = 0
                     )
                 }
                 WearHaptics.pulse(app, WearHaptics.Pattern.REST_END)
@@ -330,7 +372,7 @@ class WearSessionViewModel(private val app: Application) : ViewModel(),
             s.copy(
                 selectedIndex = index,
                 weightDisplay = defaultWeight(s.session, ex),
-                reps = ex.lastReps.takeIf { it > 0 } ?: ex.targetReps.coerceAtLeast(1),
+                reps = ex.suggestedReps ?: ex.lastReps.takeIf { it > 0 } ?: ex.targetReps.coerceAtLeast(1),
                 durationMin = defaultDuration(ex),
                 distanceDisplay = defaultDistance(s.session, s.metrics),
                 lastLogFlash = null
@@ -358,6 +400,34 @@ class WearSessionViewModel(private val app: Application) : ViewModel(),
         }
     }
 
+    fun toggleCardioTimer() {
+        val currentlyActive = _uiState.value.cardioTimerActive
+        if (!currentlyActive) {
+            _uiState.update { it.copy(cardioTimerActive = true) }
+            cardioTimerJob?.cancel()
+            cardioTimerJob = viewModelScope.launch {
+                while (isActive) {
+                    delay(1000L)
+                    _uiState.update {
+                        val nextSec = it.cardioTimerSeconds + 1
+                        it.copy(
+                            cardioTimerSeconds = nextSec,
+                            durationMin = (nextSec / 60.0).coerceAtLeast(0.5)
+                        )
+                    }
+                }
+            }
+        } else {
+            cardioTimerJob?.cancel()
+            _uiState.update { it.copy(cardioTimerActive = false) }
+        }
+    }
+
+    fun resetCardioTimer() {
+        cardioTimerJob?.cancel()
+        _uiState.update { it.copy(cardioTimerActive = false, cardioTimerSeconds = 0, durationMin = 10.0) }
+    }
+
     fun logSet() {
         val s = _uiState.value
         if (!s.session.active || s.session.exercises.isEmpty()) return
@@ -369,12 +439,19 @@ class WearSessionViewModel(private val app: Application) : ViewModel(),
             "BODYWEIGHT" -> "BODYWEIGHT_REPS"
             else -> "WEIGHT_REPS"
         }
+        
+        val effectiveDuration = if (s.cardioTimerSeconds > 0) {
+            (s.cardioTimerSeconds / 60.0).coerceAtLeast(0.5)
+        } else {
+            s.durationMin
+        }
+
         val cmd = when (tracking) {
             "CARDIO_MACHINE", "DISTANCE_TIME" -> WearLogSetCommand(
                 exerciseIndex = s.selectedIndex,
                 weightDisplay = 0.0,
                 reps = 0,
-                durationMin = s.durationMin,
+                durationMin = effectiveDuration,
                 distanceDisplay = s.distanceDisplay,
                 avgHr = s.metrics.bpm,
                 maxHr = s.metrics.bpm
@@ -392,15 +469,17 @@ class WearSessionViewModel(private val app: Application) : ViewModel(),
                 exerciseIndex = s.selectedIndex,
                 weightDisplay = 0.0,
                 reps = 0,
-                durationMin = s.durationMin,
+                durationMin = effectiveDuration,
                 distanceDisplay = 0.0,
                 avgHr = s.metrics.bpm,
                 maxHr = s.metrics.bpm
             )
-            "BODYWEIGHT_REPS", "REPS_ONLY", "ASSISTED_REPS" -> WearLogSetCommand(
+            "BODYWEIGHT_REPS" -> WearLogSetCommand(
                 exerciseIndex = s.selectedIndex,
-                weightDisplay = s.weightDisplay,
+                weightDisplay = 0.0,
                 reps = s.reps,
+                durationMin = 0.0,
+                distanceDisplay = 0.0,
                 avgHr = s.metrics.bpm,
                 maxHr = s.metrics.bpm
             )
@@ -408,99 +487,113 @@ class WearSessionViewModel(private val app: Application) : ViewModel(),
                 exerciseIndex = s.selectedIndex,
                 weightDisplay = s.weightDisplay,
                 reps = s.reps,
+                durationMin = 0.0,
+                distanceDisplay = 0.0,
                 avgHr = s.metrics.bpm,
                 maxHr = s.metrics.bpm
             )
         }
-        val flashOk = when {
-            tracking == "DISTANCE_ONLY" -> {
-                val distUnit = if (s.session.imperial) "mi" else "km"
-                "Set sent - ${fmt(cmd.distanceDisplay)} $distUnit"
-            }
-            tracking == "TIME_ONLY" -> "Set sent - ${fmt(cmd.durationMin)} min"
-            tracking in setOf("BODYWEIGHT_REPS", "REPS_ONLY") -> "Set sent - ${cmd.reps} reps"
-            tracking in setOf("CARDIO_MACHINE", "DISTANCE_TIME") -> {
-                val distUnit = if (s.session.imperial) "mi" else "km"
-                "Set sent · ${fmt(cmd.durationMin)} min · ${fmt(cmd.distanceDisplay)} $distUnit"
-            }
-            tracking == "FLEXIBILITY" -> "Set sent · ${fmt(cmd.durationMin)} min"
-            tracking == "BODYWEIGHT" -> "Set sent · ${cmd.reps} reps"
-            else -> {
-                val unit = if (s.session.imperial) "lb" else "kg"
-                "Set sent · ${cmd.reps}×${fmt(cmd.weightDisplay)} $unit"
-            }
+
+        // Reset timer if it was running
+        if (s.cardioTimerActive || s.cardioTimerSeconds > 0) {
+            cardioTimerJob?.cancel()
+            _uiState.update { it.copy(cardioTimerActive = false, cardioTimerSeconds = 0) }
         }
+
+        sendToPhone(WearPaths.LOG_SET, cmd.toJson())
+        WearHaptics.pulse(app, WearHaptics.Pattern.SET_LOGGED)
+
+        val summary = when (tracking) {
+            "CARDIO_MACHINE", "DISTANCE_TIME" -> "${fmt(s.distanceDisplay)} ${if (s.session.imperial) "mi" else "km"}"
+            "TIME_ONLY" -> "${fmt(effectiveDuration)} min"
+            "BODYWEIGHT_REPS" -> "${s.reps} reps"
+            else -> "${fmt(s.weightDisplay)}${if (s.session.imperial) "lb" else "kg"} × ${s.reps}"
+        }
+        _uiState.update { it.copy(lastLogFlash = "Logged: $summary") }
+    }
+
+    fun sendRest(action: WearRestAction, seconds: Int = 0) {
+        val cmd = WearRestCommand(action, seconds)
+        sendToPhone(WearPaths.REST, cmd.toJson())
+        if (action == WearRestAction.SKIP) {
+            _uiState.update { it.copy(session = it.session.copy(restEndsAt = null)) }
+            workoutService?.onRestChanged(null)
+        }
+    }
+
+    fun dismissFeedback() {
+        _uiState.update { it.copy(feedback = null, lastLogFlash = null) }
+    }
+
+    fun onSensorPermissionResult(granted: Boolean) {
+        if (granted) {
+            _uiState.update { it.copy(hrStatus = "HR active") }
+            bind()
+        } else {
+            _uiState.update { it.copy(hrStatus = "Permission needed") }
+        }
+    }
+
+    private fun refreshPhoneConnection(sendHello: Boolean) {
         viewModelScope.launch {
-            _uiState.update { it.copy(lastLogFlash = "Sending set…") }
-            val ok = sendToPhone(WearPaths.LOG_SET, cmd.toJson())
-            WearHaptics.pulse(app, WearHaptics.Pattern.SET_LOGGED)
-            _uiState.update {
-                it.copy(
-                    lastLogFlash = if (ok) flashOk else "Not linked — open phone session"
-                )
+            val node = findPhoneNode()
+            if (node == null) {
+                _uiState.update {
+                    it.copy(
+                        phoneConnected = false,
+                        linkStatus = "No phone found — ensure Bluetooth is on"
+                    )
+                }
+                return@launch
+            }
+            if (sendHello) {
+                try {
+                    messageClient.sendMessage(node.id, WearPaths.HELLO, ByteArray(0)).await()
+                    _uiState.update {
+                        it.copy(
+                            phoneConnected = true,
+                            linkStatus = "Phone linked — start a quest"
+                        )
+                    }
+                } catch (e: Exception) {
+                    _uiState.update {
+                        it.copy(
+                            phoneConnected = false,
+                            linkStatus = "Link failed: ${e.localizedMessage ?: "timeout"}"
+                        )
+                    }
+                }
             }
         }
     }
 
-    fun sendRest(action: WearRestAction, seconds: Int = 30) {
+    private suspend fun findPhoneNode() = try {
+        val capability = capabilityClient
+            .getCapability(WearCapabilities.PHONE, CapabilityClient.FILTER_REACHABLE)
+            .await()
+        capability.nodes.firstOrNull { it.isNearby } ?: capability.nodes.firstOrNull()
+            ?: nodeClient.connectedNodes.await().firstOrNull()
+    } catch (_: Exception) {
+        null
+    }
+
+    private fun sendToPhone(path: String, payload: ByteArray) {
         viewModelScope.launch {
-            sendToPhone(WearPaths.REST, WearRestCommand(action, seconds).toJson())
+            val node = findPhoneNode() ?: return@launch
+            try {
+                messageClient.sendMessage(node.id, path, payload).await()
+            } catch (_: Exception) {
+            }
         }
     }
 
-    fun dismissFeedback() = _uiState.update { it.copy(feedback = null) }
-
-    private suspend fun refreshPhoneConnection(sendHello: Boolean) {
-        val nodes = runCatching { nodeClient.connectedNodes.await() }.getOrDefault(emptyList())
-        val phoneCap = runCatching {
-            capabilityClient
-                .getCapability(WearCapabilities.PHONE, CapabilityClient.FILTER_REACHABLE)
-                .await()
-        }.getOrNull()
-        val phoneNodes = phoneCap?.nodes.orEmpty()
-        val linked = phoneNodes.isNotEmpty()
-        val status = when {
-            phoneNodes.isNotEmpty() -> "Phone linked — start a quest"
-            nodes.isNotEmpty() -> "Wear network up — waiting for FitnessRPG on phone"
-            else -> "Open FitnessRPG on your phone"
-        }
-        _uiState.update {
-            it.copy(
-                phoneConnected = linked,
-                linkStatus = if (it.session.active) "Quest live" else status
-            )
-        }
-        if (sendHello && nodes.isNotEmpty()) {
-            sendToPhone(WearPaths.HELLO, ByteArray(0))
-        }
-    }
-
-    private suspend fun sendToPhone(path: String, data: ByteArray): Boolean {
-        val nodes = runCatching { nodeClient.connectedNodes.await() }.getOrDefault(emptyList())
-        if (nodes.isEmpty()) return false
-        var any = false
-        nodes.forEach { node ->
-            val ok = runCatching { messageClient.sendMessage(node.id, path, data).await() }.isSuccess
-            any = any || ok
-        }
-        if (any && path != WearPaths.HELLO && path != WearPaths.METRICS && path != WearPaths.HR_SAMPLE) {
-            _uiState.update { it.copy(phoneConnected = true) }
-        }
-        return any
-    }
-
-    override fun onCleared() {
-        unbind()
-        super.onCleared()
+    class Factory(private val app: Application) : ViewModelProvider.Factory {
+        @Suppress("UNCHECKED_CAST")
+        override fun <T : ViewModel> create(modelClass: Class<T>): T =
+            WearSessionViewModel(app) as T
     }
 
     companion object {
-        fun Factory(app: Application) = object : ViewModelProvider.Factory {
-            @Suppress("UNCHECKED_CAST")
-            override fun <T : ViewModel> create(modelClass: Class<T>): T =
-                WearSessionViewModel(app) as T
-        }
-
         private fun fmt(value: Double): String =
             if (value % 1.0 < 0.05) value.toInt().toString() else "%.1f".format(value)
 
@@ -508,6 +601,9 @@ class WearSessionViewModel(private val app: Application) : ViewModel(),
             session: WearSessionState,
             ex: WearExerciseState?
         ): Double {
+            val suggested = ex?.suggestedWeightDisplay
+            if (suggested != null && suggested > 0) return suggested
+            
             if (ex != null && ex.lastWeightDisplay > 0) return ex.lastWeightDisplay
             val isBodyweight = ex?.category.equals("BODYWEIGHT", ignoreCase = true) == true
             if (isBodyweight) {
@@ -522,7 +618,6 @@ class WearSessionViewModel(private val app: Application) : ViewModel(),
         private fun defaultDuration(ex: WearExerciseState?): Double {
             val target = ex?.targetReps ?: 0
             val tracking = ex?.trackingType?.uppercase().orEmpty()
-            // Phone often stores cardio/flexibility target minutes in targetReps.
             if (target > 0 &&
                 (tracking in setOf("CARDIO_MACHINE", "DISTANCE_TIME", "TIME_ONLY") ||
                     ex?.category.equals("CARDIO", true) == true ||

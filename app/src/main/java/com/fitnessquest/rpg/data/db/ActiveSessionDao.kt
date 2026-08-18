@@ -44,6 +44,9 @@ interface ActiveSessionDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertActiveSetLog(setLog: ActiveSetLogEntity): Long
 
+    @Update
+    suspend fun updateActiveSetLog(setLog: ActiveSetLogEntity)
+
     @Query("DELETE FROM active_session_set_logs WHERE id = (SELECT id FROM active_session_set_logs WHERE exerciseId = :exerciseId ORDER BY id DESC LIMIT 1)")
     suspend fun deleteLastSetLogForExercise(exerciseId: Long)
 

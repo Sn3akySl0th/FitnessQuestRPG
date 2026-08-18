@@ -40,6 +40,7 @@ import com.fitnessquest.rpg.domain.CombatStats
 import com.fitnessquest.rpg.domain.Consumables
 import com.fitnessquest.rpg.domain.ExerciseCategories
 import com.fitnessquest.rpg.domain.GameMath
+import com.fitnessquest.rpg.domain.GearRarity
 import com.fitnessquest.rpg.domain.GearSockets
 import com.fitnessquest.rpg.domain.ItemCatalog
 import com.fitnessquest.rpg.domain.LootChests
@@ -552,7 +553,8 @@ class GameRepository(
 
     suspend fun isPersonalRecord(exerciseName: String, weightKg: Double): Boolean {
         if (weightKg <= 0.0) return false
-        val previous = db.sessionDao().maxWeightFor(exerciseName)
+        val matchedNames = getFuzzyMatchedNames(exerciseName)
+        val previous = if (matchedNames.isEmpty()) 0.0 else db.sessionDao().maxWeightForExercises(matchedNames)
         return (previous > 0.0) && (weightKg > previous)
     }
 
@@ -677,6 +679,14 @@ class GameRepository(
         db.activeSessionDao().deleteLastSetLogForExercise(exerciseId)
     }
 
+    suspend fun updateActiveSetLog(setLog: ActiveSetLogEntity) {
+        db.activeSessionDao().updateActiveSetLog(setLog)
+    }
+
+    suspend fun deleteActiveSetLog(setLogId: Long) {
+        db.activeSessionDao().deleteSetLog(setLogId)
+    }
+
     suspend fun addActiveExercise(name: String, category: ExerciseCategory, trackingType: String) {
         db.withTransaction {
             val existing = db.activeSessionDao().getActiveExercises()
@@ -722,6 +732,29 @@ class GameRepository(
                 }
             }
         }
+    }
+
+    suspend fun updateActiveExercise(entity: ActiveExerciseEntity) {
+        db.activeSessionDao().updateActiveExercise(entity)
+    }
+
+    suspend fun updateActiveExerciseTargets(
+        exerciseId: Long,
+        sets: Int,
+        reps: Int,
+        weightKg: Double?,
+        reason: String?
+    ) {
+        val all = db.activeSessionDao().getActiveExercises()
+        val match = all.find { it.id == exerciseId } ?: return
+        db.activeSessionDao().updateActiveExercise(
+            match.copy(
+                targetSets = sets,
+                targetReps = reps,
+                targetWeightKg = weightKg,
+                suggestionReason = reason
+            )
+        )
     }
 
     suspend fun reorderActiveExercises(orderedExerciseIds: List<Long>) {
@@ -1310,7 +1343,7 @@ class GameRepository(
     }
 
     suspend fun exerciseHistory(exerciseName: String): List<Pair<SessionEntity, List<SetLogEntity>>> {
-        val logs = db.sessionDao().logsForExercise(exerciseName)
+        val logs = getFuzzyMatchedLogs(exerciseName)
         if (logs.isEmpty()) return emptyList()
         val bySession = logs.groupBy { it.sessionId }
         return db.sessionDao().sessionsByIds(bySession.keys.toList())
@@ -1364,13 +1397,18 @@ class GameRepository(
         }
     }
 
-    suspend fun createGearInstance(catalog: ItemEntity, originBiome: String? = null): GearInstanceEntity {
+    suspend fun createGearInstance(
+        catalog: ItemEntity,
+        originBiome: String? = null,
+        rarity: GearRarity = GearRarity.COMMON
+    ): GearInstanceEntity {
         val id = db.gearInstanceDao().insert(
             GearInstanceEntity(
                 catalogId = catalog.id,
-                atk = catalog.atk,
-                def = catalog.def,
-                hp = catalog.hp,
+                atk = rarity.scaleStat(catalog.atk),
+                def = rarity.scaleStat(catalog.def),
+                hp = rarity.scaleStat(catalog.hp),
+                rarity = rarity.name,
                 originBiome = originBiome
             )
         )
@@ -1712,7 +1750,7 @@ class GameRepository(
 
         for (g in loot.grants) {
             when (g) {
-                is LootGrant.Gear -> createGearInstance(g.catalog, character.currentBiome)
+                is LootGrant.Gear -> createGearInstance(g.catalog, character.currentBiome, g.rarity)
                 is LootGrant.Stack -> {
                     val row = db.itemDao().get(g.catalog.id) ?: g.catalog
                     db.itemDao().update(row.copy(owned = true, quantity = row.quantity + g.quantity))
@@ -1723,7 +1761,7 @@ class GameRepository(
                 is LootGrant.ChestOpened -> {
                     for (c in g.contents) {
                         when (c) {
-                            is LootGrant.Gear -> createGearInstance(c.catalog, character.currentBiome)
+                            is LootGrant.Gear -> createGearInstance(c.catalog, character.currentBiome, c.rarity)
                             is LootGrant.Stack -> {
                                 val row = db.itemDao().get(c.catalog.id) ?: c.catalog
                                 db.itemDao().update(row.copy(owned = true, quantity = row.quantity + c.quantity))
@@ -2273,15 +2311,22 @@ class GameRepository(
 
     fun normalizeExerciseName(name: String): String {
         return name.lowercase()
-            .replace(Regex("\\s*\\([^)]*\\)"), "") // strip parenthetical suffixes
-            .replace(Regex("^(barbell|dumbbell|cable|machine|weighted|assisted)\\s+"), "") // strip leading adjectives
-            .trim()
+            .replace(Regex("[^a-z0-9]+"), " ")
+            .split(' ')
+            .filter { it.isNotBlank() }
+            .map { it.removeSuffix("s") }
+            .sorted()
+            .joinToString(" ")
+    }
+
+    private suspend fun getFuzzyMatchedNames(exerciseName: String): List<String> {
+        val target = normalizeExerciseName(exerciseName)
+        val allNames = db.sessionDao().getAllLoggedExerciseNames()
+        return allNames.filter { normalizeExerciseName(it) == target }
     }
 
     private suspend fun getFuzzyMatchedLogs(exerciseName: String): List<SetLogEntity> {
-        val target = normalizeExerciseName(exerciseName)
-        val allNames = db.sessionDao().getAllLoggedExerciseNames()
-        val matchedNames = allNames.filter { normalizeExerciseName(it) == target }
+        val matchedNames = getFuzzyMatchedNames(exerciseName)
         if (matchedNames.isEmpty()) return emptyList()
         return db.sessionDao().logsForExercises(matchedNames)
     }

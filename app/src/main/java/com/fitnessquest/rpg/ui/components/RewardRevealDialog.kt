@@ -264,7 +264,11 @@ private fun rewardPresentation(reward: Reward): Triple<String, String, Color> = 
     is Reward.Xp -> Triple("\u2B50", "+${reward.amount} XP", Color(0xFF9C7BE3))
     is Reward.Energy -> Triple("\u26A1", "+${reward.amount}", Color(0xFF4ADE80))
     is Reward.XpBoost -> Triple("\u2728", "+${reward.amount} XP Boost", Color(0xFF4A6FD8))
-    is Reward.Gear -> Triple(reward.item.emoji, reward.item.name, Color.White)
+    is Reward.Gear -> Triple(
+        reward.item.emoji,
+        if (reward.rarity != com.fitnessquest.rpg.domain.GearRarity.COMMON) "[${reward.rarity.displayName}] ${reward.item.name}" else reward.item.name,
+        Color(reward.rarity.colorHex)
+    )
     is Reward.Stackable -> Triple(reward.item.emoji, "${reward.item.name} x${reward.quantity}", Color.White)
     is Reward.LevelUp -> Triple("LV", "Level ${reward.newLevel}!", Gold)
     is Reward.NewPr -> Triple("PR", "New Record!", Color(0xFFF6AD55))

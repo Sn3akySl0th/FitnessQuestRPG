@@ -54,6 +54,7 @@ data class CoachChange(
     val exercise: String,
     val sets: Int?,
     val reps: Int?,
+    val weightKg: Double?,
     val replaceWith: String?,
     val replaceCategory: ExerciseCategory?,
     val reason: String
@@ -88,6 +89,9 @@ class GeminiService(private val context: Context) {
 
     val hasKey: Boolean get() = apiKey.isNotBlank()
     val isAvailable: Boolean get() = hasKey || isLocalModelReady()
+
+    /** Explicit check if we should even try the cloud API. */
+    fun canUseCloud(): Boolean = hasKey
 
     fun isLocalModelReady(): Boolean = getReadyModelFile() != null
 
@@ -531,13 +535,16 @@ class GeminiService(private val context: Context) {
         performedSummary: String,
         remainingPlan: String,
         profile: TrainingProfile?,
-        history: String? = null
+        history: String? = null,
+        imperial: Boolean = false
     ): Result<CoachAdvice> {
         val profileBlock = profile?.let { "\nPlayer profile:\n${it.promptSummary()}\n" }.orEmpty()
         val historyBlock = history?.let { "\nPlayer history:\n$it\n" }.orEmpty()
+        val unitLabel = if (imperial) "lbs" else "kg"
 
         val prompt = """
             You are a personal trainer coaching a live workout in a fantasy RPG fitness app.
+            The player prefers weights in $unitLabel.
 
             Sets logged so far this session:
             $performedSummary
@@ -559,14 +566,16 @@ class GeminiService(private val context: Context) {
 
             Respond with ONLY valid JSON, no markdown fences, exactly this schema:
             {"message": "1-2 sentence coaching note, encouraging, fantasy guildmaster tone",
-             "changes": [{"exercise": "exact name from the remaining list", "sets": 3, "reps": 8,
+             "changes": [{"exercise": "exact name from the remaining list", "sets": 3, "reps": 8, "weightKg": 60.5,
                           "replaceWith": null, "category": null, "reason": "short why"}]}
 
             Rules:
             - "exercise" MUST exactly match a name from the remaining list.
             - Use "replaceWith" (plus "category": "STRENGTH|CARDIO|BODYWEIGHT|FLEXIBILITY") only when
-              substituting a different exercise; otherwise keep both null and change sets/reps.
-            - "sets" 1-6, "reps" 1-60. At most 3 changes.
+              substituting a different exercise; otherwise keep both null and change sets/reps/weight.
+            - "sets" 1-6, "reps" 1-60. "weightKg" should be suggested if the player is finding the exercise too easy.
+            - "weightKg" MUST be in Kilograms, even if the player prefers $unitLabel. The app handles the conversion.
+            - At most 3 changes.
         """.trimIndent()
 
 
@@ -598,6 +607,7 @@ class GeminiService(private val context: Context) {
                     exercise = exerciseName,
                     sets = c.optInt("sets", -1).takeIf { it in 1..6 },
                     reps = c.optInt("reps", -1).takeIf { it in 1..60 },
+                    weightKg = c.optDouble("weightKg").takeIf { !it.isNaN() && it > 0 },
                     replaceWith = c.optString("replaceWith").takeIf { it.isNotBlank() && it != "null" },
                     replaceCategory = category,
                     reason = c.optString("reason", "Suggested tweak")

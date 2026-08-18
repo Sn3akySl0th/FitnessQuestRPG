@@ -5,6 +5,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -14,6 +15,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -23,9 +27,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -51,6 +59,8 @@ fun WearApp(
     onAdjustReps: (Int) -> Unit,
     onAdjustDuration: (Double) -> Unit,
     onAdjustDistance: (Double) -> Unit,
+    onToggleCardioTimer: () -> Unit,
+    onResetCardioTimer: () -> Unit,
     onRetryLink: () -> Unit,
     onRequestHrPermission: () -> Unit
 ) {
@@ -61,6 +71,27 @@ fun WearApp(
                 .fillMaxSize()
                 .background(bg)
         ) {
+            // Ambient Hero Avatar Backdrop
+            state.avatarBitmap?.let { bmp ->
+                Image(
+                    bitmap = bmp.asImageBitmap(),
+                    contentDescription = "Avatar Backdrop",
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .alpha(0.20f),
+                    contentScale = ContentScale.Crop
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.radialGradient(
+                                colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.75f))
+                            )
+                        )
+                )
+            }
+
             val session = state.session
             if (!session.active) {
                 IdleScreen(
@@ -89,6 +120,8 @@ fun WearApp(
                         onAdjustReps = onAdjustReps,
                         onAdjustDuration = onAdjustDuration,
                         onAdjustDistance = onAdjustDistance,
+                        onToggleCardioTimer = onToggleCardioTimer,
+                        onResetCardioTimer = onResetCardioTimer,
                         onRequestHrPermission = onRequestHrPermission
                     )
                 }
@@ -100,17 +133,22 @@ fun WearApp(
                         modifier = Modifier
                             .fillMaxSize()
                             .background(MaterialTheme.colors.surface)
-                            .padding(12.dp),
+                            .padding(horizontal = 16.dp, vertical = 20.dp), // W-7 safe padding for round screens
                         verticalArrangement = Arrangement.Center,
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
                             text = fb.message,
                             textAlign = TextAlign.Center,
+                            maxLines = 3,
+                            overflow = TextOverflow.Ellipsis,
                             style = MaterialTheme.typography.body1
                         )
-                        Spacer(Modifier.height(8.dp))
-                        Button(onClick = onDismissFeedback) {
+                        Spacer(Modifier.height(10.dp))
+                        Button(
+                            onClick = onDismissFeedback,
+                            modifier = Modifier.size(width = 80.dp, height = 36.dp)
+                        ) {
                             Text("OK")
                         }
                     }
@@ -170,9 +208,10 @@ private fun SessionScreen(
     onAdjustReps: (Int) -> Unit,
     onAdjustDuration: (Double) -> Unit,
     onAdjustDistance: (Double) -> Unit,
+    onToggleCardioTimer: () -> Unit,
+    onResetCardioTimer: () -> Unit,
     onRequestHrPermission: () -> Unit
 ) {
-    val listState = rememberScalingLazyListState()
     val session = state.session
     val idx = state.selectedIndex
     val ex = session.exercises.getOrNull(idx)
@@ -181,260 +220,293 @@ private fun SessionScreen(
     val unit = if (session.imperial) "lb" else "kg"
     val distUnit = if (session.imperial) "mi" else "km"
     val weightStep = if (session.imperial) 5.0 else 2.5
+    val isCardio = tracking in setOf("CARDIO_MACHINE", "DISTANCE_TIME", "TIME_ONLY")
 
-    ScalingLazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        state = listState,
-        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 20.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        // Header: Heart Rate and Timer
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(0.92f),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                val m = state.metrics
-                val color = wearZoneColor(m.zone)
-                
-                Column {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        WearPulsingHeart(bpm = m.bpm, color = color, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text(
-                            text = m.bpm?.toString() ?: "--",
-                            style = MaterialTheme.typography.title3,
-                            color = color,
-                            fontWeight = FontWeight.Black
-                        )
-                    }
-                    Text(m.zone ?: "Zone", style = MaterialTheme.typography.caption2, color = color)
-                }
-
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        text = m.caloriesKcal?.let { "${it.toInt()} kcal" } ?: "0 kcal",
-                        style = MaterialTheme.typography.title3,
-                        color = Color(0xFFFF9800),
-                        fontWeight = FontWeight.Black
-                    )
-                    Text(formatDuration(m.activeDurationMs ?: 0L), style = MaterialTheme.typography.caption2)
-                }
-            }
-        }
-
-        if (ex != null) {
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Button(
-                        enabled = idx > 0,
-                        onClick = { onSelectExercise(idx - 1) },
-                        modifier = Modifier.size(ButtonDefaults.SmallButtonSize)
-                    ) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null) }
-                    
-                    Text(
-                        text = "${idx + 1} / $count",
-                        style = MaterialTheme.typography.caption2,
-                        modifier = Modifier.padding(horizontal = 8.dp)
-                    )
-
-                    Button(
-                        enabled = idx < count - 1,
-                        onClick = { onSelectExercise(idx + 1) },
-                        modifier = Modifier.size(ButtonDefaults.SmallButtonSize)
-                    ) { Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null) }
-                }
-            }
-
-            item {
-                Text(
-                    text = ex.name,
-                    style = MaterialTheme.typography.title2,
-                    fontWeight = FontWeight.ExtraBold,
-                    textAlign = TextAlign.Center,
-                    color = MaterialTheme.colors.primary,
-                    maxLines = 2,
-                    modifier = Modifier.fillMaxWidth(0.95f)
-                )
-            }
-
-            item {
-                Text(
-                    text = "Set ${ex.loggedSets + 1} \u2022 Goal ${ex.targetReps}",
-                    style = MaterialTheme.typography.caption1,
-                    color = MaterialTheme.colors.onBackground.copy(alpha = 0.8f)
-                )
-            }
-
-            // High-tactility steppers
-            when (tracking) {
-                "CARDIO_MACHINE", "DISTANCE_TIME" -> {
-                    item {
-                        BigStepper(
-                            value = "${fmt(state.durationMin)} min",
-                            onMinus = { onAdjustDuration(-0.5) },
-                            onPlus = { onAdjustDuration(0.5) }
-                        )
-                    }
-                    item {
-                        BigStepper(
-                            value = "${fmt(state.distanceDisplay)} $distUnit",
-                            onMinus = { onAdjustDistance(-0.1) },
-                            onPlus = { onAdjustDistance(0.1) }
-                        )
-                    }
-                }
-                "DISTANCE_ONLY" -> {
-                    item {
-                        BigStepper(
-                            value = "${fmt(state.distanceDisplay)} $distUnit",
-                            onMinus = { onAdjustDistance(-0.1) },
-                            onPlus = { onAdjustDistance(0.1) }
-                        )
-                    }
-                }
-                "TIME_ONLY" -> {
-                    item {
-                        BigStepper(
-                            value = "${fmt(state.durationMin)} min",
-                            onMinus = { onAdjustDuration(-0.5) },
-                            onPlus = { onAdjustDuration(0.5) }
-                        )
-                    }
-                }
-                "BODYWEIGHT_REPS", "REPS_ONLY" -> {
-                    item {
-                        BigStepper(
-                            value = "${state.reps} reps",
-                            onMinus = { onAdjustReps(-1) },
-                            onPlus = { onAdjustReps(1) }
-                        )
-                    }
-                }
-                else -> {
-                    item {
-                        BigStepper(
-                            value = "${fmt(state.weightDisplay)} $unit",
-                            onMinus = { onAdjustWeight(-weightStep) },
-                            onPlus = { onAdjustWeight(weightStep) }
-                        )
-                    }
-                    item {
-                        BigStepper(
-                            value = "${state.reps} reps",
-                            onMinus = { onAdjustReps(-1) },
-                            onPlus = { onAdjustReps(1) }
-                        )
-                    }
-                }
-            }
-
-            item { Spacer(Modifier.height(8.dp)) }
-
-            item {
-                Button(
-                    onClick = onLogSet,
-                    modifier = Modifier.fillMaxWidth(0.95f).height(52.dp),
-                    shape = RoundedCornerShape(26.dp),
-                    colors = ButtonDefaults.primaryButtonColors()
-                ) {
-                    Text("LOG SET", fontWeight = FontWeight.Black, fontSize = 16.sp)
-                }
-            }
-
-            if (state.lastLogFlash != null) {
-                item {
-                    Text(
-                        state.lastLogFlash,
-                        style = MaterialTheme.typography.caption2,
-                        color = MaterialTheme.colors.secondary,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(top = 8.dp)
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun BigStepper(
-    value: String,
-    onMinus: () -> Unit,
-    onPlus: () -> Unit
-) {
-    Row(
+    Column(
         modifier = Modifier
-            .fillMaxWidth(0.95f)
-            .padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .fillMaxSize()
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.SpaceBetween
     ) {
-        Button(
-            onClick = onMinus,
-            modifier = Modifier.size(44.dp),
-            colors = ButtonDefaults.secondaryButtonColors()
-        ) { Icon(Icons.Default.Remove, contentDescription = "Decrease") }
-        
-        Box(
+        // 1. Compact Top Status Pill (Heart Rate • Zone • Streak • Calories)
+        val m = state.metrics
+        val color = wearZoneColor(m.zone)
+        Row(
             modifier = Modifier
-                .weight(1f)
-                .height(44.dp)
-                .clip(RoundedCornerShape(22.dp))
-                .background(MaterialTheme.colors.surface)
-                .border(1.dp, MaterialTheme.colors.onSurface.copy(alpha = 0.1f), RoundedCornerShape(22.dp)),
-            contentAlignment = Alignment.Center
+                .fillMaxWidth(0.92f)
+                .clip(RoundedCornerShape(12.dp))
+                .background(Color.Black.copy(alpha = 0.45f))
+                .padding(horizontal = 8.dp, vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                WearPulsingHeart(bpm = m.bpm, color = color, modifier = Modifier.size(12.dp))
+                Spacer(Modifier.width(3.dp))
+                Text(
+                    text = m.bpm?.toString() ?: "--",
+                    style = MaterialTheme.typography.caption2,
+                    color = color,
+                    fontWeight = FontWeight.Bold
+                )
+                m.zone?.let {
+                    Text(
+                        text = " ($it)",
+                        style = MaterialTheme.typography.caption3,
+                        color = color.copy(alpha = 0.8f)
+                    )
+                }
+            }
+
+            if (session.heatStreak > 0) {
+                Text(
+                    text = "🔥×${session.heatStreak}",
+                    style = MaterialTheme.typography.caption2,
+                    color = Color(0xFFFFD700),
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
             Text(
-                text = value,
-                style = MaterialTheme.typography.body1,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center
+                text = "${m.caloriesKcal?.toInt() ?: 0} kcal",
+                style = MaterialTheme.typography.caption2,
+                color = Color(0xFFFF9800),
+                fontWeight = FontWeight.Bold
             )
         }
 
-        Button(
-            onClick = onPlus,
-            modifier = Modifier.size(44.dp),
-            colors = ButtonDefaults.secondaryButtonColors()
-        ) { Icon(Icons.Default.Add, contentDescription = "Increase") }
+        // 2. Integrated Exercise Header & Status Switcher
+        if (ex != null) {
+            val isComplete = ex.loggedSets >= ex.targetSets && ex.targetSets > 0
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Button(
+                    enabled = idx > 0,
+                    onClick = { onSelectExercise(idx - 1) },
+                    modifier = Modifier.size(28.dp),
+                    colors = ButtonDefaults.secondaryButtonColors()
+                ) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Previous",
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.weight(1f).padding(horizontal = 4.dp)
+                ) {
+                    Text(
+                        text = ex.name,
+                        style = MaterialTheme.typography.title3,
+                        fontWeight = FontWeight.ExtraBold,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        color = MaterialTheme.colors.primary
+                    )
+                    if (isComplete) {
+                        // W-5: Green completion checkmark
+                        Text(
+                            text = "✓ Done — ${ex.loggedSets} sets",
+                            style = MaterialTheme.typography.caption2,
+                            color = Color(0xFF4CAF50),
+                            fontWeight = FontWeight.Bold
+                        )
+                    } else {
+                        Text(
+                            text = "Set ${ex.loggedSets + 1}/${ex.targetSets} • Goal ${ex.targetReps}",
+                            style = MaterialTheme.typography.caption2,
+                            color = MaterialTheme.colors.onSurface.copy(alpha = 0.8f)
+                        )
+                    }
+                }
+
+                Button(
+                    enabled = idx < count - 1,
+                    onClick = { onSelectExercise(idx + 1) },
+                    modifier = Modifier.size(28.dp),
+                    colors = ButtonDefaults.secondaryButtonColors()
+                ) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowForward,
+                        contentDescription = "Next",
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+            }
+
+            // 3. Compact Input Pod (Side-by-Side Dual Steppers OR Live Cardio Stopwatch)
+            if (isCardio) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth(0.95f)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colors.surface.copy(alpha = 0.85f))
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    // Stopwatch Time Display & Toggle
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        val totalSecs = state.cardioTimerSeconds
+                        val timeStr = "%02d:%02d".format(totalSecs / 60, totalSecs % 60)
+                        Text(
+                            text = if (totalSecs > 0) timeStr else "${fmt(state.durationMin)} min",
+                            style = MaterialTheme.typography.title3,
+                            fontWeight = FontWeight.Bold,
+                            color = if (state.cardioTimerActive) Color(0xFF4CAF50) else MaterialTheme.colors.onSurface
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Button(
+                                onClick = onToggleCardioTimer,
+                                modifier = Modifier.size(28.dp),
+                                colors = ButtonDefaults.secondaryButtonColors()
+                            ) {
+                                Icon(
+                                    imageVector = if (state.cardioTimerActive) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                    contentDescription = if (state.cardioTimerActive) "Pause" else "Start",
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+                            if (totalSecs > 0) {
+                                Button(
+                                    onClick = onResetCardioTimer,
+                                    modifier = Modifier.size(28.dp),
+                                    colors = ButtonDefaults.secondaryButtonColors()
+                                ) {
+                                    Icon(
+                                        Icons.Default.Refresh,
+                                        contentDescription = "Reset",
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Distance Stepper (if distance tracked)
+                    if (tracking in setOf("CARDIO_MACHINE", "DISTANCE_TIME")) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = "${fmt(state.distanceDisplay)} $distUnit",
+                                style = MaterialTheme.typography.caption1,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Button(
+                                    onClick = { onAdjustDistance(if (session.imperial) -0.1 else -0.2) },
+                                    modifier = Modifier.size(28.dp),
+                                    colors = ButtonDefaults.secondaryButtonColors()
+                                ) {
+                                    Icon(Icons.Default.Remove, contentDescription = "-", modifier = Modifier.size(14.dp))
+                                }
+                                Button(
+                                    onClick = { onAdjustDistance(if (session.imperial) 0.1 else 0.2) },
+                                    modifier = Modifier.size(28.dp),
+                                    colors = ButtonDefaults.secondaryButtonColors()
+                                ) {
+                                    Icon(Icons.Default.Add, contentDescription = "+", modifier = Modifier.size(14.dp))
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                // Strength / Bodyweight Dual Stepper (Side-by-Side Zero-Scroll)
+                Row(
+                    modifier = Modifier.fillMaxWidth(0.96f),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Left Pod: Weight
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(MaterialTheme.colors.surface.copy(alpha = 0.85f))
+                            .padding(2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Button(
+                            onClick = { onAdjustWeight(-weightStep) },
+                            modifier = Modifier.size(26.dp),
+                            colors = ButtonDefaults.secondaryButtonColors()
+                        ) {
+                            Icon(Icons.Default.Remove, contentDescription = "-", modifier = Modifier.size(12.dp))
+                        }
+                        Text(
+                            text = "${fmt(state.weightDisplay)} $unit",
+                            style = MaterialTheme.typography.caption1,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center
+                        )
+                        Button(
+                            onClick = { onAdjustWeight(weightStep) },
+                            modifier = Modifier.size(26.dp),
+                            colors = ButtonDefaults.secondaryButtonColors()
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = "+", modifier = Modifier.size(12.dp))
+                        }
+                    }
+
+                    // Right Pod: Reps
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(MaterialTheme.colors.surface.copy(alpha = 0.85f))
+                            .padding(2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Button(
+                            onClick = { onAdjustReps(-1) },
+                            modifier = Modifier.size(26.dp),
+                            colors = ButtonDefaults.secondaryButtonColors()
+                        ) {
+                            Icon(Icons.Default.Remove, contentDescription = "-", modifier = Modifier.size(12.dp))
+                        }
+                        Text(
+                            text = "${state.reps} reps",
+                            style = MaterialTheme.typography.caption1,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center
+                        )
+                        Button(
+                            onClick = { onAdjustReps(1) },
+                            modifier = Modifier.size(26.dp),
+                            colors = ButtonDefaults.secondaryButtonColors()
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = "+", modifier = Modifier.size(12.dp))
+                        }
+                    }
+                }
+            }
+
+            // 4. Large Prominent Log Button (Directly reachable without scrolling)
+            Button(
+                onClick = onLogSet,
+                modifier = Modifier
+                    .fillMaxWidth(0.88f)
+                    .height(38.dp),
+                shape = RoundedCornerShape(19.dp),
+                colors = ButtonDefaults.primaryButtonColors()
+            ) {
+                Text(
+                    text = "LOG SET",
+                    style = MaterialTheme.typography.button,
+                    fontWeight = FontWeight.Black
+                )
+            }
+        }
     }
-}
-
-@Composable
-private fun WearPulsingHeart(bpm: Int?, color: Color, modifier: Modifier = Modifier) {
-    val beatMs = bpm?.let { (60_000 / it.coerceIn(45, 200)).coerceIn(300, 1_300) } ?: 1000
-    val transition = rememberInfiniteTransition(label = "heartPulse")
-    val scale by transition.animateFloat(
-        initialValue = 1f,
-        targetValue = 1.25f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = (beatMs / 2).coerceAtLeast(150)),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "heartScale"
-    )
-    Text(
-        "\u2665",
-        color = color,
-        fontSize = 20.sp,
-        fontWeight = FontWeight.Black,
-        modifier = modifier.scale(scale),
-        textAlign = TextAlign.Center
-    )
-}
-
-private fun wearZoneColor(zone: String?): Color = when (zone?.lowercase()) {
-    "warmup" -> Color(0xFF7BB4E3)
-    "easy" -> Color(0xFF6BC96B)
-    "work" -> Color(0xFFF0A830)
-    "high" -> Color(0xFFE35B5B)
-    else -> Color(0xFF9C7BE3)
 }
 
 @Composable
@@ -460,7 +532,8 @@ private fun RestScreen(
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier.padding(12.dp)
         ) {
             Text("REST", style = MaterialTheme.typography.caption1, fontWeight = FontWeight.Bold)
             Text(
@@ -470,11 +543,11 @@ private fun RestScreen(
                 color = MaterialTheme.colors.primary
             )
             
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(4.dp))
             
             Row(verticalAlignment = Alignment.CenterVertically) {
                 val color = wearZoneColor(metrics.zone)
-                WearPulsingHeart(bpm = metrics.bpm, color = color, modifier = Modifier.size(16.dp))
+                WearPulsingHeart(bpm = metrics.bpm, color = color, modifier = Modifier.size(14.dp))
                 Spacer(Modifier.width(4.dp))
                 Text(
                     text = "${metrics.bpm ?: "--"} bpm",
@@ -483,23 +556,66 @@ private fun RestScreen(
                     fontWeight = FontWeight.Bold
                 )
             }
+
+            // W-3: Rest text ellipsis and center alignment
+            metrics.zone?.let {
+                Text(
+                    text = "Recovering in $it Zone",
+                    style = MaterialTheme.typography.caption2,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center,
+                    color = MaterialTheme.colors.onSurface.copy(alpha = 0.8f)
+                )
+            }
             
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(8.dp))
             
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Button(
                     onClick = onExtend,
                     colors = ButtonDefaults.secondaryButtonColors(),
-                    modifier = Modifier.size(ButtonDefaults.SmallButtonSize)
-                ) { Text("+30s", fontSize = 12.sp) }
+                    modifier = Modifier.size(width = 60.dp, height = 34.dp)
+                ) { Text("+30s", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
                 
                 Button(
                     onClick = onSkip,
-                    modifier = Modifier.size(ButtonDefaults.SmallButtonSize)
-                ) { Text("Skip", fontSize = 12.sp) }
+                    modifier = Modifier.size(width = 60.dp, height = 34.dp)
+                ) { Text("Skip", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
             }
         }
     }
+}
+
+@Composable
+private fun WearPulsingHeart(bpm: Int?, color: Color, modifier: Modifier = Modifier) {
+    val beatMs = bpm?.let { (60_000 / it.coerceIn(45, 200)).coerceIn(300, 1_300) } ?: 1000
+    val transition = rememberInfiniteTransition(label = "heartPulse")
+    val scale by transition.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.25f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = (beatMs / 2).coerceAtLeast(150)),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "heartScale"
+    )
+    Text(
+        "♥",
+        color = color,
+        fontSize = 16.sp,
+        fontWeight = FontWeight.Black,
+        modifier = modifier.scale(scale),
+        textAlign = TextAlign.Center
+    )
+}
+
+private fun wearZoneColor(zone: String?): Color = when (zone?.lowercase()) {
+    "warmup" -> Color(0xFF7BB4E3)
+    "easy" -> Color(0xFF6BC96B)
+    "work" -> Color(0xFFF0A830)
+    "high" -> Color(0xFFE35B5B)
+    else -> Color(0xFF9C7BE3)
 }
 
 private fun formatDuration(ms: Long): String {

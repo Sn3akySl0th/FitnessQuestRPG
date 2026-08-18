@@ -70,7 +70,7 @@
 
 ---
 
-## Sprint 3 — WearOS UI Safety & Completion UX
+## Sprint 3 — WearOS UI Safety & Completion UX [COMPLETED]
 **Goal:** Ensure the Wear app is safe and usable on round displays, and gives users clear workout progress feedback.  
 **Issues:** 6 | **Effort:** 1 session
 
@@ -84,12 +84,12 @@
 | SD-6 | Birthday fields: no validation error shown on invalid date | `SettingsDialog.kt` |
 
 ### Acceptance Criteria
-- [ ] When `ex.loggedSets >= ex.targetSets`, row shows `"✓ Done — N sets"` in green
-- [ ] All `Text` in `RestScreen` has `overflow = TextOverflow.Ellipsis` + `textAlign = Center`
-- [ ] Feedback dialog uses Wear-safe layout (no corner clipping on round watches)
-- [ ] Metrics row both Columns have `Modifier.weight(1f)`
-- [ ] `🔥×N` streak badge appears in metrics row when `heatStreak > 0`
-- [ ] Invalid birthday shows inline error text below the date fields after Save tap
+- [x] When `ex.loggedSets >= ex.targetSets`, row shows `"✓ Done — N sets"` in green
+- [x] All `Text` in `RestScreen` has `overflow = TextOverflow.Ellipsis` + `textAlign = Center`
+- [x] Feedback dialog uses Wear-safe layout (no corner clipping on round watches)
+- [x] Metrics row both Columns have `Modifier.weight(1f)`
+- [x] `🔥×N` streak badge appears in metrics row when `heatStreak > 0`
+- [x] Invalid birthday shows inline error text below the date fields after Save tap
 
 ---
 

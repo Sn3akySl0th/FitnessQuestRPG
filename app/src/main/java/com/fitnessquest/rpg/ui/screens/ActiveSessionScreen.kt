@@ -92,6 +92,7 @@ import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.fitnessquest.rpg.AppContainer
 import com.fitnessquest.rpg.data.ai.CoachAdvice
+import com.fitnessquest.rpg.data.ai.LocalAiEngine
 import com.fitnessquest.rpg.data.db.ExerciseCategory
 import com.fitnessquest.rpg.data.db.SetLogEntity
 import com.fitnessquest.rpg.data.health.HeightFormat
@@ -106,6 +107,7 @@ import com.fitnessquest.rpg.domain.ExerciseTrackingType
 import com.fitnessquest.rpg.domain.GameMath
 import com.fitnessquest.rpg.domain.MomentTrigger
 import com.fitnessquest.rpg.domain.MonsterCatalog
+import com.fitnessquest.rpg.data.db.ActiveSetLogEntity
 import com.fitnessquest.rpg.domain.PrKind
 import com.fitnessquest.rpg.domain.RewardBatch
 import com.fitnessquest.rpg.domain.SessionPr
@@ -151,6 +153,7 @@ data class SessionExercise(
     val targetWeightKg: Double? = null,
     val trackingType: ExerciseTrackingType = ExerciseTracking.resolve(name, category),
     val loggedSets: List<SetLogEntity> = emptyList(),
+    val suggestionReason: String? = null
 )
 
 data class SessionFinish(
@@ -245,6 +248,7 @@ data class ActiveSessionUiState(
     val partyBoss: PartyBoss? = null,
     val partyPulses: List<PartyPulse> = emptyList(),
     val hasPrAchievement: Boolean = false,
+    val characterClass: CharacterClass = CharacterClass.WARRIOR
 ) {
     val totalSets: Int get() = exercises.sumOf { it.loggedSets.size }
     val totalXp: Int get() = exercises.sumOf { ex -> ex.loggedSets.sumOf { it.xp } }
@@ -343,6 +347,10 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
         
         container.music.start()
 
+        container.repository.character.onEach { char ->
+            _uiState.update { it.copy(characterClass = char.characterClass ?: CharacterClass.WARRIOR) }
+        }.launchIn(viewModelScope)
+
         container.repository.activeSession.onEach { details ->
             if (demoMode || details == null) return@onEach
             val session = details.session
@@ -363,6 +371,7 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
                     targetReps = ex.targetReps,
                     targetWeightKg = ex.targetWeightKg,
                     trackingType = trackingType,
+                    suggestionReason = ex.suggestionReason,
                     loggedSets = exWithSets.sets.map { s ->
                         SetLogEntity(
                             id = s.id,
@@ -433,6 +442,12 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
         container.party.state.onEach { party ->
             _uiState.update { it.copy(partyBoss = party.boss, partyPulses = party.activePulses) }
         }.launchIn(viewModelScope)
+
+        _uiState
+            .map { s -> listOf(s.loading, s.exercises, s.restEndsAt) }
+            .distinctUntilChanged()
+            .onEach { publishWearState() }
+            .launchIn(viewModelScope)
     }
 
     fun toggleMusic() = container.music.togglePlayPause()
@@ -656,9 +671,94 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
 
     fun bodyWeightKgOrNull(): Double? = container.prefs.bodyWeightKg()
 
+    private val historyWeightCache = mutableMapOf<String, Double>()
+
     suspend fun getPreviousPerformance(exerciseName: String): List<SetLogEntity> {
         if (demoMode) return emptyList()
-        return container.repository.getPreviousPerformance(exerciseName)
+        val history = container.repository.getPreviousPerformance(exerciseName)
+        history.firstOrNull()?.weightKg?.let { w ->
+            if (w > 0 && historyWeightCache[exerciseName] != w) {
+                historyWeightCache[exerciseName] = w
+                publishWearState()
+            }
+        }
+        return history
+    }
+
+    fun updateLoggedSet(
+        exerciseIndex: Int,
+        setIndex: Int,
+        updated: SetLogEntity
+    ) {
+        val s = _uiState.value
+        val ex = s.exercises.getOrNull(exerciseIndex) ?: return
+        val currentSet = ex.loggedSets.getOrNull(setIndex) ?: return
+
+        val newXp = GameMath.xpForSet(updated)
+        val withXp = updated.copy(xp = newXp)
+
+        if (demoMode) {
+            _uiState.update { state ->
+                val newExercises = state.exercises.toMutableList()
+                val newSets = ex.loggedSets.toMutableList()
+                newSets[setIndex] = withXp
+                newExercises[exerciseIndex] = ex.copy(loggedSets = newSets)
+                state.copy(exercises = newExercises)
+            }
+        } else {
+            viewModelScope.launch {
+                if (currentSet.id > 0) {
+                    container.repository.updateActiveSetLog(
+                        ActiveSetLogEntity(
+                            id = currentSet.id,
+                            activeSessionId = 1L,
+                            exerciseId = ex.dbId,
+                            exerciseName = ex.name,
+                            category = ex.category,
+                            weightKg = withXp.weightKg,
+                            reps = withXp.reps,
+                            durationMin = withXp.durationMin,
+                            distanceKm = withXp.distanceKm,
+                            xp = withXp.xp,
+                            rir = withXp.rir,
+                            avgHr = withXp.avgHr,
+                            maxHr = withXp.maxHr,
+                            speedKmh = withXp.speedKmh,
+                            inclinePercent = withXp.inclinePercent,
+                            cardioProgram = withXp.cardioProgram,
+                            setType = withXp.setType,
+                            loggedAt = System.currentTimeMillis()
+                        )
+                    )
+                }
+            }
+        }
+        publishWearState()
+    }
+
+    fun deleteLoggedSet(
+        exerciseIndex: Int,
+        setIndex: Int
+    ) {
+        val s = _uiState.value
+        val ex = s.exercises.getOrNull(exerciseIndex) ?: return
+        val currentSet = ex.loggedSets.getOrNull(setIndex) ?: return
+
+        if (demoMode) {
+            _uiState.update { state ->
+                val newExercises = state.exercises.toMutableList()
+                val newSets = ex.loggedSets.filterIndexed { i, _ -> i != setIndex }
+                newExercises[exerciseIndex] = ex.copy(loggedSets = newSets)
+                state.copy(exercises = newExercises)
+            }
+        } else {
+            viewModelScope.launch {
+                if (currentSet.id > 0) {
+                    container.repository.deleteActiveSetLog(currentSet.id)
+                }
+            }
+        }
+        publishWearState()
     }
 
     private fun publishWearState() {
@@ -666,6 +766,20 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
         val imperial = container.prefs.imperial.value
         val exercises = s.exercises.map { ex ->
             val last = ex.loggedSets.lastOrNull()
+            
+            // Calculate suggestion for the NEXT set of this exercise
+            val suggestion = if (ex.loggedSets.isNotEmpty()) {
+                GameMath.suggestNextSet(last?.weightKg ?: 0.0, last?.reps ?: 0, last?.rir ?: 5)
+            } else null
+            
+            val historicalWeight = if (ex.loggedSets.isEmpty()) {
+                historyWeightCache[ex.name]
+            } else null
+            
+            val suggestedWeight = suggestion?.weightKg ?: ex.targetWeightKg ?: historicalWeight
+            val suggestedReps = suggestion?.reps ?: ex.targetReps
+            val reason = ex.suggestionReason ?: suggestion?.note
+
             WearExerciseState(
                 name = ex.name,
                 category = ex.category.name,
@@ -673,8 +787,12 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
                 targetReps = ex.targetReps,
                 loggedSets = ex.loggedSets.size,
                 trackingType = ex.trackingType.name,
-                lastWeightDisplay = last?.let { Units.toDisplay(it.weightKg, imperial) } ?: 0.0,
-                lastReps = last?.reps ?: 0
+                lastWeightDisplay = last?.let { Units.toDisplay(it.weightKg, imperial) }
+                    ?: historicalWeight?.let { Units.toDisplay(it, imperial) } ?: 0.0,
+                lastReps = last?.reps ?: 0,
+                suggestedWeightDisplay = suggestedWeight?.takeIf { it > 0 }?.let { Units.toDisplay(it, imperial) },
+                suggestedReps = suggestedReps.takeIf { it > 0 },
+                suggestionReason = reason
             )
         }
         wearBridge.publishSession(
@@ -838,29 +956,36 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
 
     private fun maybeAutoCoach(index: Int) {
         val s = _uiState.value
-        if (!s.hasAi || s.coachLoading) return
+        if (s.coachLoading) return
         val ex = s.exercises.getOrNull(index) ?: return
-        // Auto-coach after every set of a new exercise to keep the loop tight,
-        // or when an exercise is fully completed.
-        if (ex.loggedSets.isEmpty()) return
         
-        // Use a unique key to prevent spamming the same exercise coaching too often
-        val coachingKey = "${ex.name}_${ex.loggedSets.size}"
+        // Auto-coach when an exercise is fully completed (logged all sets)
+        if (ex.loggedSets.size < ex.targetSets) return
+        
+        // Use a unique key to prevent spamming the same exercise completion coaching
+        val coachingKey = "completed_${ex.name}_${ex.loggedSets.size}"
         if (!coachedExercises.add(coachingKey)) return
         
-        if (s.exercises.none { it.loggedSets.isEmpty() }) return
         askCoach()
     }
 
     fun askCoach(manual: Boolean = false, simulateHighPerf: Boolean = false) {
         val s = _uiState.value
-        if (!s.hasAi || s.coachLoading) return
+        if (s.coachLoading) return
         if (!manual && s.totalSets == 0) return
         
         _uiState.update { it.copy(coachLoading = true, coach = null, coachError = null) }
 
         viewModelScope.launch {
             try {
+                // If Gemini is not fully set up (no key and no local model), skip directly to Squire.
+                // If there's a local model but no key, container.gemini.isAvailable is true, but cloud will fail and it will retry local.
+                if (!container.gemini.isAvailable) {
+                    val advice = LocalAiEngine.coachHeuristic(s.exercises, container.prefs.imperial.value)
+                    _uiState.update { it.copy(coachLoading = false, coach = advice) }
+                    return@launch
+                }
+
                 val performed = if (simulateHighPerf) {
                     s.exercises.firstOrNull()?.let { ex ->
                         "- ${ex.name}: ${ex.targetWeightKg ?: 100.0}kg x ${ex.targetReps + 5} @0 RIR (Exceeded target!)"
@@ -884,7 +1009,7 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
 
                 val contextPrefix = if (simulateHighPerf) "CRITICAL: The player just SMASHED their targets. You MUST increase intensity significantly for remaining exercises.\n" else ""
 
-                container.gemini.coachSession(performed, remaining, container.prefs.profile.value, contextPrefix + history + hrContext)
+                container.gemini.coachSession(performed, remaining, container.prefs.profile.value, contextPrefix + history + hrContext, container.prefs.imperial.value)
                     .onSuccess { advice ->
                         val valid = advice.changes.filter { change ->
                             _uiState.value.exercises.any { it.loggedSets.isEmpty() && it.name.equals(change.exercise, true) }
@@ -892,10 +1017,14 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
                         _uiState.update { it.copy(coachLoading = false, coach = advice.copy(changes = valid)) }
                     }
                     .onFailure { e ->
-                        _uiState.update { it.copy(coachLoading = false, coachError = e.message ?: "Coach is unavailable right now.") }
+                        // Fallback to Squire if cloud AI (or local retry) is unavailable or failing
+                        val advice = LocalAiEngine.coachHeuristic(s.exercises, container.prefs.imperial.value)
+                        _uiState.update { it.copy(coachLoading = false, coach = advice) }
                     }
             } catch (e: Exception) {
-                _uiState.update { it.copy(coachLoading = false, coachError = e.message ?: "Coach check-in failed.") }
+                // Last ditch fallback
+                val advice = LocalAiEngine.coachHeuristic(s.exercises, container.prefs.imperial.value)
+                _uiState.update { it.copy(coachLoading = false, coach = advice) }
             }
         }
     }
@@ -920,7 +1049,18 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
                             category = tracking.first,
                             targetSets = change.sets ?: ex.targetSets,
                             targetReps = change.reps ?: ex.targetReps,
-                            trackingType = tracking.second
+                            targetWeightKg = change.weightKg ?: ex.targetWeightKg,
+                            trackingType = tracking.second,
+                            suggestionReason = change.reason
+                        )
+                    }
+                    if (!demoMode) {
+                        container.repository.updateActiveExerciseTargets(
+                            exerciseId = ex.dbId,
+                            sets = change.sets ?: ex.targetSets,
+                            reps = change.reps ?: ex.targetReps,
+                            weightKg = change.weightKg ?: ex.targetWeightKg,
+                            reason = change.reason
                         )
                     }
                 }
@@ -1227,6 +1367,8 @@ fun ActiveSessionScreen(
             onDeclineAmbush = viewModel::declineAmbush,
             onAcceptAmbush = viewModel::acceptAmbush,
             onAddCustomCardioProgram = viewModel::addCustomCardioProgram,
+            onUpdateLoggedSet = viewModel::updateLoggedSet,
+            onDeleteLoggedSet = viewModel::deleteLoggedSet,
             getPreviousPerformance = viewModel::getPreviousPerformance,
             bodyWeightKgOrNull = viewModel::bodyWeightKgOrNull
         )
@@ -1245,6 +1387,8 @@ data class ActiveSessionActions(
     val onAiSwap: (Int, Boolean) -> Unit = { _, _ -> },
     val onLogSet: (Int, Double, Int, Double, Double, Int?, Int?, Int?, Double, Double, String, SetType, Boolean) -> Unit = { _, _, _, _, _, _, _, _, _, _, _, _, _ -> },
     val onRemoveLastSet: (Int) -> Unit = {},
+    val onUpdateLoggedSet: (Int, Int, SetLogEntity) -> Unit = { _, _, _ -> },
+    val onDeleteLoggedSet: (Int, Int) -> Unit = { _, _ -> },
     val onSkipRest: () -> Unit = {},
     val onExtendRest: (Int) -> Unit = {},
     val onSetRestDuration: (Int) -> Unit = {},
@@ -1282,6 +1426,12 @@ fun ActiveSessionScreenContent(
     var swapFor by remember { mutableStateOf<Int?>(null) }
     var showPlates by remember { mutableStateOf(false) }
     var showDiscardConfirm by remember { mutableStateOf(false) }
+    var expandedIndex by remember { mutableIntStateOf(-1) }
+
+    // Sync expandedIndex with currentExerciseIndex when it changes
+    LaunchedEffect(state.currentExerciseIndex) {
+        expandedIndex = state.currentExerciseIndex
+    }
 
     data class PendingSwap(val index: Int, val name: String, val category: ExerciseCategory, val isAi: Boolean = false)
     var pendingSwap by remember { mutableStateOf<PendingSwap?>(null) }
@@ -1336,7 +1486,14 @@ fun ActiveSessionScreenContent(
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(coach.message, style = MaterialTheme.typography.bodyMedium)
                     coach.changes.forEach { change ->
-                        val action = if (change.replaceWith != null) "${change.exercise} \u2192 ${change.replaceWith}" else "${change.exercise}: ${change.sets ?: "?"} \u00D7 ${change.reps ?: "?"}"
+                        val action = if (change.replaceWith != null) {
+                            "${change.exercise} \u2192 ${change.replaceWith}"
+                        } else {
+                            val weightPart = if (change.weightKg != null) {
+                                " @ ${Units.toDisplay(change.weightKg, imperial).let(HeightFormat::trimNum)} ${Units.label(imperial)}"
+                            } else ""
+                            "${change.exercise}: ${change.sets ?: "?"} \u00D7 ${change.reps ?: "?"}$weightPart"
+                        }
                         Column {
                             Text(action, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
                             if (change.reason.isNotBlank()) Text(change.reason, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -1345,10 +1502,16 @@ fun ActiveSessionScreenContent(
                 }
             },
             confirmButton = {
-                Button(onClick = actions.onApplyCoachChanges) { Text("Apply Changes") }
+                if (coach.changes.isNotEmpty()) {
+                    Button(onClick = actions.onApplyCoachChanges) { Text("Apply Changes") }
+                } else {
+                    Button(onClick = actions.onDismissCoach) { Text("Got it") }
+                }
             },
             dismissButton = {
-                TextButton(onClick = actions.onDismissCoach) { Text("Keep Plan") }
+                if (coach.changes.isNotEmpty()) {
+                    TextButton(onClick = actions.onDismissCoach) { Text("Keep Plan") }
+                }
             }
         )
     }
@@ -1583,6 +1746,10 @@ fun ActiveSessionScreenContent(
                         showCardioIntensity = false,
                         onToggleCardioIntensity = {},
                         aiSwapping = state.aiSwapIndex == index,
+                        minimized = index != expandedIndex,
+                        onHeaderClick = {
+                            expandedIndex = if (expandedIndex == index) -1 else index
+                        },
                         canMoveUp = index > 0,
                         canMoveDown = index < state.exercises.lastIndex,
                         canRemove = state.exercises.size > 1,
@@ -1593,6 +1760,8 @@ fun ActiveSessionScreenContent(
                             actions.onLogSet(index, w, r, dur, dist, rir, null, null, speed, incline, program, st, false)
                         },
                         onUndo = { actions.onRemoveLastSet(index) },
+                        onUpdateSet = { sIdx, updated -> actions.onUpdateLoggedSet(index, sIdx, updated) },
+                        onDeleteSet = { sIdx -> actions.onDeleteLoggedSet(index, sIdx) },
                         getPreviousPerformance = actions.getPreviousPerformance,
                         customPrograms = customCardioPrograms,
                         onAddCustomProgram = actions.onAddCustomCardioProgram
@@ -1610,20 +1779,30 @@ fun ActiveSessionScreenContent(
                 }
             }
 
-            if (state.hasAi && !state.coachLoading) {
-                Box(modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)) {
-                    FloatingActionButton(
+            Box(modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)) {
+                FloatingActionButton(
+                    onClick = { actions.onAskCoach(true, false) },
+                    containerColor = if (state.coachLoading) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = if (state.coachLoading) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.combinedClickable(
+                        enabled = !state.coachLoading,
                         onClick = { actions.onAskCoach(true, false) },
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.combinedClickable(
-                            onClick = { actions.onAskCoach(true, false) },
-                            onLongClick = { actions.onAskCoach(true, true) }
-                        )
-                    ) {
-                        Row(Modifier.padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text("\uD83E\uDDD9 Coach", style = MaterialTheme.typography.labelLarge)
+                        onLongClick = { actions.onAskCoach(true, true) }
+                    )
+                ) {
+                    Row(Modifier.padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        if (state.coachLoading) {
+                            CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = LocalContentColor.current)
+                            Spacer(Modifier.width(8.dp))
                         }
+                        Text(
+                            text = if (state.hasAi) {
+                                if (state.coachLoading) "Consulting..." else "\uD83E\uDDD9 Coach"
+                            } else {
+                                if (state.coachLoading) "Scouting..." else "\uD83D\uDDE1\uFE0F Squire"
+                            },
+                            style = MaterialTheme.typography.labelLarge
+                        )
                     }
                 }
             }
@@ -1795,6 +1974,168 @@ private fun formatDuration(ms: Long): String {
 }
 
 @Composable
+fun EditSetDialog(
+    set: SetLogEntity,
+    exercise: SessionExercise,
+    imperial: Boolean,
+    effortMethod: EffortMethod,
+    onDismiss: () -> Unit,
+    onSave: (SetLogEntity) -> Unit,
+    onDelete: () -> Unit
+) {
+    val isTimed = exercise.trackingType in setOf(ExerciseTrackingType.TIME_ONLY, ExerciseTrackingType.DISTANCE_TIME, ExerciseTrackingType.CARDIO_MACHINE)
+    val isCardio = exercise.trackingType == ExerciseTrackingType.CARDIO_MACHINE || exercise.trackingType == ExerciseTrackingType.DISTANCE_TIME
+
+    val initialWeightDisplay = if (set.weightKg > 0) Units.toDisplay(set.weightKg, imperial).let(HeightFormat::trimNum) else ""
+    var weight by remember { mutableStateOf(initialWeightDisplay) }
+    var reps by remember { mutableStateOf(if (set.reps > 0) set.reps.toString() else "") }
+    
+    val totalSecs = (set.durationMin * 60.0).roundToInt()
+    var durationMin by remember { mutableStateOf(if (set.durationMin > 0) (totalSecs / 60).toString() else "") }
+    var durationSec by remember { mutableStateOf(if (totalSecs % 60 > 0) (totalSecs % 60).toString() else "") }
+    
+    val initialDist = if (set.distanceKm > 0) Units.trimmed(Units.kmToDisplay(set.distanceKm, imperial)) else ""
+    var distance by remember { mutableStateOf(initialDist) }
+    var speed by remember { mutableStateOf(if (set.speedKmh > 0) Units.trimmed(Units.speedToDisplay(set.speedKmh, imperial)) else "") }
+    var incline by remember { mutableStateOf(if (set.inclinePercent > 0) set.inclinePercent.toString() else "") }
+    var program by remember { mutableStateOf(set.cardioProgram) }
+    var effort by remember { mutableStateOf(set.rir) }
+    var setType by remember { mutableStateOf(set.setType) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Edit Set • ${exercise.name}") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                // Set Type Selector
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Type:", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                    SetType.entries.forEach { type ->
+                        FilterChip(
+                            selected = setType == type,
+                            onClick = { setType = type },
+                            label = { Text(type.shortLabel) }
+                        )
+                    }
+                }
+
+                if (isCardio) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = distance,
+                            onValueChange = { distance = it },
+                            label = { Text("Dist (${Units.distLabel(imperial)})") },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true
+                        )
+                        OutlinedTextField(
+                            value = durationMin,
+                            onValueChange = { durationMin = it },
+                            label = { Text("Min") },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true
+                        )
+                        OutlinedTextField(
+                            value = durationSec,
+                            onValueChange = { durationSec = it },
+                            label = { Text("Sec") },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true
+                        )
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = incline,
+                            onValueChange = { incline = it },
+                            label = { Text("Incline %") },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true
+                        )
+                        OutlinedTextField(
+                            value = speed,
+                            onValueChange = { speed = it },
+                            label = { Text("Speed") },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true
+                        )
+                    }
+                    OutlinedTextField(
+                        value = program,
+                        onValueChange = { program = it },
+                        label = { Text("Program (e.g. Hill, Intervals)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                } else {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = if (isTimed) durationMin else weight,
+                            onValueChange = { if (isTimed) durationMin = it else weight = it },
+                            label = { Text(if (isTimed) "Min" else "Weight (${Units.label(imperial)})") },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true
+                        )
+                        OutlinedTextField(
+                            value = if (isTimed) durationSec else reps,
+                            onValueChange = { if (isTimed) durationSec = it else reps = it },
+                            label = { Text(if (isTimed) "Sec" else "Reps") },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true
+                        )
+                    }
+                    // Effort (RIR / RPE)
+                    if (effortMethod != EffortMethod.OFF) {
+                        Column {
+                            Text("${effortMethod.label}:", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                val ops = if (effortMethod == EffortMethod.RPE) listOf(null to "—", 4 to "6", 3 to "7", 2 to "8", 1 to "9", 0 to "10")
+                                else listOf(null to "—", 0 to "0", 1 to "1", 2 to "2", 3 to "3", 4 to "4", 5 to "5+")
+                                ops.forEach { (v, label) ->
+                                    FilterChip(
+                                        selected = effort == v,
+                                        onClick = { effort = v },
+                                        label = { Text(label) }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    val totalMins = (durationMin.toDoubleOrNull() ?: 0.0) + (durationSec.toDoubleOrNull() ?: 0.0) / 60.0
+                    val updated = set.copy(
+                        weightKg = if (isTimed) 0.0 else Units.toKg(weight.toDoubleOrNull() ?: 0.0, imperial),
+                        reps = if (isTimed) 0 else (reps.toIntOrNull() ?: 0),
+                        durationMin = if (isTimed || isCardio) totalMins else 0.0,
+                        distanceKm = if (isCardio) Units.toKm(distance.toDoubleOrNull() ?: 0.0, imperial) else 0.0,
+                        rir = effort,
+                        speedKmh = if (isCardio) Units.toSpeedKmh(speed.toDoubleOrNull() ?: 0.0, imperial) else 0.0,
+                        inclinePercent = if (isCardio) (incline.toDoubleOrNull() ?: 0.0) else 0.0,
+                        cardioProgram = program.trim(),
+                        setType = setType
+                    )
+                    onSave(updated)
+                    onDismiss()
+                }
+            ) { Text("Save") }
+        },
+        dismissButton = {
+            Row {
+                TextButton(onClick = { onDelete(); onDismiss() }) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
+                Spacer(Modifier.width(8.dp))
+                TextButton(onClick = onDismiss) { Text("Cancel") }
+            }
+        }
+    )
+}
+
+@Composable
 private fun ExerciseLogCard(
     exercise: SessionExercise,
     imperial: Boolean,
@@ -1803,6 +2144,8 @@ private fun ExerciseLogCard(
     showCardioIntensity: Boolean = false,
     onToggleCardioIntensity: (Boolean) -> Unit = {},
     aiSwapping: Boolean,
+    minimized: Boolean = false,
+    onHeaderClick: () -> Unit = {},
     canMoveUp: Boolean,
     canMoveDown: Boolean,
     canRemove: Boolean = true,
@@ -1811,12 +2154,37 @@ private fun ExerciseLogCard(
     onRemove: () -> Unit = {},
     onLogSet: (weightKg: Double, reps: Int, durationMin: Double, distanceKm: Double, rir: Int?, speedKmh: Double, inclinePercent: Double, cardioProgram: String, setType: SetType) -> Unit,
     onUndo: () -> Unit,
+    onUpdateSet: (setIndex: Int, updated: SetLogEntity) -> Unit = { _, _ -> },
+    onDeleteSet: (setIndex: Int) -> Unit = {},
     getPreviousPerformance: suspend (String) -> List<SetLogEntity>,
     customPrograms: Set<String> = emptySet(),
     onAddCustomProgram: (String) -> Unit = {}
 ) {
+    var editingSetIndex by remember { mutableStateOf<Int?>(null) }
+
+    editingSetIndex?.let { sIdx ->
+        val set = exercise.loggedSets.getOrNull(sIdx)
+        if (set != null) {
+            EditSetDialog(
+                set = set,
+                exercise = exercise,
+                imperial = imperial,
+                effortMethod = effortMethod,
+                onDismiss = { editingSetIndex = null },
+                onSave = { updated ->
+                    onUpdateSet(sIdx, updated)
+                    editingSetIndex = null
+                },
+                onDelete = {
+                    onDeleteSet(sIdx)
+                    editingSetIndex = null
+                }
+            )
+        }
+    }
+
     var weight by rememberSaveable(exercise.name) { mutableStateOf(exercise.targetWeightKg?.let { Units.toDisplay(it, imperial).let(HeightFormat::trimNum) } ?: "") }
-    var reps by rememberSaveable(exercise.name) { mutableStateOf("") }
+    var reps by rememberSaveable(exercise.name) { mutableStateOf(exercise.targetReps.toString()) }
     var durationMin by rememberSaveable(exercise.name) { mutableStateOf("") }
     var durationSec by rememberSaveable(exercise.name) { mutableStateOf("") }
     var distance by rememberSaveable(exercise.name) { mutableStateOf("") }
@@ -1827,6 +2195,29 @@ private fun ExerciseLogCard(
     var setType by rememberSaveable(exercise.name) { mutableStateOf(SetType.NORMAL) }
     var previousSets by remember(exercise.name) { mutableStateOf<List<SetLogEntity>>(emptyList()) }
     LaunchedEffect(exercise.name) { previousSets = getPreviousPerformance(exercise.name) }
+
+    // Prefill logic for the weight and reps fields
+    LaunchedEffect(exercise.targetWeightKg, exercise.targetReps, exercise.suggestionReason, previousSets, imperial) {
+        val targetWeightNum = exercise.targetWeightKg?.let { Units.toDisplay(it, imperial) } ?: 0.0
+        val historyWeightNum = previousSets.firstOrNull()?.weightKg?.let { Units.toDisplay(it, imperial) } ?: 0.0
+        
+        // Priority 1: AI Coach/Target weight
+        if (targetWeightNum > 0.0) {
+            val display = Units.toDisplay(exercise.targetWeightKg!!, imperial).let(HeightFormat::trimNum)
+            if (weight != display) {
+                weight = display
+            }
+        } 
+        // Priority 2: History (if weight field is empty and no target exists)
+        else if (weight.isBlank() && historyWeightNum > 0.0) {
+            weight = historyWeightNum.let(HeightFormat::trimNum)
+        }
+        
+        // Reps prefilling
+        if (reps.isBlank() || reps == "0" || reps.toIntOrNull() != exercise.targetReps) {
+            reps = exercise.targetReps.toString()
+        }
+    }
 
     var showAdvanced by rememberSaveable(exercise.name) { mutableStateOf(false) }
     var showAddProgramDialog by remember { mutableStateOf(false) }
@@ -1918,7 +2309,11 @@ private fun ExerciseLogCard(
         SectionCard {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f).clickable { showDetail = true }) {
+                    Column(
+                        Modifier
+                            .weight(1f)
+                            .clickable { if (minimized) onHeaderClick() else showDetail = true }
+                    ) {
                         Text(exercise.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         Text(
                             text = "${exercise.category.label} \u2022 ${targetSummary(exercise)} \u2022 ${exercise.category.statLabel}",
@@ -1927,6 +2322,19 @@ private fun ExerciseLogCard(
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis
                         )
+                    }
+                    if (minimized) {
+                        IconButton(onClick = onHeaderClick, modifier = Modifier.size(32.dp)) {
+                            Icon(Icons.Default.KeyboardArrowDown, "Expand")
+                        }
+                    }
+                    if (!minimized) {
+                        IconButton(onClick = { onMove(-1) }, enabled = canMoveUp, modifier = Modifier.size(32.dp)) { 
+                            Icon(Icons.Default.KeyboardArrowUp, "Move Up", modifier = Modifier.size(20.dp)) 
+                        }
+                        IconButton(onClick = { onMove(1) }, enabled = canMoveDown, modifier = Modifier.size(32.dp)) { 
+                            Icon(Icons.Default.KeyboardArrowDown, "Move Down", modifier = Modifier.size(20.dp)) 
+                        }
                     }
                     if (isTimed) {
                         IconButton(onClick = { 
@@ -1981,24 +2389,38 @@ private fun ExerciseLogCard(
                         )
                     }
                 }
-                Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("Type", Modifier.width(32.dp), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
-                    Text("Set", Modifier.width(24.dp), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
-                    Text("Previous", Modifier.weight(1.2f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
-                    if (isCardio) {
-                        Text("Dist", Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
-                        Text("Time", Modifier.weight(1.5f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
-                    } else {
-                        val c1 = if (isTimed) "Min" else "Weight"
-                        val c2 = if (isTimed) "Sec" else "Reps"
-                        Text(c1, Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
-                        Text(c2, Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
-                        Text(effortMethod.label, Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
+
+                if (!minimized) {
+                    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("Type", Modifier.width(32.dp), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
+                        Text("Set", Modifier.width(24.dp), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
+                        Text("Previous", Modifier.weight(1.2f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
+                        if (isCardio) {
+                            Text("Dist", Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
+                            Text("Time", Modifier.weight(1.5f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
+                        } else {
+                            val c1 = if (isTimed) "Min" else "Weight"
+                            val c2 = if (isTimed) "Sec" else "Reps"
+                            Text(c1, Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
+                            Text(c2, Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
+                            Text(effortMethod.label, Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
+                        }
+                        Spacer(Modifier.width(36.dp))
                     }
-                    Spacer(Modifier.width(36.dp))
                 }
+
                 exercise.loggedSets.forEachIndexed { i, set ->
-                    Row(Modifier.fillMaxWidth().alpha(0.6f), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (minimized && i < exercise.loggedSets.size - 1) return@forEachIndexed
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(6.dp))
+                            .clickable { editingSetIndex = i }
+                            .alpha(if (minimized) 1.0f else 0.85f)
+                            .padding(vertical = 2.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Text(set.setType.shortLabel, Modifier.width(32.dp), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center, fontWeight = FontWeight.Bold)
                         Text("${i + 1}", Modifier.width(24.dp), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
                         val p = previousSets.getOrNull(i); Text(if (p != null) setSummary(p, imperial) else "—", Modifier.weight(1.2f), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
@@ -2015,7 +2437,7 @@ private fun ExerciseLogCard(
                         Icon(Icons.Default.Check, null, tint = Color(0xFF4CAF50), modifier = Modifier.size(36.dp).padding(8.dp))
                     }
                 }
-                if (exercise.loggedSets.size < 20) {
+                if (!minimized && exercise.loggedSets.size < 20) {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                             Box(Modifier.width(32.dp)) {
@@ -2105,11 +2527,20 @@ private fun ExerciseLogCard(
                         }
                     }
                 }
-                if (suggestion != null) {
-                    val t = if (suggestedWeightText != null) "$suggestedWeightText ${Units.label(imperial)} \u00D7 ${suggestion.reps}" else "${suggestion.reps} reps"
-                    Text("\uD83D\uDCA1 ${suggestion.note} \u00B7 next: $t", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary, fontWeight = FontWeight.SemiBold)
+                
+                val aiReason = exercise.suggestionReason
+                if (!minimized && (suggestion != null || aiReason != null)) {
+                    val nextText = if (suggestion != null) {
+                        val t = if (suggestedWeightText != null) "$suggestedWeightText ${Units.label(imperial)} \u00D7 ${suggestion.reps}" else "${suggestion.reps} reps"
+                        "next: $t"
+                    } else {
+                        val weightPart = exercise.targetWeightKg?.let { " @ ${Units.toDisplay(it, imperial).let(HeightFormat::trimNum)} ${Units.label(imperial)}" }.orEmpty()
+                        "next: ${exercise.targetReps} reps$weightPart"
+                    }
+                    val note = aiReason ?: suggestion?.note ?: "Ready for the next set"
+                    Text("\uD83D\uDCA1 $note \u00B7 $nextText", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary, fontWeight = FontWeight.SemiBold)
                 }
-                if (exercise.loggedSets.isNotEmpty()) TextButton(onClick = onUndo, Modifier.align(Alignment.Start)) { Text("Undo Last Set", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error) }
+                if (exercise.loggedSets.isNotEmpty() && !minimized) TextButton(onClick = onUndo, Modifier.align(Alignment.Start)) { Text("Undo Last Set", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error) }
             }
         }
         if (burstVisible) Box(Modifier.align(Alignment.Center)) { FloatingTextBurst(FloatingBurst(text = "+$burstXp XP", subtext = "${exercise.category.statLabel} GAIN!", color = Gold), { }) }

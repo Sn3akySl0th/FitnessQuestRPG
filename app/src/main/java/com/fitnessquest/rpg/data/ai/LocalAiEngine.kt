@@ -7,6 +7,7 @@ import com.fitnessquest.rpg.data.db.ExerciseCategory
 import com.fitnessquest.rpg.data.db.WorkoutExerciseEntity
 import com.fitnessquest.rpg.domain.ExerciseCategories
 import com.fitnessquest.rpg.domain.ItemCatalog
+import com.fitnessquest.rpg.ui.screens.SessionExercise
 import com.google.mediapipe.tasks.genai.llminference.LlmInference
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
@@ -217,5 +218,59 @@ object LocalAiEngine {
         } else {
             "The $monsterName's fury proves overwhelming. Rest up, train hard, and return stronger!"
         }
+    }
+
+    /** Hardcoded heuristic coach for when no LLM is available. */
+    fun coachHeuristic(
+        exercises: List<SessionExercise>,
+        imperial: Boolean
+    ): CoachAdvice {
+        val changes = mutableListOf<CoachChange>()
+        val performed = exercises.filter { it.loggedSets.isNotEmpty() }
+        val remaining = exercises.filter { it.loggedSets.isEmpty() }
+        
+        if (performed.isEmpty()) return CoachAdvice("I'm watching your progress, hero. Complete a few sets first!", emptyList())
+
+        // Check if player is "smashing" targets (RIR 0 with high reps, or exceeded target reps)
+        val highPerformance = performed.any { ex ->
+            ex.loggedSets.any { set -> 
+                val highReps = set.reps >= ex.targetReps
+                val highIntensity = (set.rir ?: 5) <= 1
+                val cardioExceeded = (ex.category == ExerciseCategory.CARDIO && set.durationMin >= ex.targetReps)
+                
+                (highReps && highIntensity) || cardioExceeded
+            }
+        }
+
+        if (highPerformance && remaining.isNotEmpty()) {
+            val target = remaining.first()
+            
+            val targetWeight = target.targetWeightKg
+            val newWeight = if (targetWeight != null && targetWeight > 0) {
+                if (imperial) {
+                    val lbs = targetWeight * 2.2046226 + 5.0
+                    lbs / 2.2046226
+                } else {
+                    targetWeight + 2.5
+                }
+            } else null
+            
+            changes += CoachChange(
+                exercise = target.name,
+                sets = target.targetSets,
+                reps = target.targetReps,
+                weightKg = newWeight,
+                replaceWith = null,
+                replaceCategory = null,
+                reason = if (newWeight != null) "Your power grows! I suggest increasing the load to match your momentum." else "You're showing great intensity. Stay focused on these targets!"
+            )
+            return CoachAdvice(
+                if (newWeight != null) "Your power grows! I suggest increasing the load for ${target.name}."
+                else "You're smashing it, hero! Keep that same fire for ${target.name}.", 
+                changes
+            )
+        }
+
+        return CoachAdvice("You're following the path well. Stay focused and complete your quest!", emptyList())
     }
 }

@@ -195,13 +195,7 @@ object ProgressionRules {
         (10 + monster.tier * 4 + monster.level / 2).coerceAtLeast(10)
 
     fun salvageMaterialQuantity(tier: Int, rarity: String): Int {
-        val rarityBonus = when (rarity.uppercase()) {
-            "UNCOMMON" -> 1
-            "RARE" -> 2
-            "EPIC" -> 3
-            "LEGENDARY" -> 5
-            else -> 0
-        }
+        val rarityBonus = GearRarity.fromName(rarity).salvageBonus
         return (tier.coerceAtLeast(1) + rarityBonus).coerceAtLeast(1)
     }
 

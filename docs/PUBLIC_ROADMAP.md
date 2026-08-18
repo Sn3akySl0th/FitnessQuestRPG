@@ -19,6 +19,12 @@ The next major focus is boss-gated biome progression, followed by Movement Maste
 
 ### Fixed Recently
 
+- **Phone vs Watch Prefilled Weight Sync & Live Cardio Stopwatch**: Resolved historical performance weight prefill desync between phone and watch so watch immediately displays the correct previous workout weight (e.g. 115 lb). Added wrist live cardio stopwatch with interactive Start/Pause/Reset controls and auto-duration capture on log.
+- **Interactive Tap-to-Edit Logged Sets on Phone**: Any completed set (logged on watch or phone) can now be tapped on phone to open `EditSetDialog` and modify weight, reps, RIR/RPE, cardio distance/duration/incline/speed/program, or set type with automatic XP recalculation.
+- **Wear OS Zero-Scroll Compact UI**: Redesigned Wear OS quest screen into a single glanceable layout with top status pill (Heart rate, Zone, Streak, Calories), integrated exercise switcher with completion checkmark indicators (`✓ Done — N sets`), side-by-side steppers, and single-screen reachable `LOG SET` button.
+- **Ambient Hero Avatar Workout Backdrop**: Integrated watermarked Hero Avatar backdrop into phone and Wear OS active workout screens via DataLayer bitmap transfer.
+- **Multi-Tier RPG Gear Rarity Scaling System**: Introduced 5 rarity tiers (Common 1.0×, Uncommon 1.10×, Rare 1.25×, Epic 1.45×, Legendary 1.70×) across drops, crafting, salvage bonuses, and reward reveals with 30-day simulation tests.
+- **Birthday Validation Feedback**: Added inline calendar date validation in settings to prevent silent failures on invalid date entries.
 - Google Play Automatic In-App Updates: Integrated Google Play `AppUpdateManager` with non-blocking Flexible background downloads, lifecycle hooks in `MainActivity`, and a themed floating restart banner to apply updates seamlessly without interrupting workouts.
 - Boss Progression UI & First-Clear Milestone Reward Flow: Added dynamic boss gates (`BossProgressCard`), canonical biome boss assignments, readiness & trait previews, transactional `GameRepository.applyVictory` atomicity, and guaranteed milestone loot (high-tier gear, Biome Chest, crafting mats, gold/energy).
 - Hevy CSV Import Fix: Fixed CSV column index disambiguation (so workout_name and exercise_name columns are detected separately) and session grouping so all exercises (e.g. Bench Press, Bent Over Row, Shoulder Press, Bicep Curl) from the same Hevy workout are correctly grouped into a single routine template & history session.

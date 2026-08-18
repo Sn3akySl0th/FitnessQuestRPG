@@ -54,13 +54,16 @@ private inline fun <reified T> createDummyProxy(): T {
                 method.name.contains("All") ||
                 method.name.contains("Logs") ||
                 method.name.contains("Events") ||
+                method.name.contains("exercises") ||
+                method.name.contains("Exercises") ||
+                method.name.contains("For") ||
                 method.name.startsWith("by")
             ) {
                 emptyList<Any>()
             } else {
                 null
             }
-        } else if (returnType == java.util.List::class.java || returnType.name.contains("List")) {
+        } else if (returnType == java.util.List::class.java || returnType == java.util.Set::class.java || returnType.name.contains("List") || returnType.name.contains("Set")) {
             emptyList<Any>()
         } else if (returnType == Boolean::class.javaPrimitiveType) {
             false

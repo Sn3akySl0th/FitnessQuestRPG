@@ -840,13 +840,13 @@ object WorkoutImportService {
     }
 
     private fun normalizeExerciseName(raw: String): String {
-        val n = raw.lowercase()
-        return when {
-            n.contains("treadmill") || 
-            n == "run" || n == "running" || n == "jog" || n == "jogging" || n == "walk" || n == "walking" ||
-            n.startsWith("run ") || n.startsWith("jog ") || n.startsWith("walk ") -> "Treadmill"
-            else -> raw
-        }
+        return raw.lowercase()
+            .replace(Regex("[^a-z0-9]+"), " ")
+            .split(' ')
+            .filter { it.isNotBlank() }
+            .map { it.removeSuffix("s") }
+            .sorted()
+            .joinToString(" ")
     }
 
     private fun extractExerciseTitle(exObj: JSONObject, index: Int): String {

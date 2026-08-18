@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FitnessCenter
@@ -358,7 +359,8 @@ fun FitQuestNav() {
             Column(
                 modifier = Modifier
                     .align(if (isLandscape) Alignment.BottomEnd else Alignment.BottomCenter)
-                    .padding(bottom = if (showBottomBar && !isLandscape) 80.dp else 0.dp)
+                    .navigationBarsPadding()
+                    .padding(bottom = if (showBottomBar && !isLandscape) DockClearance else 0.dp)
             ) {
                 val hideBanners = currentRoute == Routes.SESSION || currentRoute?.startsWith("battle/fight") == true
                 
@@ -415,6 +417,7 @@ fun FitQuestNav() {
                 hostState = snackbarHostState,
                 modifier = Modifier
                     .align(if (isLandscape) Alignment.BottomEnd else Alignment.BottomCenter)
+                    .navigationBarsPadding()
                     .padding(
                         bottom = if (showBottomBar && !isLandscape) 100.dp else 16.dp,
                         end = if (isLandscape) 16.dp else 0.dp

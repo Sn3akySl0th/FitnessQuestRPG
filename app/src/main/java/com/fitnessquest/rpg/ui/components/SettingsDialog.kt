@@ -1051,6 +1051,8 @@ private fun BodyMetricsSection(viewModel: SettingsViewModel, imperial: Boolean) 
         )
     }
 
+    var birthdayError by remember { mutableStateOf<String?>(null) }
+
     Text("Birthday", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 8.dp))
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -1058,7 +1060,7 @@ private fun BodyMetricsSection(viewModel: SettingsViewModel, imperial: Boolean) 
     ) {
         OutlinedTextField(
             value = month,
-            onValueChange = { month = it.filter { ch -> ch.isDigit() }.take(2) },
+            onValueChange = { month = it.filter { ch -> ch.isDigit() }.take(2); birthdayError = null },
             label = { Text("MM") },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -1066,7 +1068,7 @@ private fun BodyMetricsSection(viewModel: SettingsViewModel, imperial: Boolean) 
         )
         OutlinedTextField(
             value = day,
-            onValueChange = { day = it.filter { ch -> ch.isDigit() }.take(2) },
+            onValueChange = { day = it.filter { ch -> ch.isDigit() }.take(2); birthdayError = null },
             label = { Text("DD") },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -1074,25 +1076,47 @@ private fun BodyMetricsSection(viewModel: SettingsViewModel, imperial: Boolean) 
         )
         OutlinedTextField(
             value = year,
-            onValueChange = { year = it.filter { ch -> ch.isDigit() }.take(4) },
+            onValueChange = { year = it.filter { ch -> ch.isDigit() }.take(4); birthdayError = null },
             label = { Text("YYYY") },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             modifier = Modifier.weight(1.5f)
         )
     }
+    birthdayError?.let { err ->
+        Text(err, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+    }
 
     Button(
         onClick = {
-            val m = month.toIntOrNull() ?: 0
-            val d = day.toIntOrNull() ?: 0
-            val y = year.toIntOrNull() ?: 0
-            val dob = if (m in 1..12 && d in 1..31 && y in 1900..2025) {
-                LocalDate.of(y, m, d)
-                    .atStartOfDay(ZoneId.systemDefault())
-                    .toInstant()
-                    .toEpochMilli()
+            val m = month.toIntOrNull()
+            val d = day.toIntOrNull()
+            val y = year.toIntOrNull()
+            val currentYear = LocalDate.now().year
+            val dob = if (month.isNotBlank() || day.isNotBlank() || year.isNotBlank()) {
+                if (m == null || m !in 1..12) {
+                    birthdayError = "Invalid month (1-12)"
+                    return@Button
+                }
+                if (d == null || d !in 1..31) {
+                    birthdayError = "Invalid day (1-31)"
+                    return@Button
+                }
+                if (y == null || y !in 1900..currentYear) {
+                    birthdayError = "Invalid year (1900-$currentYear)"
+                    return@Button
+                }
+                try {
+                    LocalDate.of(y, m, d)
+                        .atStartOfDay(ZoneId.systemDefault())
+                        .toInstant()
+                        .toEpochMilli()
+                } catch (e: Exception) {
+                    birthdayError = "Invalid calendar date"
+                    return@Button
+                }
             } else null
+            birthdayError = null
 
             viewModel.saveBodyProfileManual(
                 weightDisplay = weightText,
