@@ -63,6 +63,8 @@ fun WearApp(
     onAdjustDistance: (Double) -> Unit,
     onToggleCardioTimer: () -> Unit,
     onResetCardioTimer: () -> Unit,
+    onStartWorkout: (Long?) -> Unit,
+    onSelectRoutine: (Int) -> Unit,
     onRetryLink: () -> Unit,
     onRequestHrPermission: () -> Unit
 ) {
@@ -80,7 +82,7 @@ fun WearApp(
                     contentDescription = "Avatar Backdrop",
                     modifier = Modifier
                         .fillMaxSize()
-                        .alpha(0.20f),
+                        .alpha(0.35f),
                     contentScale = ContentScale.Crop
                 )
                 Box(
@@ -88,7 +90,7 @@ fun WearApp(
                         .fillMaxSize()
                         .background(
                             Brush.radialGradient(
-                                colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.75f))
+                                colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.65f))
                             )
                         )
                 )
@@ -97,8 +99,9 @@ fun WearApp(
             val session = state.session
             if (!session.active) {
                 IdleScreen(
-                    phoneConnected = state.phoneConnected,
-                    statusText = state.linkStatus,
+                    state = state,
+                    onStartWorkout = onStartWorkout,
+                    onSelectRoutine = onSelectRoutine,
                     onRetryLink = onRetryLink
                 )
             } else {
@@ -162,40 +165,153 @@ fun WearApp(
 
 @Composable
 private fun IdleScreen(
-    phoneConnected: Boolean,
-    statusText: String,
+    state: WearUiState,
+    onStartWorkout: (Long?) -> Unit,
+    onSelectRoutine: (Int) -> Unit,
     onRetryLink: () -> Unit
 ) {
+    val routines = state.routines
+    val selectedIdx = state.selectedRoutineIndex.coerceIn(0, (routines.size - 1).coerceAtLeast(0))
+    val currentRoutine = routines.getOrNull(selectedIdx)
+
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.Center,
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.SpaceBetween,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        val color = if (phoneConnected) MaterialTheme.colors.primary else Color.Gray
-        Box(
-            Modifier
-                .size(12.dp)
-                .clip(CircleShape)
-                .background(color)
-        )
-        Spacer(Modifier.height(12.dp))
-        Text(
-            text = "FitQuest",
-            style = MaterialTheme.typography.title1,
-            fontWeight = FontWeight.Black
-        )
-        Spacer(Modifier.height(4.dp))
-        Text(
-            text = statusText,
-            textAlign = TextAlign.Center,
-            style = MaterialTheme.typography.caption2
-        )
-        if (!phoneConnected) {
-            Spacer(Modifier.height(16.dp))
-            Button(onClick = onRetryLink) {
-                Text("Retry Link")
+        // Header
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(top = 4.dp)
+        ) {
+            Text(
+                text = "FitQuest RPG",
+                style = MaterialTheme.typography.title3,
+                fontWeight = FontWeight.Black,
+                color = Color(0xFFFFD700)
+            )
+            Text(
+                text = if (state.phoneConnected) (currentRoutine?.name ?: "Ready for quest") else state.linkStatus,
+                style = MaterialTheme.typography.caption2,
+                color = MaterialTheme.colors.onSurface.copy(alpha = 0.85f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center
+            )
+        }
+
+        // Middle Section: Routine Selector or Link Indicator
+        if (state.phoneConnected && routines.isNotEmpty()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth(0.92f)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colors.surface.copy(alpha = 0.85f))
+                    .padding(horizontal = 4.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Button(
+                    enabled = selectedIdx > 0,
+                    onClick = { onSelectRoutine(selectedIdx - 1) },
+                    modifier = Modifier.size(28.dp),
+                    shape = CircleShape,
+                    colors = ButtonDefaults.secondaryButtonColors()
+                ) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Prev Quest",
+                        modifier = Modifier.size(12.dp)
+                    )
+                }
+
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.weight(1f).padding(horizontal = 4.dp)
+                ) {
+                    Text(
+                        text = currentRoutine?.name ?: "Quest",
+                        style = MaterialTheme.typography.caption1,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center
+                    )
+                    Text(
+                        text = "${currentRoutine?.exerciseCount ?: 0} exercises",
+                        style = MaterialTheme.typography.caption3,
+                        color = MaterialTheme.colors.onSurface.copy(alpha = 0.7f)
+                    )
+                }
+
+                Button(
+                    enabled = selectedIdx < routines.size - 1,
+                    onClick = { onSelectRoutine(selectedIdx + 1) },
+                    modifier = Modifier.size(28.dp),
+                    shape = CircleShape,
+                    colors = ButtonDefaults.secondaryButtonColors()
+                ) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowForward,
+                        contentDescription = "Next Quest",
+                        modifier = Modifier.size(12.dp)
+                    )
+                }
+            }
+        } else {
+            Box(
+                Modifier
+                    .size(10.dp)
+                    .clip(CircleShape)
+                    .background(if (state.phoneConnected) Color(0xFF4CAF50) else Color.Gray)
+            )
+        }
+
+        // Bottom Action Button: Start Quest or Retry Link
+        if (state.phoneConnected) {
+            Button(
+                onClick = { onStartWorkout(currentRoutine?.id) },
+                modifier = Modifier
+                    .fillMaxWidth(0.82f)
+                    .height(36.dp)
+                    .padding(bottom = 4.dp),
+                shape = RoundedCornerShape(18.dp),
+                colors = ButtonDefaults.primaryButtonColors()
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        Icons.Default.PlayArrow,
+                        contentDescription = "Start",
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        text = "START QUEST",
+                        style = MaterialTheme.typography.button,
+                        fontWeight = FontWeight.Black
+                    )
+                }
+            }
+        } else {
+            Button(
+                onClick = onRetryLink,
+                modifier = Modifier
+                    .fillMaxWidth(0.75f)
+                    .height(34.dp)
+                    .padding(bottom = 4.dp),
+                shape = RoundedCornerShape(17.dp),
+                colors = ButtonDefaults.secondaryButtonColors()
+            ) {
+                Text(
+                    text = "Retry Link",
+                    style = MaterialTheme.typography.button,
+                    fontWeight = FontWeight.Bold
+                )
             }
         }
     }

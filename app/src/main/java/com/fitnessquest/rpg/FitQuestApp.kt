@@ -93,6 +93,20 @@ class FitQuestApp : Application() {
                 HeroStatusWidgetProvider.refresh(this@FitQuestApp)
             }
         }
+        appScope.launchStartup("avatarWear.sync.collect", crashlytics) {
+            container.repository.character.collect { char ->
+                char?.let {
+                    val gearMap = container.repository.equippedGear(it)
+                    val cls = it.characterClass ?: com.fitnessquest.rpg.domain.CharacterClass.WARRIOR
+                    com.fitnessquest.rpg.data.export.AvatarExporter.syncAvatarToWear(
+                        context = this@FitQuestApp,
+                        character = it,
+                        cls = cls,
+                        gear = gearMap
+                    )
+                }
+            }
+        }
         startSafely("prefs.start", crashlytics) { container.prefs.start() }
         startSafely("sync.start", crashlytics) { container.sync.start() }
         startSafely("steps.start", crashlytics) { container.steps.start() }

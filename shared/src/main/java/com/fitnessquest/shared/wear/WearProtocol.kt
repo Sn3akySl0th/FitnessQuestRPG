@@ -22,6 +22,8 @@ object WearPaths {
     const val HELLO = "/fitnessrpg/hello"
     const val HELLO_ACK = "/fitnessrpg/hello_ack"
     const val AVATAR_WATCH_FACE = "/fitnessrpg/avatar_watch_face"
+    const val START_WORKOUT = "/fitnessrpg/start_workout"
+    const val ROUTINES_LIST = "/fitnessrpg/routines_list"
 }
 
 enum class WearRestAction { SKIP, EXTEND, SET_DURATION }
@@ -358,5 +360,40 @@ data class WearFeedbackEvent(
                 message = o.optString("message", "")
             )
         }
+    }
+}
+
+data class WearRoutineSummary(
+    val id: Long,
+    val name: String,
+    val exerciseCount: Int,
+    val isRecommended: Boolean = false
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("id", id)
+        put("name", name)
+        put("exerciseCount", exerciseCount)
+        put("isRecommended", isRecommended)
+    }
+
+    companion object {
+        fun fromJson(json: JSONObject): WearRoutineSummary = WearRoutineSummary(
+            id = json.optLong("id", -1L),
+            name = json.optString("name", "Quest"),
+            exerciseCount = json.optInt("exerciseCount", 0),
+            isRecommended = json.optBoolean("isRecommended", false)
+        )
+
+        fun listToJson(list: List<WearRoutineSummary>): ByteArray {
+            val arr = JSONArray()
+            list.forEach { arr.put(it.toJson()) }
+            return JSONObject().put("routines", arr).toString().toByteArray(Charsets.UTF_8)
+        }
+
+        fun listFromJson(bytes: ByteArray): List<WearRoutineSummary> = runCatching {
+            val obj = JSONObject(String(bytes, Charsets.UTF_8))
+            val arr = obj.optJSONArray("routines") ?: JSONArray()
+            (0 until arr.length()).map { fromJson(arr.getJSONObject(it)) }
+        }.getOrDefault(emptyList())
     }
 }

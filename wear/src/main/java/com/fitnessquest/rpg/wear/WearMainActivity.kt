@@ -34,7 +34,9 @@ import com.fitnessquest.shared.wear.WearLogSetCommand
 import com.fitnessquest.shared.wear.WearPaths
 import com.fitnessquest.shared.wear.WearRestAction
 import com.fitnessquest.shared.wear.WearRestCommand
+import com.fitnessquest.shared.wear.WearRoutineSummary
 import com.fitnessquest.shared.wear.WearSessionState
+import org.json.JSONObject
 import com.google.android.gms.wearable.CapabilityClient
 import com.google.android.gms.wearable.DataClient
 import com.google.android.gms.wearable.DataEvent
@@ -102,6 +104,8 @@ class WearMainActivity : FragmentActivity(), AmbientModeSupport.AmbientCallbackP
                 onAdjustDistance = viewModel::adjustDistance,
                 onToggleCardioTimer = viewModel::toggleCardioTimer,
                 onResetCardioTimer = viewModel::resetCardioTimer,
+                onStartWorkout = viewModel::startWorkout,
+                onSelectRoutine = viewModel::selectRoutine,
                 onRetryLink = viewModel::retryLink,
                 onRequestHrPermission = { ensurePermissions(force = true) }
             )
@@ -167,7 +171,9 @@ data class WearUiState(
     val phoneConnected: Boolean = false,
     val linkStatus: String = "Looking for phone…",
     val lastLogFlash: String? = null,
-    val avatarBitmap: Bitmap? = null
+    val avatarBitmap: Bitmap? = null,
+    val routines: List<WearRoutineSummary> = emptyList(),
+    val selectedRoutineIndex: Int = 0
 ) {
     val localBpm: Int? get() = metrics.bpm
 }
@@ -298,9 +304,14 @@ class WearSessionViewModel(private val app: Application) : ViewModel(),
                 _uiState.update {
                     it.copy(
                         phoneConnected = true,
-                        linkStatus = "Phone linked — start a quest"
+                        linkStatus = "Phone linked — select a quest"
                     )
                 }
+                sendToPhone(WearPaths.ROUTINES_LIST, ByteArray(0))
+            }
+            WearPaths.ROUTINES_LIST -> {
+                val routines = WearRoutineSummary.listFromJson(event.data)
+                _uiState.update { it.copy(routines = routines, phoneConnected = true) }
             }
             WearPaths.SESSION_STATE -> {
                 val session = WearSessionState.fromJson(event.data)
@@ -377,6 +388,23 @@ class WearSessionViewModel(private val app: Application) : ViewModel(),
                 distanceDisplay = defaultDistance(s.session, s.metrics),
                 lastLogFlash = null
             )
+        }
+    }
+
+    fun selectRoutine(index: Int) {
+        _uiState.update { s ->
+            val maxIdx = (s.routines.size - 1).coerceAtLeast(0)
+            s.copy(selectedRoutineIndex = index.coerceIn(0, maxIdx))
+        }
+    }
+
+    fun startWorkout(routineId: Long? = null) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(linkStatus = "Starting quest…") }
+            val req = JSONObject().apply {
+                if (routineId != null && routineId > 0) put("routineId", routineId)
+            }
+            sendToPhone(WearPaths.START_WORKOUT, req.toString().toByteArray(Charsets.UTF_8))
         }
     }
 
