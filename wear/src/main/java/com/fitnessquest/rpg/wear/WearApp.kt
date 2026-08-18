@@ -15,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
@@ -225,143 +226,116 @@ private fun SessionScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 8.dp, vertical = 6.dp),
+            .padding(horizontal = 6.dp, vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.SpaceBetween
     ) {
-        // 1. Compact Top Status Pill (Heart Rate • Zone • Streak • Calories)
-        val m = state.metrics
-        val color = wearZoneColor(m.zone)
-        Row(
-            modifier = Modifier
-                .fillMaxWidth(0.92f)
-                .clip(RoundedCornerShape(12.dp))
-                .background(Color.Black.copy(alpha = 0.45f))
-                .padding(horizontal = 8.dp, vertical = 2.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                WearPulsingHeart(bpm = m.bpm, color = color, modifier = Modifier.size(12.dp))
-                Spacer(Modifier.width(3.dp))
-                Text(
-                    text = m.bpm?.toString() ?: "--",
-                    style = MaterialTheme.typography.caption2,
-                    color = color,
-                    fontWeight = FontWeight.Bold
-                )
-                m.zone?.let {
-                    Text(
-                        text = " ($it)",
-                        style = MaterialTheme.typography.caption3,
-                        color = color.copy(alpha = 0.8f)
-                    )
-                }
-            }
-
-            if (session.heatStreak > 0) {
-                Text(
-                    text = "🔥×${session.heatStreak}",
-                    style = MaterialTheme.typography.caption2,
-                    color = Color(0xFFFFD700),
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
-            Text(
-                text = "${m.caloriesKcal?.toInt() ?: 0} kcal",
-                style = MaterialTheme.typography.caption2,
-                color = Color(0xFFFF9800),
-                fontWeight = FontWeight.Bold
-            )
-        }
-
-        // 2. Integrated Exercise Header & Status Switcher
         if (ex != null) {
             val isComplete = ex.loggedSets >= ex.targetSets && ex.targetSets > 0
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Button(
-                    enabled = idx > 0,
-                    onClick = { onSelectExercise(idx - 1) },
-                    modifier = Modifier.size(28.dp),
-                    colors = ButtonDefaults.secondaryButtonColors()
-                ) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Previous",
-                        modifier = Modifier.size(14.dp)
-                    )
-                }
+            val m = state.metrics
+            val color = wearZoneColor(m.zone)
 
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.weight(1f).padding(horizontal = 4.dp)
+            // 1. Top Section: Exercise Name + Subtitle with Set #, HR, and Calories (Hevy-style)
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 10.dp)
+            ) {
+                Text(
+                    text = ex.name,
+                    style = MaterialTheme.typography.title3,
+                    fontWeight = FontWeight.ExtraBold,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colors.primary,
+                    modifier = Modifier.fillMaxWidth(0.90f)
+                )
+
+                Spacer(Modifier.height(2.dp))
+
+                // Subtitle: "Set 1/4 • ❤️ 102 • 🔥 24 kcal" (or "✓ Done (4) • ❤️ 102")
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center,
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text(
-                        text = ex.name,
-                        style = MaterialTheme.typography.title3,
-                        fontWeight = FontWeight.ExtraBold,
-                        textAlign = TextAlign.Center,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        color = MaterialTheme.colors.primary
-                    )
                     if (isComplete) {
-                        // W-5: Green completion checkmark
                         Text(
-                            text = "✓ Done — ${ex.loggedSets} sets",
+                            text = "✓ Done (${ex.loggedSets})",
                             style = MaterialTheme.typography.caption2,
                             color = Color(0xFF4CAF50),
                             fontWeight = FontWeight.Bold
                         )
                     } else {
                         Text(
-                            text = "Set ${ex.loggedSets + 1}/${ex.targetSets} • Goal ${ex.targetReps}",
+                            text = "Set ${ex.loggedSets + 1}/${ex.targetSets}",
                             style = MaterialTheme.typography.caption2,
-                            color = MaterialTheme.colors.onSurface.copy(alpha = 0.8f)
+                            color = MaterialTheme.colors.onSurface.copy(alpha = 0.9f),
+                            fontWeight = FontWeight.SemiBold
                         )
                     }
-                }
 
-                Button(
-                    enabled = idx < count - 1,
-                    onClick = { onSelectExercise(idx + 1) },
-                    modifier = Modifier.size(28.dp),
-                    colors = ButtonDefaults.secondaryButtonColors()
-                ) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.ArrowForward,
-                        contentDescription = "Next",
-                        modifier = Modifier.size(14.dp)
+                    Spacer(Modifier.width(6.dp))
+
+                    // Heart Rate
+                    WearPulsingHeart(bpm = m.bpm, color = color, modifier = Modifier.size(10.dp))
+                    Spacer(Modifier.width(2.dp))
+                    Text(
+                        text = "${m.bpm ?: "--"}",
+                        style = MaterialTheme.typography.caption2,
+                        color = color,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Spacer(Modifier.width(6.dp))
+
+                    // Streak or Calories
+                    if (session.heatStreak > 0) {
+                        Text(
+                            text = "🔥×${session.heatStreak}",
+                            style = MaterialTheme.typography.caption2,
+                            color = Color(0xFFFFD700),
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(Modifier.width(4.dp))
+                    }
+
+                    Text(
+                        text = "${m.caloriesKcal?.toInt() ?: 0} kcal",
+                        style = MaterialTheme.typography.caption2,
+                        color = Color(0xFFFF9800),
+                        fontWeight = FontWeight.Bold
                     )
                 }
             }
 
-            // 3. Compact Input Pod (Side-by-Side Dual Steppers OR Live Cardio Stopwatch)
+            // 2. Middle Section: Dual Input Pods (Side-by-Side)
             if (isCardio) {
                 Row(
                     modifier = Modifier
-                        .fillMaxWidth(0.95f)
+                        .fillMaxWidth(0.94f)
                         .clip(RoundedCornerShape(12.dp))
                         .background(MaterialTheme.colors.surface.copy(alpha = 0.85f))
-                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                        .padding(horizontal = 6.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
                     // Stopwatch Time Display & Toggle
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        val totalSecs = state.cardioTimerSeconds
-                        val timeStr = "%02d:%02d".format(totalSecs / 60, totalSecs % 60)
+                    val totalSecs = state.cardioTimerSeconds
+                    val timeStr = "%02d:%02d".format(totalSecs / 60, totalSecs % 60)
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.weight(1f)
+                    ) {
                         Text(
-                            text = if (totalSecs > 0) timeStr else "${fmt(state.durationMin)} min",
+                            text = if (totalSecs > 0 || state.cardioTimerActive) timeStr else "${fmt(state.durationMin)} min",
                             style = MaterialTheme.typography.title3,
                             fontWeight = FontWeight.Bold,
                             color = if (state.cardioTimerActive) Color(0xFF4CAF50) else MaterialTheme.colors.onSurface
                         )
+                        Spacer(Modifier.height(2.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                             Button(
                                 onClick = onToggleCardioTimer,
@@ -390,14 +364,18 @@ private fun SessionScreen(
                         }
                     }
 
-                    // Distance Stepper (if distance tracked)
+                    // Distance Stepper
                     if (tracking in setOf("CARDIO_MACHINE", "DISTANCE_TIME")) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.weight(1f)
+                        ) {
                             Text(
                                 text = "${fmt(state.distanceDisplay)} $distUnit",
                                 style = MaterialTheme.typography.caption1,
                                 fontWeight = FontWeight.Bold
                             )
+                            Spacer(Modifier.height(2.dp))
                             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Button(
                                     onClick = { onAdjustDistance(if (session.imperial) -0.1 else -0.2) },
@@ -418,92 +396,165 @@ private fun SessionScreen(
                     }
                 }
             } else {
-                // Strength / Bodyweight Dual Stepper (Side-by-Side Zero-Scroll)
+                // Strength Pods: Weight (Left) & Reps (Right)
                 Row(
                     modifier = Modifier.fillMaxWidth(0.96f),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     // Left Pod: Weight
-                    Row(
+                    Column(
                         modifier = Modifier
                             .weight(1f)
                             .clip(RoundedCornerShape(10.dp))
                             .background(MaterialTheme.colors.surface.copy(alpha = 0.85f))
-                            .padding(2.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                            .padding(vertical = 4.dp, horizontal = 2.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Button(
-                            onClick = { onAdjustWeight(-weightStep) },
-                            modifier = Modifier.size(26.dp),
-                            colors = ButtonDefaults.secondaryButtonColors()
-                        ) {
-                            Icon(Icons.Default.Remove, contentDescription = "-", modifier = Modifier.size(12.dp))
-                        }
                         Text(
                             text = "${fmt(state.weightDisplay)} $unit",
                             style = MaterialTheme.typography.caption1,
                             fontWeight = FontWeight.Bold,
                             textAlign = TextAlign.Center
                         )
-                        Button(
-                            onClick = { onAdjustWeight(weightStep) },
-                            modifier = Modifier.size(26.dp),
-                            colors = ButtonDefaults.secondaryButtonColors()
+                        Spacer(Modifier.height(2.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            Icon(Icons.Default.Add, contentDescription = "+", modifier = Modifier.size(12.dp))
+                            Button(
+                                onClick = { onAdjustWeight(-weightStep) },
+                                modifier = Modifier.size(26.dp),
+                                colors = ButtonDefaults.secondaryButtonColors()
+                            ) {
+                                Icon(Icons.Default.Remove, contentDescription = "-", modifier = Modifier.size(12.dp))
+                            }
+                            Button(
+                                onClick = { onAdjustWeight(weightStep) },
+                                modifier = Modifier.size(26.dp),
+                                colors = ButtonDefaults.secondaryButtonColors()
+                            ) {
+                                Icon(Icons.Default.Add, contentDescription = "+", modifier = Modifier.size(12.dp))
+                            }
                         }
                     }
 
                     // Right Pod: Reps
-                    Row(
+                    Column(
                         modifier = Modifier
                             .weight(1f)
                             .clip(RoundedCornerShape(10.dp))
                             .background(MaterialTheme.colors.surface.copy(alpha = 0.85f))
-                            .padding(2.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                            .padding(vertical = 4.dp, horizontal = 2.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Button(
-                            onClick = { onAdjustReps(-1) },
-                            modifier = Modifier.size(26.dp),
-                            colors = ButtonDefaults.secondaryButtonColors()
-                        ) {
-                            Icon(Icons.Default.Remove, contentDescription = "-", modifier = Modifier.size(12.dp))
-                        }
                         Text(
                             text = "${state.reps} reps",
                             style = MaterialTheme.typography.caption1,
                             fontWeight = FontWeight.Bold,
                             textAlign = TextAlign.Center
                         )
-                        Button(
-                            onClick = { onAdjustReps(1) },
-                            modifier = Modifier.size(26.dp),
-                            colors = ButtonDefaults.secondaryButtonColors()
+                        Spacer(Modifier.height(2.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            Icon(Icons.Default.Add, contentDescription = "+", modifier = Modifier.size(12.dp))
+                            Button(
+                                onClick = { onAdjustReps(-1) },
+                                modifier = Modifier.size(26.dp),
+                                colors = ButtonDefaults.secondaryButtonColors()
+                            ) {
+                                Icon(Icons.Default.Remove, contentDescription = "-", modifier = Modifier.size(12.dp))
+                            }
+                            Button(
+                                onClick = { onAdjustReps(1) },
+                                modifier = Modifier.size(26.dp),
+                                colors = ButtonDefaults.secondaryButtonColors()
+                            ) {
+                                Icon(Icons.Default.Add, contentDescription = "+", modifier = Modifier.size(12.dp))
+                            }
                         }
                     }
                 }
             }
 
-            // 4. Large Prominent Log Button (Directly reachable without scrolling)
-            Button(
-                onClick = onLogSet,
+            // 3. Previous Performance / Goal hint
+            val prevText = if (isCardio) {
+                "Goal: ${fmt(state.durationMin)} min"
+            } else if (ex.lastWeightDisplay > 0) {
+                "prev. ${fmt(ex.lastWeightDisplay)} $unit × ${ex.targetReps}"
+            } else {
+                "Goal: ${ex.targetReps} reps"
+            }
+            Text(
+                text = prevText,
+                style = MaterialTheme.typography.caption3,
+                color = MaterialTheme.colors.onSurface.copy(alpha = 0.65f),
+                textAlign = TextAlign.Center
+            )
+
+            // 4. Bottom Action Bar (Hevy-style: [<] [ LOG ] [>])
+            Row(
                 modifier = Modifier
-                    .fillMaxWidth(0.88f)
-                    .height(38.dp),
-                shape = RoundedCornerShape(19.dp),
-                colors = ButtonDefaults.primaryButtonColors()
+                    .fillMaxWidth(0.92f)
+                    .padding(bottom = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text(
-                    text = "LOG SET",
-                    style = MaterialTheme.typography.button,
-                    fontWeight = FontWeight.Black
-                )
+                Button(
+                    enabled = idx > 0,
+                    onClick = { onSelectExercise(idx - 1) },
+                    modifier = Modifier.size(34.dp),
+                    shape = CircleShape,
+                    colors = ButtonDefaults.secondaryButtonColors()
+                ) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Previous Exercise",
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+
+                Button(
+                    onClick = onLogSet,
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(38.dp)
+                        .padding(horizontal = 8.dp),
+                    shape = RoundedCornerShape(19.dp),
+                    colors = ButtonDefaults.primaryButtonColors()
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            Icons.Default.Check,
+                            contentDescription = "Log",
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            text = "LOG",
+                            style = MaterialTheme.typography.button,
+                            fontWeight = FontWeight.Black
+                        )
+                    }
+                }
+
+                Button(
+                    enabled = idx < count - 1,
+                    onClick = { onSelectExercise(idx + 1) },
+                    modifier = Modifier.size(34.dp),
+                    shape = CircleShape,
+                    colors = ButtonDefaults.secondaryButtonColors()
+                ) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowForward,
+                        contentDescription = "Next Exercise",
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
             }
         }
     }
