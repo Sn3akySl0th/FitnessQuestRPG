@@ -16,6 +16,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
@@ -280,7 +281,7 @@ private fun SessionScreen(
                     Spacer(Modifier.width(6.dp))
 
                     // Heart Rate
-                    WearPulsingHeart(bpm = m.bpm, color = color, modifier = Modifier.size(10.dp))
+                    WearPulsingHeart(bpm = m.bpm, color = color, modifier = Modifier.size(11.dp))
                     Spacer(Modifier.width(2.dp))
                     Text(
                         text = "${m.bpm ?: "--"}",
@@ -291,19 +292,10 @@ private fun SessionScreen(
 
                     Spacer(Modifier.width(6.dp))
 
-                    // Streak or Calories
-                    if (session.heatStreak > 0) {
-                        Text(
-                            text = "🔥×${session.heatStreak}",
-                            style = MaterialTheme.typography.caption2,
-                            color = Color(0xFFFFD700),
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(Modifier.width(4.dp))
-                    }
-
+                    // Streak and Calories (always includes flame icon)
+                    val calText = if (session.heatStreak > 0) "🔥×${session.heatStreak} ${m.caloriesKcal?.toInt() ?: 0} kcal" else "🔥 ${m.caloriesKcal?.toInt() ?: 0} kcal"
                     Text(
-                        text = "${m.caloriesKcal?.toInt() ?: 0} kcal",
+                        text = calText,
                         style = MaterialTheme.typography.caption2,
                         color = Color(0xFFFF9800),
                         fontWeight = FontWeight.Bold
@@ -496,22 +488,22 @@ private fun SessionScreen(
             // 4. Bottom Action Bar (Hevy-style: [<] [ LOG ] [>])
             Row(
                 modifier = Modifier
-                    .fillMaxWidth(0.92f)
-                    .padding(bottom = 6.dp),
+                    .fillMaxWidth(0.88f)
+                    .padding(bottom = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
             ) {
                 Button(
                     enabled = idx > 0,
                     onClick = { onSelectExercise(idx - 1) },
-                    modifier = Modifier.size(34.dp),
+                    modifier = Modifier.size(32.dp),
                     shape = CircleShape,
                     colors = ButtonDefaults.secondaryButtonColors()
                 ) {
                     Icon(
                         Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "Previous Exercise",
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(14.dp)
                     )
                 }
 
@@ -519,9 +511,8 @@ private fun SessionScreen(
                     onClick = onLogSet,
                     modifier = Modifier
                         .weight(1f)
-                        .height(38.dp)
-                        .padding(horizontal = 8.dp),
-                    shape = RoundedCornerShape(19.dp),
+                        .height(36.dp),
+                    shape = RoundedCornerShape(18.dp),
                     colors = ButtonDefaults.primaryButtonColors()
                 ) {
                     Row(
@@ -531,7 +522,7 @@ private fun SessionScreen(
                         Icon(
                             Icons.Default.Check,
                             contentDescription = "Log",
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(16.dp)
                         )
                         Spacer(Modifier.width(4.dp))
                         Text(
@@ -545,14 +536,14 @@ private fun SessionScreen(
                 Button(
                     enabled = idx < count - 1,
                     onClick = { onSelectExercise(idx + 1) },
-                    modifier = Modifier.size(34.dp),
+                    modifier = Modifier.size(32.dp),
                     shape = CircleShape,
                     colors = ButtonDefaults.secondaryButtonColors()
                 ) {
                     Icon(
                         Icons.AutoMirrored.Filled.ArrowForward,
                         contentDescription = "Next Exercise",
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(14.dp)
                     )
                 }
             }
@@ -651,13 +642,11 @@ private fun WearPulsingHeart(bpm: Int?, color: Color, modifier: Modifier = Modif
         ),
         label = "heartScale"
     )
-    Text(
-        "♥",
-        color = color,
-        fontSize = 16.sp,
-        fontWeight = FontWeight.Black,
-        modifier = modifier.scale(scale),
-        textAlign = TextAlign.Center
+    Icon(
+        imageVector = Icons.Default.Favorite,
+        contentDescription = "Heart",
+        tint = color,
+        modifier = modifier.scale(scale)
     )
 }
 
