@@ -15,9 +15,11 @@ Status key:
 
 ### Done Or Foundation Complete
 
+- `[x] Multi-Tier RPG Gear Rarity Scaling System`: Full 5-tier rarity system (Common 1.0×, Uncommon 1.10×, Rare 1.25×, Epic 1.45×, Legendary 1.70×) with deterministic source rolling, stat scaling on ATK/DEF/HP, salvage bonuses, and comprehensive 3-day and 30-day simulation tests.
+- `[x] Wear OS Zero-Scroll Redesign & Workout Sync`: Glanceable single-screen workout UI with top status pill (HR, Zone, Streak, Calories), integrated exercise switcher with completion checkmarks, side-by-side steppers, historical weight prefill sync between phone & watch, live wrist cardio stopwatch, and interactive tap-to-edit logged sets on phone.
 - `[~] Progression pacing foundation`: gear tier caps now depend on progression rules, boss/biome state, and loot source instead of only player level.
 - `[~] Biome progress foundation`: Room now stores biome layer, boss unlock, boss defeated, progress points, and first-clear reward state.
-- `[~] Forge foundation`: gear instances support upgrade level, rarity, traits, and origin biome; repository methods exist for salvage and upgrade.
+- `[x] Forge foundation`: gear instances support upgrade level, rarity, traits, and origin biome; repository methods exist for salvage and upgrade.
 - `[x] Shop, Inventory, Armory browsing MVP`: the old long-list feel has been replaced with tabs, grids, filters, sorting, detail sheets, armory slots, and Forge entry actions.
 - `[x] Procedural Avatar & Widget`: full-body layered avatar rendering on the home screen widget and throughout the app.
 - `[x] Class Identity Expansion`: added Necromancer summons (Skeletons/Zombies) and unique class auras for all jobs.
