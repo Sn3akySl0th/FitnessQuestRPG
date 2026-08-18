@@ -20,11 +20,9 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
-import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import androidx.wear.ambient.AmbientModeSupport
 import com.fitnessquest.shared.wear.WearCapabilities
 import com.fitnessquest.shared.wear.WearExerciseState
 import com.fitnessquest.shared.wear.WearFeedbackEvent
@@ -55,25 +53,9 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
-class WearMainActivity : FragmentActivity(), AmbientModeSupport.AmbientCallbackProvider {
+class WearMainActivity : ComponentActivity() {
     private val viewModel: WearSessionViewModel by viewModels {
         WearSessionViewModel.Factory(application)
-    }
-
-    private lateinit var ambientController: AmbientModeSupport.AmbientController
-
-    override fun getAmbientCallback(): AmbientModeSupport.AmbientCallback = object : AmbientModeSupport.AmbientCallback() {
-        override fun onEnterAmbient(ambientDetails: Bundle?) {
-            super.onEnterAmbient(ambientDetails)
-        }
-
-        override fun onUpdateAmbient() {
-            super.onUpdateAmbient()
-        }
-
-        override fun onExitAmbient() {
-            super.onExitAmbient()
-        }
     }
 
     private val permissionLauncher = registerForActivityResult(
@@ -88,7 +70,6 @@ class WearMainActivity : FragmentActivity(), AmbientModeSupport.AmbientCallbackP
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
-        ambientController = AmbientModeSupport.attach(this)
         
         setContent {
             val state by viewModel.uiState.collectAsState()
