@@ -73,6 +73,9 @@ object Consumables {
     const val POTION_OF_REBIRTH = 904L
     const val HEALTH_POTION = 905L
     const val LIFE_POTION = 906L
+    const val CLEANSING_SALVE = 907L
+    const val BATTLE_ELIXIR = 908L
+    const val IRONHIDE_SALVE = 909L
 
     const val XP_MINOR_BONUS = 50
     const val XP_MAJOR_BONUS = 200
@@ -262,7 +265,7 @@ object ItemCatalog {
         ItemEntity(1124, "Mythic Wayfarer Greaves", "\uD83D\uDC56", ItemSlot.LEGS, 4, 540, def = 12, hp = 22, description = "Leg armor for long roads and longer progression arcs.", style = ItemStyle.LIGHT),
         ItemEntity(1125, "Mythic Wayfarer Boots", "\uD83E\uDD7E", ItemSlot.FEET, 4, 500, def = 10, hp = 18, description = "They make every biome feel one step closer.", style = ItemStyle.LIGHT),
 
-        // ---- Consumable supplies ----
+        // ---- Consumable supplies & In-Combat Tactical Items ----
         ItemEntity(Consumables.STREAK_FREEZE, "Streak Freeze", "\u2744\uFE0F", ItemSlot.CONSUMABLE, 1, 250,
             description = "Protects your workout streak for one missed day. Used automatically when you need it."),
         ItemEntity(Consumables.XP_ELIXIR_MINOR, "Minor XP Elixir", "\uD83E\uDDEA", ItemSlot.CONSUMABLE, 1, 120,
@@ -271,6 +274,28 @@ object ItemCatalog {
             description = "Drink before training: your next workout earns +${Consumables.XP_MAJOR_BONUS} bonus XP."),
         ItemEntity(Consumables.POTION_OF_REBIRTH, "Potion of Rebirth", "\uD83D\uDD2E", ItemSlot.CONSUMABLE, 3, 600,
             description = "Resets STR, END, AGI, and WIL to 5 and refunds every earned point to spend however you like."),
+        ItemEntity(Consumables.HEALTH_POTION, "Health Potion", "🧪", ItemSlot.CONSUMABLE, 1, 60,
+            description = "Use in combat to restore 35% of your Max HP immediately."),
+        ItemEntity(Consumables.CLEANSING_SALVE, "Cleansing Salve", "🌿", ItemSlot.CONSUMABLE, 2, 90,
+            description = "Use in combat to instantly cleanse poisons, bleeds, and status debuffs."),
+        ItemEntity(Consumables.BATTLE_ELIXIR, "Battle Elixir", "⚔️", ItemSlot.CONSUMABLE, 2, 110,
+            description = "Drink in combat: boosts Attack by +35% for 3 turns."),
+        ItemEntity(Consumables.IRONHIDE_SALVE, "Ironhide Salve", "🛡️", ItemSlot.CONSUMABLE, 2, 110,
+            description = "Apply in combat: strengthens Defense by +30 for 3 turns."),
+
+        // ---- Unique Boss Signature Relics (Trophies) ----
+        ItemEntity(1201, "Boar's Slumber Girdle", "🐗", ItemSlot.TRINKET, 2, 350, def = 6, hp = 25,
+            description = "Trophy of the Lazy Boar. Embraces restorative rest: catching breath on Defend restores +15 bonus HP."),
+        ItemEntity(1202, "Spotter's Ribcage Aegis", "💀", ItemSlot.TRINKET, 3, 500, atk = 4, def = 10, hp = 30,
+            description = "Trophy of the Skeleton Spotter. Warded bone shards blunt incoming blows and reflect damage."),
+        ItemEntity(1203, "Ogre's Resolution Smasher", "👹", ItemSlot.TRINKET, 3, 550, atk = 12, def = 6, hp = 20,
+            description = "Trophy of the Ogre of Excuses. Heavy attacks shatter enemy posture with high Stagger chance."),
+        ItemEntity(1204, "Wraith's Treadmill Cinders", "👻", ItemSlot.TRINKET, 4, 850, atk = 10, def = 8, hp = 25,
+            description = "Trophy of the Cardio Wraith. Imbued with infinite aerobic cadence: grants +25 Speed in combat."),
+        ItemEntity(1205, "Golem's Unyielding Core", "🤖", ItemSlot.TRINKET, 4, 900, def = 16, hp = 45,
+            description = "Trophy of the Iron Golem. Barbell-forged iron plates grant +10% physical damage mitigation."),
+        ItemEntity(1206, "Burnout Dragon's Flameheart", "🐲", ItemSlot.TRINKET, 4, 1100, atk = 16, def = 10, hp = 40,
+            description = "Trophy of the Burnout Dragon. Converts intensity to fire: Critical strikes ignite enemies for 3 turns."),
 
         // ---- Extra diverse weapons & gear progression ----
         ItemEntity(1131, "Swiftwind Scythe", "🌾", ItemSlot.WEAPON, 2, 115, atk = 7, def = 1, description = "Sweeps through training volume with effortless cadence.", style = ItemStyle.SWORD),
@@ -455,6 +480,10 @@ object ItemCatalog {
  * Combat quirks that make monsters fight differently. Each one rewards a
  * different player stat or tactic, so builds and skill choices matter.
  */
+/**
+ * Combat quirks that make monsters fight differently. Each one rewards a
+ * different player stat or tactic, so builds and skill choices matter.
+ */
 enum class MonsterTrait(val label: String, val emoji: String, val blurb: String) {
     ARMORED("Armored", "\uD83D\uDEE1\uFE0F", "Takes 30% less attack damage. Defense-piercing skills cut through."),
     SWIFT("Swift", "\uD83D\uDCA8", "Hard to hit and may strike twice. Speed keeps you out of reach."),
@@ -462,6 +491,34 @@ enum class MonsterTrait(val label: String, val emoji: String, val blurb: String)
     REGENERATING("Regenerating", "\uD83D\uDC9A", "Recovers HP every turn. Finish it fast."),
     ENRAGED("Enraged", "\uD83D\uDE21", "Hits 40% harder once wounded. End the fight before it ends you.")
 }
+
+/**
+ * Monster variant tier: roaming monsters can roll as Elite or Epic champions with boosted stats and rewards.
+ */
+enum class MonsterVariant(
+    val label: String,
+    val badge: String,
+    val hpMult: Double,
+    val atkMult: Double,
+    val rewardMult: Double
+) {
+    NORMAL("Normal", "", 1.0, 1.0, 1.0),
+    ELITE("Elite", "⭐ ELITE", 1.35, 1.20, 2.0),
+    EPIC("Epic", "👑 EPIC", 1.70, 1.40, 3.5)
+}
+
+/**
+ * Telegraphed super-attack that enemies charge up for 1 turn, giving the player tactical warning.
+ */
+data class TelegraphedMove(
+    val name: String,
+    val emoji: String,
+    val description: String,
+    val turnsUntilStrike: Int = 1,
+    val damageMultiplier: Double = 2.2,
+    val armorPiercing: Boolean = false,
+    val appliesStun: Boolean = false
+)
 
 data class Monster(
     val id: Int,
@@ -478,61 +535,143 @@ data class Monster(
     val biome: Biome,
     val description: String,
     val trait: MonsterTrait? = null,
+    val secondaryTrait: MonsterTrait? = null,
     val bossOf: Biome? = null,
+    val variant: MonsterVariant = MonsterVariant.NORMAL,
+    val telegraphedMove: TelegraphedMove? = null
 ) {
     val isBoss: Boolean get() = bossOf != null
+
+    fun withVariant(v: MonsterVariant, extraTrait: MonsterTrait? = null): Monster {
+        if (v == MonsterVariant.NORMAL) return this
+        val newHp = (hp * v.hpMult).toInt()
+        val newAtk = (atk * v.atkMult).toInt()
+        val newGold = (goldReward * v.rewardMult).toInt()
+        val newXp = (xpReward * v.rewardMult).toInt()
+        val telegraphed = if (v == MonsterVariant.EPIC && telegraphedMove == null) {
+            TelegraphedMove(
+                name = "Primal Overload",
+                emoji = "⚡",
+                description = "Gathers terrifying energy to strike for massive damage! DEFEND or STUN!",
+                damageMultiplier = 2.2
+            )
+        } else telegraphedMove
+
+        return copy(
+            name = "${v.badge} $name",
+            hp = newHp,
+            atk = newAtk,
+            goldReward = newGold,
+            xpReward = newXp,
+            variant = v,
+            secondaryTrait = extraTrait ?: secondaryTrait,
+            telegraphedMove = telegraphed
+        )
+    }
 }
 
 object MonsterCatalog {
     val all: List<Monster> = listOf(
         // Meadowlands (lv 1-3)
-        Monster(1, "Couch Slime", "🤢", 1, 1, 120, 22, 6, 5, 18, 30, Biome.MEADOWLANDS, "A gelatinous blob that hasn't moved in weeks. Relatable, but it must be stopped."),
-        Monster(2, "Gym Rat", "🐀", 2, 1, 150, 26, 8, 9, 28, 48, Biome.MEADOWLANDS, "It hoards all the dumbbells and never re-racks them."),
-        Monster(19, "Snooze Gremlin", "⏰", 2, 1, 140, 25, 7, 16, 28, 46, Biome.MEADOWLANDS, "It hits your snooze button from inside the walls. Quick little menace.", MonsterTrait.SWIFT),
-        Monster(9, "Lazy Boar", "🐗", 3, 1, 240, 34, 12, 8, 45, 70, Biome.MEADOWLANDS, "It naps in the sun and judges joggers. Today, it judges you.", bossOf = Biome.MEADOWLANDS),
-        Monster(20, "Junk Food Mimic", "🍔", 3, 1, 180, 29, 9, 7, 38, 60, Biome.MEADOWLANDS, "Looks delicious. Bites back. Poisons your macros.", MonsterTrait.VENOMOUS),
+        Monster(1, "Couch Slime", "🤢", 1, 1, 140, 24, 6, 5, 20, 35, Biome.MEADOWLANDS, "A gelatinous blob that hasn't moved in weeks. Relatable, but it must be stopped."),
+        Monster(2, "Gym Rat", "🐀", 2, 1, 160, 28, 8, 9, 30, 50, Biome.MEADOWLANDS, "It hoards all the dumbbells and never re-racks them."),
+        Monster(19, "Snooze Gremlin", "⏰", 2, 1, 150, 26, 7, 16, 30, 48, Biome.MEADOWLANDS, "It hits your snooze button from inside the walls. Quick little menace.", MonsterTrait.SWIFT),
+        Monster(20, "Junk Food Mimic", "🍔", 3, 1, 190, 30, 9, 7, 40, 65, Biome.MEADOWLANDS, "Looks delicious. Bites back. Poisons your macros.", MonsterTrait.VENOMOUS),
+        Monster(31, "Sugar Crash Specter", "🍩", 3, 1, 175, 32, 8, 12, 42, 68, Biome.MEADOWLANDS, "Manifests when energy crashes. Strikes with sudden furious spikes.", MonsterTrait.ENRAGED),
+        Monster(32, "Skipping Rope Viper", "🪢", 3, 1, 165, 28, 8, 18, 38, 62, Biome.MEADOWLANDS, "Tangles up your footwork and strikes in rapid succession.", MonsterTrait.SWIFT),
+        Monster(9, "Lazy Boar", "🐗", 3, 1, 320, 38, 14, 8, 55, 85, Biome.MEADOWLANDS, "It naps in the sun and judges joggers. Today, it judges you.",
+            trait = MonsterTrait.REGENERATING,
+            bossOf = Biome.MEADOWLANDS,
+            telegraphedMove = TelegraphedMove("Mudslide Slam", "🐗", "Braces its massive hooves to charge down the meadow! DEFEND or STUN!", damageMultiplier = 2.0)
+        ),
 
         // Darkwood (lv 4-6)
-        Monster(3, "Procrastination Imp", "👿", 4, 2, 260, 36, 12, 12, 55, 85, Biome.DARKWOOD, "Whispers 'you can work out tomorrow' into your ear."),
-        Monster(21, "Excuse Goblin", "👺", 5, 2, 290, 40, 11, 19, 62, 95, Biome.DARKWOOD, "Darts between trees flinging excuses. Hard to pin down.", MonsterTrait.SWIFT),
-        Monster(10, "Doomscroll Spider", "🕷️", 5, 2, 320, 44, 14, 14, 68, 100, Biome.DARKWOOD, "Its web is infinite. Its venom keeps you scrolling.", MonsterTrait.VENOMOUS),
-        Monster(4, "Skeleton Spotter", "💀", 6, 2, 480, 50, 18, 14, 90, 135, Biome.DARKWOOD, "It has literally no muscles. It is so jealous of yours.", bossOf = Biome.DARKWOOD),
-        Monster(22, "Couch Potato Golem", "🥔", 6, 2, 420, 42, 24, 6, 88, 125, Biome.DARKWOOD, "Centuries of sitting have compressed it into solid starch armor.", MonsterTrait.ARMORED),
+        Monster(3, "Procrastination Imp", "👿", 4, 2, 280, 40, 12, 12, 60, 90, Biome.DARKWOOD, "Whispers 'you can work out tomorrow' into your ear."),
+        Monster(21, "Excuse Goblin", "👺", 5, 2, 310, 44, 12, 19, 68, 105, Biome.DARKWOOD, "Darts between trees flinging excuses. Hard to pin down.", MonsterTrait.SWIFT),
+        Monster(10, "Doomscroll Spider", "🕷️", 5, 2, 340, 48, 14, 14, 75, 115, Biome.DARKWOOD, "Its web is infinite. Its venom keeps you scrolling.", MonsterTrait.VENOMOUS),
+        Monster(22, "Couch Potato Golem", "🥔", 6, 2, 450, 46, 26, 6, 95, 135, Biome.DARKWOOD, "Centuries of sitting have compressed it into solid starch armor.", MonsterTrait.ARMORED),
+        Monster(33, "Form Police Gargoyle", "🗿", 6, 2, 390, 50, 22, 10, 92, 130, Biome.DARKWOOD, "Stony critic that punishes every slip in posture.", MonsterTrait.ARMORED),
+        Monster(34, "Ego-Lift Minotaur", "🐂", 6, 2, 460, 54, 16, 13, 98, 140, Biome.DARKWOOD, "Stacks way too much weight and enters a berserk frenzy when challenged.", MonsterTrait.ENRAGED),
+        Monster(4, "Skeleton Spotter", "💀", 6, 2, 620, 56, 20, 14, 110, 160, Biome.DARKWOOD, "It has literally no muscles. It is so jealous of yours.",
+            trait = MonsterTrait.ARMORED,
+            bossOf = Biome.DARKWOOD,
+            telegraphedMove = TelegraphedMove("Barbell Guillotine", "💀", "Raises a colossal weighted barbell overhead! DEFEND or STUN!", damageMultiplier = 2.2, armorPiercing = true)
+        ),
 
         // Crystal Caves (lv 7-9)
-        Monster(11, "Crystal Crab", "🦀", 7, 2, 450, 52, 24, 8, 100, 140, Biome.CRYSTAL_CAVES, "Its shell is pure gem. Attacks glance right off it.", MonsterTrait.ARMORED),
-        Monster(12, "Echo Bat", "🦇", 8, 3, 430, 58, 15, 22, 112, 155, Biome.CRYSTAL_CAVES, "It repeats every excuse you've ever made, in your own voice.", MonsterTrait.SWIFT),
-        Monster(23, "Gem Serpent", "🐍", 8, 3, 470, 56, 18, 16, 115, 158, Biome.CRYSTAL_CAVES, "Its fangs drip crystallized venom worth a fortune. Don't get bitten.", MonsterTrait.VENOMOUS),
-        Monster(5, "Ogre of Excuses", "👹", 9, 3, 650, 68, 22, 10, 145, 200, Biome.CRYSTAL_CAVES, "Its club is carved from a thousand broken New Year's resolutions.", bossOf = Biome.CRYSTAL_CAVES),
-        Monster(24, "Prism Wisp", "🗯️", 9, 3, 480, 66, 14, 26, 132, 185, Biome.CRYSTAL_CAVES, "A shard of living light that refuses to hold still.", MonsterTrait.SWIFT),
+        Monster(11, "Crystal Crab", "🦀", 7, 2, 490, 56, 28, 8, 110, 150, Biome.CRYSTAL_CAVES, "Its shell is pure gem. Attacks glance right off it.", MonsterTrait.ARMORED),
+        Monster(12, "Echo Bat", "🦇", 8, 3, 460, 62, 16, 22, 120, 165, Biome.CRYSTAL_CAVES, "It repeats every excuse you've ever made, in your own voice.", MonsterTrait.SWIFT),
+        Monster(23, "Gem Serpent", "🐍", 8, 3, 510, 62, 20, 16, 125, 170, Biome.CRYSTAL_CAVES, "Its fangs drip crystallized venom worth a fortune. Don't get bitten.", MonsterTrait.VENOMOUS),
+        Monster(24, "Prism Wisp", "🗯️", 9, 3, 500, 70, 15, 26, 140, 195, Biome.CRYSTAL_CAVES, "A shard of living light that refuses to hold still.", MonsterTrait.SWIFT),
+        Monster(35, "Cramp Basilisk", "🦎", 9, 3, 540, 66, 22, 14, 145, 200, Biome.CRYSTAL_CAVES, "Its gaze locks muscles into sudden agonizing spasms.", MonsterTrait.VENOMOUS),
+        Monster(36, "Resonant Stalagmite", "💎", 9, 3, 580, 60, 32, 7, 142, 190, Biome.CRYSTAL_CAVES, "Living cavern crystal that vibrates and deflects blunt force.", MonsterTrait.ARMORED),
+        Monster(5, "Ogre of Excuses", "👹", 9, 3, 880, 76, 25, 10, 175, 240, Biome.CRYSTAL_CAVES, "Its club is carved from a thousand broken New Year's resolutions.",
+            trait = MonsterTrait.ENRAGED,
+            bossOf = Biome.CRYSTAL_CAVES,
+            telegraphedMove = TelegraphedMove("Resolution Crusher", "👹", "Winds up a catastrophic sweep with its colossal club! DEFEND or STUN!", damageMultiplier = 2.3)
+        ),
 
         // Ember Peaks (lv 11-13)
-        Monster(13, "Magma Hound", "🔥", 11, 3, 700, 80, 22, 16, 168, 230, Biome.EMBER_PEAKS, "It fetches boulders. The angrier it gets, the hotter it burns.", MonsterTrait.ENRAGED),
-        Monster(25, "Ash Ghoul", "🧟", 12, 3, 750, 78, 20, 13, 185, 245, Biome.EMBER_PEAKS, "Rises from every burned-out training plan. Keeps getting back up.", MonsterTrait.REGENERATING),
-        Monster(6, "Cardio Wraith", "👻", 12, 3, 920, 92, 26, 24, 210, 280, Biome.EMBER_PEAKS, "It runs eternally, fueled by the souls of abandoned treadmills.", MonsterTrait.SWIFT, bossOf = Biome.EMBER_PEAKS),
-        Monster(14, "Cinder Imp", "🧨", 13, 3, 820, 88, 24, 18, 210, 275, Biome.EMBER_PEAKS, "It lights the sauna way too hot on purpose."),
-        Monster(26, "Lava Turtle", "🐢", 13, 3, 950, 80, 38, 6, 215, 280, Biome.EMBER_PEAKS, "Its obsidian shell shrugs off almost anything. Slow and smug about it.", MonsterTrait.ARMORED),
+        Monster(13, "Magma Hound", "🔥", 11, 3, 750, 86, 24, 16, 180, 250, Biome.EMBER_PEAKS, "It fetches boulders. The angrier it gets, the hotter it burns.", MonsterTrait.ENRAGED),
+        Monster(25, "Ash Ghoul", "🧟", 12, 3, 790, 84, 22, 13, 195, 260, Biome.EMBER_PEAKS, "Rises from every burned-out training plan. Keeps getting back up.", MonsterTrait.REGENERATING),
+        Monster(14, "Cinder Imp", "🧨", 13, 3, 850, 94, 25, 18, 220, 290, Biome.EMBER_PEAKS, "It lights the sauna way too hot on purpose.", MonsterTrait.SWIFT),
+        Monster(26, "Lava Turtle", "🐢", 13, 3, 1020, 86, 42, 6, 230, 300, Biome.EMBER_PEAKS, "Its obsidian shell shrugs off almost anything. Slow and smug about it.", MonsterTrait.ARMORED),
+        Monster(37, "Sauna Pyromancer", "🧙‍♂️", 12, 3, 820, 96, 20, 17, 210, 275, Biome.EMBER_PEAKS, "Pours molten heat over the arena, testing your thermoregulation.", MonsterTrait.ENRAGED),
+        Monster(38, "Overload Chimera", "🦁", 13, 3, 940, 92, 30, 15, 225, 295, Biome.EMBER_PEAKS, "Amalgamation of three conflicting training programs in eternal burning fury.", MonsterTrait.REGENERATING),
+        Monster(6, "Cardio Wraith", "👻", 12, 3, 1150, 102, 30, 24, 250, 330, Biome.EMBER_PEAKS, "It runs eternally, fueled by the souls of abandoned treadmills.",
+            trait = MonsterTrait.SWIFT,
+            bossOf = Biome.EMBER_PEAKS,
+            telegraphedMove = TelegraphedMove("Treadmill Blitz", "👻", "Revs into Mach 3 sprint for a blinding supersonic lunge! DEFEND or STUN!", damageMultiplier = 2.4)
+        ),
 
         // Frozen Wastes (lv 15-17)
-        Monster(15, "Frost Yeti", "⛄", 15, 4, 1020, 100, 30, 12, 260, 335, Biome.FROZEN_WASTES, "Takes ice baths recreationally. The cold knits its wounds shut.", MonsterTrait.REGENERATING),
-        Monster(27, "Frostbite Wolf", "🐺", 16, 4, 1060, 105, 28, 28, 280, 360, Biome.FROZEN_WASTES, "It circles twice before you can blink. Pack tactics, solo executed.", MonsterTrait.SWIFT),
-        Monster(7, "Iron Golem", "🤖", 16, 4, 1350, 112, 42, 10, 310, 400, Biome.FROZEN_WASTES, "Assembled from every barbell plate ever left on the floor.", MonsterTrait.ARMORED, bossOf = Biome.FROZEN_WASTES),
-        Monster(16, "Blizzard Elemental", "🌨️", 17, 4, 1180, 114, 35, 22, 320, 400, Biome.FROZEN_WASTES, "A snowstorm with a grudge and surprisingly good footwork."),
-        Monster(28, "Permafrost Lich", "🧙", 17, 4, 1150, 118, 34, 16, 325, 410, Biome.FROZEN_WASTES, "An ancient coach who never let anyone skip warm-ups. Death didn't stop him.", MonsterTrait.REGENERATING),
+        Monster(15, "Frost Yeti", "⛄", 15, 4, 1120, 108, 32, 12, 280, 360, Biome.FROZEN_WASTES, "Takes ice baths recreationally. The cold knits its wounds shut.", MonsterTrait.REGENERATING),
+        Monster(27, "Frostbite Wolf", "🐺", 16, 4, 1150, 112, 30, 28, 300, 385, Biome.FROZEN_WASTES, "It circles twice before you can blink. Pack tactics, solo executed.", MonsterTrait.SWIFT),
+        Monster(16, "Blizzard Elemental", "🌨️", 17, 4, 1240, 118, 36, 22, 340, 425, Biome.FROZEN_WASTES, "A snowstorm with a grudge and surprisingly good footwork.", MonsterTrait.SWIFT),
+        Monster(28, "Permafrost Lich", "🧙", 17, 4, 1220, 122, 36, 16, 350, 440, Biome.FROZEN_WASTES, "An ancient coach who never let anyone skip warm-ups. Death didn't stop him.", MonsterTrait.REGENERATING),
+        Monster(39, "Cryo-Stasis Golem", "🧊", 16, 4, 1400, 110, 46, 8, 335, 420, Biome.FROZEN_WASTES, "Cooled to absolute zero. Attacks glance off its glacial armor.", MonsterTrait.ARMORED),
+        Monster(40, "Rest-Day Siren", "🧜‍♀️", 17, 4, 1180, 126, 28, 20, 360, 450, Biome.FROZEN_WASTES, "Sings a hypnotic melody tempting you to cancel your morning workout.", MonsterTrait.VENOMOUS),
+        Monster(7, "Iron Golem", "🤖", 16, 4, 1650, 124, 48, 10, 380, 480, Biome.FROZEN_WASTES, "Assembled from every barbell plate ever left on the floor.",
+            trait = MonsterTrait.ARMORED,
+            bossOf = Biome.FROZEN_WASTES,
+            telegraphedMove = TelegraphedMove("Colossus Quake", "🤖", "Slams 1,000kg iron fists into the glacial earth! DEFEND or STUN!", damageMultiplier = 2.5)
+        ),
 
         // Shadowfen (lv 18-20)
-        Monster(17, "Bog Lurker", "🐊", 18, 4, 1300, 125, 38, 15, 375, 450, Biome.SHADOWFEN, "It waits in the murk for anyone who skips leg day. Its bite festers.", MonsterTrait.VENOMOUS),
-        Monster(29, "Doom Toad", "🐸", 19, 4, 1350, 128, 36, 14, 395, 475, Biome.SHADOWFEN, "Each croak is a prophecy of failure. Its tongue drips despair.", MonsterTrait.VENOMOUS),
-        Monster(18, "Despair Shade", "🫥", 19, 4, 1400, 132, 38, 20, 410, 485, Biome.SHADOWFEN, "The embodiment of 'what's the point?'. Show it the point."),
-        Monster(30, "Sleep Paralysis Fiend", "😈", 20, 4, 1450, 138, 38, 28, 435, 510, Biome.SHADOWFEN, "It sits on your chest at 3 AM and dares you to make the morning workout.", MonsterTrait.SWIFT),
-        Monster(8, "Burnout Dragon", "🐲", 20, 4, 1850, 150, 45, 18, 550, 650, Biome.SHADOWFEN, "The final boss of every fitness journey. Its fury grows as it weakens.", MonsterTrait.ENRAGED, bossOf = Biome.SHADOWFEN),
+        Monster(17, "Bog Lurker", "🐊", 18, 4, 1380, 132, 40, 15, 400, 480, Biome.SHADOWFEN, "It waits in the murk for anyone who skips leg day. Its bite festers.", MonsterTrait.VENOMOUS),
+        Monster(29, "Doom Toad", "🐸", 19, 4, 1420, 136, 38, 14, 420, 505, Biome.SHADOWFEN, "Each croak is a prophecy of failure. Its tongue drips despair.", MonsterTrait.VENOMOUS),
+        Monster(18, "Despair Shade", "🫥", 19, 4, 1480, 140, 40, 20, 440, 520, Biome.SHADOWFEN, "The embodiment of 'what's the point?'. Show it the point.", MonsterTrait.ENRAGED),
+        Monster(30, "Sleep Paralysis Fiend", "😈", 20, 4, 1520, 146, 40, 28, 465, 545, Biome.SHADOWFEN, "It sits on your chest at 3 AM and dares you to make the morning workout.", MonsterTrait.SWIFT),
+        Monster(41, "DOMS Behemoth", "🦧", 20, 4, 1700, 142, 48, 11, 480, 560, Biome.SHADOWFEN, "Delayed Onset Muscle Soreness made flesh. Heavy, bone-cracking strikes.", MonsterTrait.ARMORED),
+        Monster(42, "Void Leech Queen", "🪱", 20, 4, 1560, 148, 36, 18, 490, 570, Biome.SHADOWFEN, "Drains momentum and will. Recovers rapidly from damage.", MonsterTrait.REGENERATING),
+        Monster(8, "Burnout Dragon", "🐲", 20, 4, 2250, 165, 50, 18, 620, 750, Biome.SHADOWFEN, "The final boss of every fitness journey. Its fury grows as it weakens.",
+            trait = MonsterTrait.ENRAGED,
+            bossOf = Biome.SHADOWFEN,
+            telegraphedMove = TelegraphedMove("Cataclysmic Burnout Breath", "🐲", "Inhales apocalyptic hellfire to annihilate everything! DEFEND or STUN!", damageMultiplier = 2.8, armorPiercing = true)
+        ),
 
         // Ambush elites (harder than biome peers; wagered rest encounters)
-        Monster(101, "Restless Specter", "👻", 5, 2, 380, 48, 16, 18, 110, 160, Biome.MEADOWLANDS, "It attacks between sets. Your rest is its feast.", MonsterTrait.SWIFT),
-        Monster(102, "Plate Pirate", "🧟", 8, 3, 560, 68, 26, 12, 150, 230, Biome.DARKWOOD, "Steals your progress plates mid-rest.", MonsterTrait.ARMORED),
-        Monster(103, "Interval Demon", "🔥", 12, 3, 800, 90, 24, 24, 210, 320, Biome.EMBER_PEAKS, "Wants you to skip the rest and burn out.", MonsterTrait.ENRAGED),
-        Monster(104, "Cooldown Debt", "❄️", 16, 4, 1100, 112, 34, 16, 300, 440, Biome.FROZEN_WASTES, "Compound interest on every missed rep.", MonsterTrait.REGENERATING),
+        Monster(101, "Restless Specter", "👻", 5, 2, 420, 52, 18, 18, 120, 175, Biome.MEADOWLANDS, "It attacks between sets. Your rest is its feast.", MonsterTrait.SWIFT),
+        Monster(102, "Plate Pirate", "🧟", 8, 3, 620, 72, 28, 12, 165, 250, Biome.DARKWOOD, "Steals your progress plates mid-rest.", MonsterTrait.ARMORED),
+        Monster(103, "Interval Demon", "🔥", 12, 3, 880, 98, 26, 24, 230, 350, Biome.EMBER_PEAKS, "Wants you to skip the rest and burn out.", MonsterTrait.ENRAGED),
+        Monster(104, "Cooldown Debt", "❄️", 16, 4, 1200, 120, 36, 16, 330, 480, Biome.FROZEN_WASTES, "Compound interest on every missed rep.", MonsterTrait.REGENERATING),
     )
+
+    fun rollVariant(monster: Monster, rng: kotlin.random.Random = kotlin.random.Random.Default): Monster {
+        if (monster.isBoss || monster.id >= 100) return monster
+        val roll = rng.nextInt(100)
+        return when {
+            roll < 5 -> {
+                val extraTrait = MonsterTrait.entries.filter { it != monster.trait }.randomOrNull(rng)
+                monster.withVariant(MonsterVariant.EPIC, extraTrait)
+            }
+            roll < 25 -> {
+                val extraTrait = MonsterTrait.entries.filter { it != monster.trait }.randomOrNull(rng)
+                monster.withVariant(MonsterVariant.ELITE, extraTrait)
+            }
+            else -> monster
+        }
+    }
 
     fun ambushForLevel(level: Int): Monster {
         val pool = listOf(101, 102, 103, 104).mapNotNull { byId(it) }

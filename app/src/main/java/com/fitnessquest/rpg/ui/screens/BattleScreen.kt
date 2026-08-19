@@ -385,17 +385,27 @@ private fun MonsterCard(
             Column(Modifier.weight(1f)) {
                 Text(monster.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(
-                    "Level ${monster.level} \u00B7 ${difficultyLabel(monster.level, playerLevel)}",
+                    "Level ${monster.level} · ${difficultyLabel(monster.level, playerLevel)}",
                     style = MaterialTheme.typography.labelMedium,
                     color = difficultyColor(monster.level, playerLevel)
                 )
-                monster.trait?.let { trait ->
-                    Text(
-                        "${trait.emoji} ${trait.label}",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.tertiary
-                    )
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    monster.trait?.let { trait ->
+                        Text(
+                            "${trait.emoji} ${trait.label}",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.tertiary
+                        )
+                    }
+                    if (monster.isBoss) {
+                        Text(
+                            "👑 BOSS",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = Gold
+                        )
+                    }
                 }
             }
             Button(onClick = onFight, enabled = enabled) { Text("Fight") }
@@ -405,14 +415,22 @@ private fun MonsterCard(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+        monster.telegraphedMove?.let { move ->
+            Text(
+                "⚡ Special Move: ${move.name} (${(move.damageMultiplier * 100).toInt()}% power) · Guard or Stun to mitigate!",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color(0xFFFFB300),
+                fontWeight = FontWeight.SemiBold
+            )
+        }
         Text(
-            "Reward: ${monster.goldReward} \uD83D\uDCB0 \u00B7 ${monster.xpReward} XP",
+            "Reward: ${monster.goldReward} 💰 · ${monster.xpReward} XP",
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.primary
         )
         val estimate = battleEstimate(monster, playerLevel, combat)
         Text(
-            "Preview: ${estimate.winChance}% win chance \u00B7 ${estimate.warning} \u00B7 train ${estimate.recommendedStat}",
+            "Preview: ${estimate.winChance}% win chance · ${estimate.warning} · train ${estimate.recommendedStat}",
             style = MaterialTheme.typography.bodySmall,
             color = estimate.color()
         )

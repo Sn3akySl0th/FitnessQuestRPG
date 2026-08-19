@@ -72,6 +72,11 @@ fun BossProgressCard(
     val isUnlocked = biomeProgress?.bossUnlocked ?: false || (points >= unlockThreshold)
     val isDefeated = biomeProgress?.bossDefeated ?: false
     val firstClearClaimed = biomeProgress?.firstClearRewardClaimed ?: false
+    val onCooldown = ProgressionRules.isBossOnCooldown(biomeProgress)
+    val remainingMs = ProgressionRules.bossCooldownRemainingMs(biomeProgress)
+    val cooldownHours = remainingMs / 3600000
+    val cooldownMins = (remainingMs % 3600000) / 60000
+    val cooldownLabel = if (cooldownHours > 0) "${cooldownHours}h ${cooldownMins}m" else "${cooldownMins}m"
 
     val progressFraction = (points.toFloat() / unlockThreshold.toFloat()).coerceIn(0f, 1f)
     val pointsNeeded = (unlockThreshold - points).coerceAtLeast(0)
@@ -179,14 +184,14 @@ fun BossProgressCard(
                     isDefeated -> {
                         Surface(
                             shape = RoundedCornerShape(8.dp),
-                            color = Gold.copy(alpha = 0.2f),
-                            border = BorderStroke(1.dp, Gold),
+                            color = if (onCooldown) Color(0xFF37474F).copy(alpha = 0.5f) else Gold.copy(alpha = 0.15f),
+                            border = BorderStroke(1.dp, if (onCooldown) Color.White.copy(alpha = 0.3f) else Gold),
                         ) {
                             Text(
-                                text = "👑 DEFEATED",
+                                text = if (onCooldown) "⏳ COOLDOWN ($cooldownLabel)" else "🏆 DEFEATED",
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
-                                color = Gold,
+                                color = if (onCooldown) Color.White.copy(alpha = 0.8f) else Gold,
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                             )
                         }
@@ -364,18 +369,18 @@ fun BossProgressCard(
                             HapticEffects.performSetLogged(haptic, context)
                             onChallenge(boss.id)
                         },
-                        enabled = enabled,
+                        enabled = enabled && !onCooldown,
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(44.dp),
                         shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(1.dp, Gold.copy(alpha = 0.6f)),
+                        border = BorderStroke(1.dp, if (onCooldown) Color.White.copy(alpha = 0.2f) else Gold.copy(alpha = 0.6f)),
                     ) {
                         Text(
-                            text = "🔄 RE-FIGHT BOSS (${GameMath.BATTLE_ENERGY_COST}⚡)",
+                            text = if (onCooldown) "⏳ RESPAWNING IN $cooldownLabel" else "🔄 RE-FIGHT BOSS (${GameMath.BATTLE_ENERGY_COST}⚡)",
                             fontWeight = FontWeight.Bold,
                             fontSize = 14.sp,
-                            color = Gold,
+                            color = if (onCooldown) Color.White.copy(alpha = 0.5f) else Gold,
                         )
                     }
                 }
@@ -383,3 +388,4 @@ fun BossProgressCard(
         }
     }
 }
+

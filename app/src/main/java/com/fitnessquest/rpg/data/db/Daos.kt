@@ -195,6 +195,9 @@ interface ItemDao {
     @Query("SELECT * FROM items WHERE id = :id")
     suspend fun get(id: Long): ItemEntity?
 
+    @Query("SELECT * FROM items")
+    suspend fun getAll(): List<ItemEntity>
+
     @Query("SELECT * FROM items WHERE slot = :slot AND tier <= :maxTier")
     suspend fun bySlotUpToTier(slot: String, maxTier: Int): List<ItemEntity>
 
@@ -269,11 +272,15 @@ interface ClassProgressDao {
     suspend fun get(clazz: CharacterClass): ClassProgressEntity?
 
     @Query("SELECT * FROM class_progress WHERE characterId = 1")
+    suspend fun getAll(): List<ClassProgressEntity>
+
+    @Query("SELECT * FROM class_progress WHERE characterId = 1")
     fun observeAll(): Flow<List<ClassProgressEntity>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(progress: ClassProgressEntity)
 }
+
 
 @Dao
 interface BodyMetricDao {

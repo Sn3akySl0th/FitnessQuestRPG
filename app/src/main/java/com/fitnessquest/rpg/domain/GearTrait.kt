@@ -52,7 +52,50 @@ enum class GearTrait(
         emoji = "🛡️",
         description = "Reduces incoming critical hit damage by 25%.",
         minRarity = GearRarity.LEGENDARY
+    ),
+    MOMENTUM(
+        id = "MOMENTUM",
+        displayName = "Momentum",
+        emoji = "⚡",
+        description = "Gains +5% damage per consecutive hit landed (up to +25%).",
+        minRarity = GearRarity.RARE
+    ),
+    VENOMOUS(
+        id = "VENOMOUS",
+        displayName = "Venomous",
+        emoji = "🧪",
+        description = "Attacks afflict enemies with poison dealing 10% ATK damage for 3 turns.",
+        minRarity = GearRarity.RARE
+    ),
+    COLOSSAL_IMPACT(
+        id = "COLOSSAL_IMPACT",
+        displayName = "Colossal Impact",
+        emoji = "🔨",
+        description = "Attacks have a 15% chance to stagger and interrupt the opponent.",
+        minRarity = GearRarity.EPIC
+    ),
+    FORTUNE_SEEKER(
+        id = "FORTUNE_SEEKER",
+        displayName = "Fortune Seeker",
+        emoji = "💰",
+        description = "Grants +20% bonus gold and crafting material drops from victories.",
+        minRarity = GearRarity.RARE
+    ),
+    SCHOLAR(
+        id = "SCHOLAR",
+        displayName = "Scholar",
+        emoji = "📜",
+        description = "Grants +15% bonus XP from battles and workouts.",
+        minRarity = GearRarity.RARE
+    ),
+    SECOND_WIND(
+        id = "SECOND_WIND",
+        displayName = "Second Wind",
+        emoji = "💫",
+        description = "Once per battle, fatal blows leave you at 1 HP and recover 20% max HP.",
+        minRarity = GearRarity.LEGENDARY
     );
+
 
     companion object {
         fun fromId(id: String): GearTrait? =

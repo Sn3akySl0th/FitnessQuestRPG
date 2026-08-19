@@ -5,7 +5,7 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.random.Random
 
-enum class BattleAction { ATTACK, SKILL, DEFEND, FLEE }
+enum class BattleAction { ATTACK, SKILL, DEFEND, FLEE, ULTIMATE, ITEM }
 
 enum class BattleOutcome { ONGOING, VICTORY, DEFEAT, FLED }
 
@@ -24,22 +24,33 @@ data class BattleState(
     val agility: Int = 0,
     val willpower: Int = 0,
     // Status effects. Counters tick down at the end of each full round.
-    val atkBuffTurns: Int = 0,       // War Cry / Bestial Wrath: player deals +40%
-    val monsterChillTurns: Int = 0,  // Frost Lance: monster deals -35%
-    val monsterStunTurns: Int = 0,   // Titan Smash / Stun skills: monster skips turns
-    val monsterBleedTurns: Int = 0,  // Bleeds: monster takes damage over time
+    val atkBuffTurns: Int = 0,          // War Cry / Bestial Wrath / Battle Elixir: player deals +40%
+    val defBuffTurns: Int = 0,          // Ironhide Salve / Iron Bastion: player DEF +30
+    val monsterChillTurns: Int = 0,     // Frost Lance: monster deals -35%
+    val monsterStunTurns: Int = 0,      // Titan Smash / Stun skills: monster skips turns
+    val monsterStaggerTurns: Int = 0,   // Posture Broken: monster stunned and takes +50% damage!
+    val monsterBleedTurns: Int = 0,     // Bleeds / Burns: monster takes damage over time
     val monsterBleedDmg: Int = 0,
-    val playerPoisonTurns: Int = 0,  // Venomous monsters poison the player
-    val playerVanished: Boolean = false, // Smoke Bomb: next monster attack misses
+    val playerPoisonTurns: Int = 0,     // Venomous monsters poison the player
+    val playerVanished: Boolean = false,// Smoke Bomb: next monster attack misses
+    val adrenaline: Int = 0,            // 0 to 100 limit break meter
+    val bossPhase: Int = 1,             // Phase 1 or 2
+    val telegraphedCharging: Boolean = false, // True if monster/boss is charging an ultimate move
+    val guardPrecisionMult: Double = 1.0, // Multiplier from precision guard (e.g. 2.0 = Perfect Guard)
+    val itemsUsedThisBattle: Int = 0,   // Limit 2 tactical consumables per battle
     val log: List<String> = emptyList(),
     val outcome: BattleOutcome = BattleOutcome.ONGOING,
     val droppedItemId: Long? = null,
     val druidForm: String = "HUMAN",
     val baseStats: CombatStats? = null,
-    val equippedTraits: List<GearTrait> = emptyList()
+    val equippedTraits: List<GearTrait> = emptyList(),
+    val comboHits: Int = 0,
+    val secondWindUsed: Boolean = false
 ) {
     /** Skills the player has unlocked at their current level. */
     val unlockedSkills: List<ClassSkill> get() = clazz.skillsUnlockedAt(level)
+
+    val canUseUltimate: Boolean get() = adrenaline >= 100
 }
 
 /**
@@ -62,6 +73,22 @@ object BattleEngine {
         equippedTraits: List<GearTrait> = emptyList(),
         rng: Random = Random.Default
     ): BattleState {
+        val introLines = buildList {
+            when (monster.variant) {
+                MonsterVariant.EPIC -> add("👑 EPIC ENCOUNTER! An ancient ${monster.name} ${monster.emoji} emerges, radiating terrifying power!")
+                MonsterVariant.ELITE -> add("⭐ ELITE FOE! A hardened ${monster.name} ${monster.emoji} steps forward!")
+                MonsterVariant.NORMAL -> {
+                    if (monster.isBoss) {
+                        add("⚔️ BIOME BOSS BATTLE! The mighty ${monster.name} ${monster.emoji} challenges your reign!")
+                    } else {
+                        add("A wild ${monster.name} ${monster.emoji} appears!")
+                    }
+                }
+            }
+            monster.trait?.let { add("${it.emoji} Trait: ${it.label.uppercase()} \u2014 ${it.blurb}") }
+            monster.secondaryTrait?.let { add("${it.emoji} Bonus Trait: ${it.label.uppercase()} \u2014 ${it.blurb}") }
+        }
+
         var s = BattleState(
             playerName = playerName,
             clazz = clazz,
@@ -77,10 +104,7 @@ object BattleEngine {
             baseStats = baseStats,
             equippedTraits = equippedTraits,
             skillCooldowns = List(clazz.skills.size) { 0 },
-            log = buildList {
-                add("A wild ${monster.name} ${monster.emoji} appears!")
-                monster.trait?.let { add("${it.emoji} It is ${it.label.uppercase()}: ${it.blurb}") }
-            }
+            log = introLines
         )
 
         // Swift monsters strike first if they outspeed you.
@@ -105,24 +129,44 @@ object BattleEngine {
         state: BattleState,
         action: BattleAction,
         skillIndex: Int = 0,
+        itemId: Long? = null,
         rng: Random = Random.Default,
         precisionMultiplier: Double = 1.0
     ): BattleState {
         if (state.outcome != BattleOutcome.ONGOING) return state
 
-        var s = state.copy(playerDefending = false)
+        var s = state.copy(playerDefending = false, guardPrecisionMult = 1.0)
         val lines = mutableListOf<String>()
 
         // 1. Player Action
         when (action) {
             BattleAction.ATTACK -> s = playerAttack(s, lines, rng, precisionMultiplier)
             BattleAction.SKILL -> s = playerSkill(s, skillIndex, lines, rng)
+            BattleAction.ULTIMATE -> s = playerUltimate(s, lines, rng)
+            BattleAction.ITEM -> s = playerUseItem(s, itemId, lines)
             BattleAction.DEFEND -> {
-                s = s.copy(playerDefending = true)
-                val heal = max(1, s.willpower / 4 + s.playerStats.maxHp / 20)
+                val relicHealBonus = if (s.equippedTraits.contains(GearTrait.VAMPIRIC)) 5 else 0
+                val baseHeal = max(1, s.willpower / 4 + s.playerStats.maxHp / 20 + relicHealBonus)
+                val heal = when {
+                    precisionMultiplier >= 1.95 -> baseHeal * 2
+                    precisionMultiplier >= 1.45 -> (baseHeal * 1.5).roundToInt()
+                    else -> baseHeal
+                }
                 val newHp = min(s.playerStats.maxHp, s.playerHp + heal)
-                s = s.copy(playerHp = newHp)
-                lines += "🛡️ You raise your guard, bracing for impact and catching your breath (+$heal HP)."
+                val newAdrenaline = min(100, s.adrenaline + if (precisionMultiplier >= 1.95) 25 else 15)
+
+                s = s.copy(
+                    playerDefending = true,
+                    guardPrecisionMult = precisionMultiplier,
+                    playerHp = newHp,
+                    adrenaline = newAdrenaline
+                )
+
+                lines += when {
+                    precisionMultiplier >= 1.95 -> "🛡️⚡ PERFECT GUARD! You brace in flawless cadence (+$heal HP), reducing the next attack by 85% with an instant counter-strike ready!"
+                    precisionMultiplier >= 1.45 -> "🛡️ GREAT GUARD! Guard raised high (+$heal HP), blunting incoming force by 65%!"
+                    else -> "🛡️ You raise your guard, bracing for impact and catching your breath (+$heal HP)."
+                }
             }
             BattleAction.FLEE -> {
                 val fleeChance = (40 + (s.playerStats.spd - s.monster.spd) * 2).coerceIn(15, 85)
@@ -138,7 +182,7 @@ object BattleEngine {
             }
         }
 
-        // Check victory
+        // Check victory after player attack
         if (s.monsterHp <= 0) {
             lines += "🏆 The ${s.monster.name} collapses! Victory is yours!"
             return s.copy(
@@ -161,15 +205,34 @@ object BattleEngine {
         }
 
         // 3. Monster Regenerating status
-        if (s.monster.trait == MonsterTrait.REGENERATING && s.monsterHp < s.monster.hp) {
+        val isRegen = s.monster.trait == MonsterTrait.REGENERATING || s.monster.secondaryTrait == MonsterTrait.REGENERATING
+        if (isRegen && s.monsterHp < s.monster.hp) {
             val regen = max(4, (s.monster.hp * 0.08).roundToInt())
             s = s.copy(monsterHp = min(s.monster.hp, s.monsterHp + regen))
             lines += "💚 The ${s.monster.name} knits its wounds shut, recovering $regen HP."
         }
 
-        // 4. Monster Action
-        if (s.monsterStunTurns > 0) {
-            lines += "💫 The ${s.monster.name} is stunned and cannot act!"
+        // 4. Boss Phase 2 Check (Transitions at <= 50% HP)
+        if (s.bossPhase == 1 && (s.monster.isBoss || s.monster.variant == MonsterVariant.EPIC) && s.monsterHp <= s.monster.hp * 0.5) {
+            s = s.copy(
+                bossPhase = 2,
+                telegraphedCharging = true
+            )
+            val specialMove = s.monster.telegraphedMove
+            lines += "⚡ PHASE 2: The ${s.monster.name} roars in blind fury and enters Phase 2! Its power surges!"
+            if (specialMove != null) {
+                lines += "⚠️ CHARGING: ${s.monster.name} begins channeling ${specialMove.name}! ${specialMove.description}"
+            }
+        }
+
+        // 5. Monster Action
+        if (s.monsterStunTurns > 0 || s.monsterStaggerTurns > 0) {
+            if (s.telegraphedCharging) {
+                lines += "💥 STAGGER! The ${s.monster.name}'s channeled special move was completely SHATTERED by your blow!"
+                s = s.copy(telegraphedCharging = false)
+            } else {
+                lines += "💫 The ${s.monster.name} is staggered / stunned and cannot act!"
+            }
         } else {
             s = monsterAttack(s, lines, rng)
             if (s.playerHp <= 0) {
@@ -178,9 +241,8 @@ object BattleEngine {
             }
 
             // Swift monsters may lunge again if they outpace you
-            if (s.monster.trait == MonsterTrait.SWIFT &&
-                s.monster.spd > s.playerStats.spd && rng.nextInt(100) < 30
-            ) {
+            val isSwift = s.monster.trait == MonsterTrait.SWIFT || s.monster.secondaryTrait == MonsterTrait.SWIFT
+            if (isSwift && s.monster.spd > s.playerStats.spd && rng.nextInt(100) < 30) {
                 lines += "💨 The ${s.monster.name} moves in a blur — it strikes again!"
                 s = monsterAttack(s, lines, rng)
                 if (s.playerHp <= 0) {
@@ -190,14 +252,14 @@ object BattleEngine {
             }
         }
 
-        // 5. Dragoon Wyvern Regen
+        // 6. Dragoon Wyvern Regen
         if (s.clazz == CharacterClass.DRAGOON && s.druidForm == "WYVERN") {
             val heal = max(2, (s.playerStats.maxHp * 0.02).roundToInt())
             s = s.copy(playerHp = min(s.playerStats.maxHp, s.playerHp + heal))
             lines += "🐲 Your Wyvern heals you for $heal HP."
         }
 
-        // 6. Hunter / Ranger Companion Turn Assist
+        // 7. Hunter / Ranger Companion Turn Assist
         if (s.clazz == CharacterClass.RANGER) {
             when (s.druidForm) {
                 "FALCON" -> {
@@ -210,7 +272,7 @@ object BattleEngine {
                     s = s.copy(playerHp = min(s.playerStats.maxHp, s.playerHp + bearHeal))
                     lines += "🐻 Your Forest Bear shields you, restoring $bearHeal HP."
                 }
-                else -> { // "WOLF" or default
+                else -> {
                     val biteDmg = max(3, (s.playerStats.atk * 0.25).roundToInt())
                     s = s.copy(monsterHp = max(0, s.monsterHp - biteDmg))
                     lines += "🐺 Your Dire Wolf flanks from the brush, biting the ${s.monster.name} for $biteDmg damage!"
@@ -225,7 +287,7 @@ object BattleEngine {
             }
         }
 
-        // 7. Druid Wild Shape Turn Passives
+        // 8. Druid Wild Shape Turn Passives
         if (s.clazz == CharacterClass.DRUID) {
             when (s.druidForm) {
                 "BEAR" -> {
@@ -273,7 +335,7 @@ object BattleEngine {
             }
         }
 
-        // Poison ticks at the end of the round
+        // 9. Poison ticks at the end of the round
         if (s.playerPoisonTurns > 0) {
             val poison = max(3, s.monster.tier * 6 + s.monster.level / 2 - s.willpower / 3)
             s = s.copy(playerHp = max(0, s.playerHp - poison))
@@ -289,8 +351,10 @@ object BattleEngine {
             log = s.log + lines,
             skillCooldowns = s.skillCooldowns.map { max(0, it - 1) },
             atkBuffTurns = max(0, s.atkBuffTurns - 1),
+            defBuffTurns = max(0, s.defBuffTurns - 1),
             monsterChillTurns = max(0, s.monsterChillTurns - 1),
             monsterStunTurns = max(0, s.monsterStunTurns - 1),
+            monsterStaggerTurns = max(0, s.monsterStaggerTurns - 1),
             monsterBleedTurns = max(0, s.monsterBleedTurns - 1),
             playerPoisonTurns = max(0, s.playerPoisonTurns - 1)
         )
@@ -307,29 +371,238 @@ object BattleEngine {
         var s = state
         val dodge = monsterDodgeChance(s)
         if (rng.nextInt(100) < dodge) {
-            lines += "The ${s.monster.name} darts aside — your attack misses!"
-            return s
+            lines += "The ${s.monster.name} darts aside \u2014 your attack misses!"
+            return s.copy(comboHits = 0)
         }
-        val (dmg, crit) = rollDamage(
+
+        val isArmored = s.monster.trait == MonsterTrait.ARMORED || s.monster.secondaryTrait == MonsterTrait.ARMORED
+        val (rawDmg, crit) = rollDamage(
             atk = s.playerStats.atk * buffMult(s) * precisionMultiplier.coerceIn(1.0, 2.0),
             def = s.monster.def.toDouble(),
             critPercent = s.playerStats.critPercent,
             rng = rng,
-            armored = s.monster.trait == MonsterTrait.ARMORED
+            armored = isArmored
         )
-        s = s.copy(monsterHp = max(0, s.monsterHp - dmg))
+
+        // Stagger vulnerability multiplier (+50% bonus if monster is staggered)
+        val staggerMultiplier = if (s.monsterStaggerTurns > 0) 1.5 else 1.0
+        val dmg = (rawDmg * staggerMultiplier).roundToInt()
+
+        val nextCombo = s.comboHits + 1
+        val adrenalineGain = if (precisionMultiplier >= 1.95) 25 else 15
+        val nextAdrenaline = min(100, s.adrenaline + adrenalineGain)
+
+        // Stagger check: Crits or High Colossal impact break enemy posture
+        var nextStagger = s.monsterStaggerTurns
+        if (crit && rng.nextInt(100) < 40 && nextStagger <= 0) {
+            nextStagger = 1
+            lines += "💥 POSTURE BROKEN! Your heavy strike staggered the ${s.monster.name} (+50% dmg next turn)!"
+        }
+
+        s = s.copy(
+            monsterHp = max(0, s.monsterHp - dmg),
+            comboHits = nextCombo,
+            adrenaline = nextAdrenaline,
+            monsterStaggerTurns = nextStagger
+        )
+
         lines += when {
             precisionMultiplier >= 1.95 -> "PERFECT STRIKE! You hit the ${s.monster.name} for $dmg damage!"
             precisionMultiplier >= 1.45 -> "Great strike! You hit the ${s.monster.name} for $dmg damage."
             crit -> "CRITICAL HIT! You strike the ${s.monster.name} for $dmg damage!"
-            s.monster.trait == MonsterTrait.ARMORED -> "Your attack glances off the armor — $dmg damage."
+            isArmored -> "Your attack glances off the armor \u2014 $dmg damage."
             else -> "You attack the ${s.monster.name} for $dmg damage."
         }
 
         if (s.equippedTraits.contains(GearTrait.VAMPIRIC) && dmg > 0) {
-            val leech = max(1, (dmg * 0.12).roundToInt())
+            val leech = max(1, (dmg * 0.14).roundToInt())
             s = s.copy(playerHp = min(s.playerStats.maxHp, s.playerHp + leech))
             lines += "🩸 Vampiric: You leeched $leech HP from the strike!"
+        }
+
+        if (s.equippedTraits.contains(GearTrait.VENOMOUS) && dmg > 0 && s.monsterBleedTurns <= 0) {
+            val poisonTick = max(2, (s.playerStats.atk * 0.12).roundToInt())
+            s = s.copy(monsterBleedTurns = 3, monsterBleedDmg = poisonTick)
+            lines += "🧪 Venomous: Envenomed the ${s.monster.name} for 3 turns ($poisonTick dmg/turn)!"
+        }
+
+        if (s.equippedTraits.contains(GearTrait.COLOSSAL_IMPACT) && dmg > 0 && rng.nextInt(100) < 25) {
+            s = s.copy(monsterStaggerTurns = max(s.monsterStaggerTurns, 1))
+            lines += "🔨 Colossal Impact: Staggered the ${s.monster.name}!"
+        }
+        return s
+    }
+
+    private fun playerUltimate(
+        state: BattleState,
+        lines: MutableList<String>,
+        rng: Random
+    ): BattleState {
+        var s = state
+        if (s.adrenaline < 100) {
+            lines += "Adrenaline is not full yet!"
+            return s
+        }
+
+        val atk = s.playerStats.atk * buffMult(s)
+        s = s.copy(adrenaline = 0)
+
+        fun ultHit(multiplier: Double, armorPierce: Boolean = true): Int {
+            val (dmg, _) = rollDamage(atk * multiplier, if (armorPierce) 0.0 else s.monster.def * 0.2, 50, rng, false)
+            return dmg
+        }
+
+        when (s.clazz) {
+            CharacterClass.WARRIOR -> {
+                val dmg = ultHit(6.0)
+                s = s.copy(monsterHp = max(0, s.monsterHp - dmg), monsterStaggerTurns = 2)
+                lines += "⚔️💥 TITAN EXECUTION! You awaken cataclysmic might, crashing down for $dmg armor-piercing damage and shattering enemy posture!"
+            }
+            CharacterClass.MAGE -> {
+                val dmg = ultHit(6.5)
+                s = s.copy(monsterHp = max(0, s.monsterHp - dmg), monsterChillTurns = 4, monsterStunTurns = 1)
+                lines += "🌌⚡ SINGULARITY COLLAPSE! A black hole implodes for $dmg cosmic damage, chilling and freezing the foe in space-time!"
+            }
+            CharacterClass.THIEF -> {
+                var total = 0
+                repeat(7) { total += (atk * 0.95 + s.agility * 0.8).roundToInt() }
+                s = s.copy(monsterHp = max(0, s.monsterHp - total), playerVanished = true)
+                lines += "🗡️🩸 DEATH BLOSSOM! 7 blinding shadow cuts rip through the ${s.monster.name} for $total lethal damage as you vanish into the mist!"
+            }
+            CharacterClass.RANGER -> {
+                val dmg = ultHit(5.8)
+                val bleed = max(6, (atk * 0.5).roundToInt())
+                s = s.copy(monsterHp = max(0, s.monsterHp - dmg), monsterBleedTurns = 4, monsterBleedDmg = bleed)
+                lines += "🏹🐺 APEX HUNT STAMPEDE! You and an ethereal spirit pack trample the foe for $dmg damage and heavy bleeding!"
+            }
+            CharacterClass.PALADIN -> {
+                val dmg = ultHit(5.5)
+                s = s.copy(
+                    monsterHp = max(0, s.monsterHp - dmg),
+                    playerHp = s.playerStats.maxHp,
+                    playerDefending = true
+                )
+                lines += "✨🛡️ HEAVENSFALL SMITE! Radiant celestial pillar descends for $dmg holy damage, fully restoring your HP and raising holy aegis!"
+            }
+            CharacterClass.NECROMANCER -> {
+                val dmg = ultHit(5.4)
+                val leech = (dmg * 0.5).roundToInt()
+                s = s.copy(
+                    monsterHp = max(0, s.monsterHp - dmg),
+                    playerHp = min(s.playerStats.maxHp, s.playerHp + leech)
+                )
+                lines += "💀🌪️ REAPER'S CATACLYSM! The Nether realm tears open for $dmg necrotic damage, leeching $leech HP!"
+            }
+            CharacterClass.WHITE_MAGE -> {
+                val dmg = ultHit(5.2)
+                s = s.copy(
+                    monsterHp = max(0, s.monsterHp - dmg),
+                    playerHp = s.playerStats.maxHp,
+                    playerPoisonTurns = 0
+                )
+                lines += "🕊️🌟 DIVINE INTERVENTION! Archangelic light cleanses all poisons, restores full HP, and smites the ${s.monster.name} for $dmg damage!"
+            }
+            CharacterClass.MONK -> {
+                var total = 0
+                repeat(12) { total += (atk * 0.5 + s.agility * 0.4).roundToInt() }
+                s = s.copy(monsterHp = max(0, s.monsterHp - total), monsterStunTurns = 2)
+                lines += "🥋⚡ ASCENDED CHI BURST! 12 lightning chi strikes land in an instant for $total piercing damage, locking the enemy in stun!"
+            }
+            CharacterClass.DRUID -> {
+                val dmg = ultHit(5.8)
+                val heal = (s.playerStats.maxHp * 0.5).roundToInt()
+                s = s.copy(
+                    monsterHp = max(0, s.monsterHp - dmg),
+                    playerHp = min(s.playerStats.maxHp, s.playerHp + heal),
+                    monsterBleedTurns = 4,
+                    monsterBleedDmg = max(5, (atk * 0.4).roundToInt())
+                )
+                lines += "🌿🦅 WRATH OF GAIA! Primeval forces crush the ${s.monster.name} for $dmg damage, restoring $heal HP and inflicting bleeding roots!"
+            }
+            CharacterClass.BERSERKER -> {
+                val dmg = ultHit(7.0)
+                s = s.copy(monsterHp = max(0, s.monsterHp - dmg), atkBuffTurns = 5)
+                lines += "🔥🪓 RAGE INCARNATE! Absolute berserk apotheosis cleaves the enemy for $dmg catastrophic damage and sets Attack on fire for 5 turns!"
+            }
+            CharacterClass.BARD -> {
+                val dmg = ultHit(5.0)
+                val heal = (s.playerStats.maxHp * 0.4).roundToInt()
+                s = s.copy(
+                    monsterHp = max(0, s.monsterHp - dmg),
+                    playerHp = min(s.playerStats.maxHp, s.playerHp + heal),
+                    atkBuffTurns = 4,
+                    monsterStunTurns = 1
+                )
+                lines += "🎵🌌 HYMN OF THE COSMOS! Harmonious celestial melody deals $dmg damage, heals for $heal HP, buffs Attack, and stuns the foe!"
+            }
+            CharacterClass.SUMMONER -> {
+                val dmg = ultHit(6.8)
+                s = s.copy(monsterHp = max(0, s.monsterHp - dmg), monsterBleedTurns = 3, monsterBleedDmg = max(8, (atk * 0.4).roundToInt()))
+                lines += "☄️🐉 MEGAFLARE APOCALYPSE! Primal Bahamut obliterates the field for $dmg cosmic fire damage!"
+            }
+            CharacterClass.DRAGOON -> {
+                val dmg = ultHit(6.6)
+                s = s.copy(
+                    monsterHp = max(0, s.monsterHp - dmg),
+                    skillCooldowns = List(s.skillCooldowns.size) { 0 },
+                    playerVanished = true
+                )
+                lines += "🐉⚡ FINAL DRAGON DIVE! You pierce the stratosphere and crash down for $dmg apocalyptic piercing damage, resetting all skill cooldowns!"
+            }
+        }
+        return s
+    }
+
+    private fun playerUseItem(
+        state: BattleState,
+        itemId: Long?,
+        lines: MutableList<String>
+    ): BattleState {
+        var s = state
+        if (s.itemsUsedThisBattle >= 2) {
+            lines += "You have reached the maximum consumable item limit (2) for this battle!"
+            return s
+        }
+        val nextUsed = s.itemsUsedThisBattle + 1
+
+        when (itemId) {
+            Consumables.HEALTH_POTION -> {
+                val heal = (s.playerStats.maxHp * 0.35).roundToInt()
+                s = s.copy(
+                    playerHp = min(s.playerStats.maxHp, s.playerHp + heal),
+                    itemsUsedThisBattle = nextUsed
+                )
+                lines += "🧪 You drank a Health Potion! Restored $heal HP."
+            }
+            Consumables.CLEANSING_SALVE -> {
+                s = s.copy(
+                    playerPoisonTurns = 0,
+                    itemsUsedThisBattle = nextUsed
+                )
+                lines += "🌿 You applied Cleansing Salve! Cleansed all poison and status debuffs."
+            }
+            Consumables.BATTLE_ELIXIR -> {
+                s = s.copy(
+                    atkBuffTurns = 4,
+                    itemsUsedThisBattle = nextUsed
+                )
+                lines += "⚔️ You drank a Battle Elixir! Attack surged by +35% for 3 turns."
+            }
+            Consumables.IRONHIDE_SALVE -> {
+                s = s.copy(
+                    defBuffTurns = 4,
+                    itemsUsedThisBattle = nextUsed
+                )
+                lines += "🛡️ You applied Ironhide Salve! Defense fortified by +30 for 3 turns."
+            }
+            else -> {
+                val heal = (s.playerStats.maxHp * 0.30).roundToInt()
+                s = s.copy(
+                    playerHp = min(s.playerStats.maxHp, s.playerHp + heal),
+                    itemsUsedThisBattle = nextUsed
+                )
+                lines += "🧪 You used a recovery potion! Restored $heal HP."
+            }
         }
         return s
     }
@@ -350,12 +623,16 @@ object BattleEngine {
 
         val atk = s.playerStats.atk * buffMult(s)
         val def = s.monster.def.toDouble()
-        val armored = s.monster.trait == MonsterTrait.ARMORED
+        val isArmored = s.monster.trait == MonsterTrait.ARMORED || s.monster.secondaryTrait == MonsterTrait.ARMORED
 
         fun hit(raw: Double, defFactor: Double, crit: Int, piercing: Boolean = false): Int {
-            val (dmg, _) = rollDamage(raw, def * defFactor, crit, rng, armored = armored && !piercing)
-            return dmg
+            val (dmg, isCrit) = rollDamage(raw, def * defFactor, crit, rng, armored = isArmored && !piercing)
+            val staggerMult = if (s.monsterStaggerTurns > 0) 1.5 else 1.0
+            return (dmg * staggerMult).roundToInt()
         }
+
+        val adrenalineGain = 20
+        s = s.copy(adrenaline = min(100, s.adrenaline + adrenalineGain))
 
         when (s.clazz) {
             CharacterClass.WARRIOR -> when (index) {
@@ -366,12 +643,12 @@ object BattleEngine {
                 }
                 1 -> {
                     s = s.copy(atkBuffTurns = 4)
-                    lines += "${skill.emoji} WAR CRY! Your muscles surge — +40% attack for 3 turns!"
+                    lines += "${skill.emoji} WAR CRY! Your muscles surge \u2014 +40% attack for 3 turns!"
                 }
                 2 -> {
                     val dmg = hit(atk * 3.0, 0.6, 20)
-                    s = s.copy(monsterHp = max(0, s.monsterHp - dmg), monsterStunTurns = 2)
-                    lines += "${skill.emoji} TITAN SMASH! $dmg damage — the ${s.monster.name} reels, stunned!"
+                    s = s.copy(monsterHp = max(0, s.monsterHp - dmg), monsterStunTurns = 2, monsterStaggerTurns = 1)
+                    lines += "${skill.emoji} TITAN SMASH! $dmg damage \u2014 the ${s.monster.name} reels, STUNNED and STAGGERED!"
                 }
                 3 -> {
                     val base = s.baseStats ?: s.playerStats
@@ -402,7 +679,7 @@ object BattleEngine {
                 1 -> {
                     val dmg = hit(atk * 1.2 + s.willpower * 1.5, 0.3, 10, piercing = true)
                     s = s.copy(monsterHp = max(0, s.monsterHp - dmg), monsterChillTurns = 3)
-                    lines += "${skill.emoji} FROST LANCE! $dmg damage — the ${s.monster.name} is chilled!"
+                    lines += "${skill.emoji} FROST LANCE! $dmg damage \u2014 the ${s.monster.name} is chilled!"
                 }
                 2 -> {
                     val dmg = hit(atk * 1.5 + s.willpower * 4.0, 0.0, 15, piercing = true)
@@ -437,7 +714,7 @@ object BattleEngine {
                 1 -> {
                     val dmg = hit(atk * 1.2 + s.agility, 0.6, s.playerStats.critPercent)
                     s = s.copy(monsterHp = max(0, s.monsterHp - dmg), playerVanished = true)
-                    lines += "${skill.emoji} SMOKE BOMB! $dmg damage — you vanish into the haze!"
+                    lines += "${skill.emoji} SMOKE BOMB! $dmg damage \u2014 you vanish into the haze!"
                 }
                 2 -> {
                     val executing = s.monsterHp < s.monster.hp * 0.35
@@ -454,7 +731,7 @@ object BattleEngine {
                         monsterBleedTurns = 4,
                         monsterBleedDmg = poison
                     )
-                    lines += "${skill.emoji} POISONED BLADE! $dmg damage — venom inflicts $poison poison each turn!"
+                    lines += "${skill.emoji} POISONED BLADE! $dmg damage \u2014 venom inflicts $poison poison each turn!"
                 }
                 4 -> {
                     val d1 = hit(atk * 0.9 + s.agility * 0.5, 0.5, 100)
@@ -529,7 +806,7 @@ object BattleEngine {
                 2 -> {
                     val dmg = hit(atk * 2.2 + s.willpower, 0.2, 15, piercing = true)
                     s = s.copy(monsterHp = max(0, s.monsterHp - dmg), monsterStunTurns = 2)
-                    lines += "${skill.emoji} JUDGMENT! $dmg piercing damage — the ${s.monster.name} is stunned!"
+                    lines += "${skill.emoji} JUDGMENT! $dmg piercing damage \u2014 the ${s.monster.name} is stunned!"
                 }
                 3 -> {
                     val dmg = hit(atk * 1.6 + s.willpower * 1.5, 0.2, 15, piercing = true)
@@ -559,7 +836,7 @@ object BattleEngine {
                         monsterHp = max(0, s.monsterHp - dmg),
                         playerHp = min(s.playerStats.maxHp, s.playerHp + heal)
                     )
-                    lines += "${skill.emoji} DRAIN LIFE! $dmg damage siphoned — you recover $heal HP!"
+                    lines += "${skill.emoji} DRAIN LIFE! $dmg damage siphoned \u2014 you recover $heal HP!"
                 }
                 1 -> {
                     val base = s.baseStats ?: s.playerStats
@@ -788,7 +1065,7 @@ object BattleEngine {
                         playerHp = max(1, s.playerHp - hpCost),
                         atkBuffTurns = 4
                     )
-                    lines += "${skill.emoji} BLOOD RAGE! Sacrificed $hpCost HP — Attack surges by +60%!"
+                    lines += "${skill.emoji} BLOOD RAGE! Sacrificed $hpCost HP \u2014 Attack surges by +60%!"
                 }
                 2 -> {
                     val dmg = hit(atk * 3.2, 0.4, 35)
@@ -797,7 +1074,7 @@ object BattleEngine {
                 }
                 3 -> {
                     s = s.copy(atkBuffTurns = 4)
-                    lines += "${skill.emoji} UNDYING WILL! Fury peaks — attack multiplies as health falls!"
+                    lines += "${skill.emoji} UNDYING WILL! Fury peaks \u2014 attack multiplies as health falls!"
                 }
                 4 -> {
                     val dmg = hit(atk * 4.2 + s.strength * 2.0, 0.3, 100)
@@ -942,7 +1219,7 @@ object BattleEngine {
     private fun monsterAttack(state: BattleState, lines: MutableList<String>, rng: Random): BattleState {
         var s = state
         if (s.playerVanished) {
-            lines += "The ${s.monster.name} lashes out at empty smoke — you're untouchable!"
+            lines += "The ${s.monster.name} lashes out at empty smoke \u2014 you're untouchable!"
             return s.copy(playerVanished = false)
         }
         val dodge = playerDodgeChance(s)
@@ -951,24 +1228,54 @@ object BattleEngine {
             return s
         }
 
+        val isCharging = s.telegraphedCharging && s.monster.telegraphedMove != null
+        val telegraphed = s.monster.telegraphedMove
+
         var monsterAtk = s.monster.atk.toDouble()
+        if (isCharging && telegraphed != null) {
+            monsterAtk *= telegraphed.damageMultiplier
+        }
+
+        val isEnraged = s.monster.trait == MonsterTrait.ENRAGED || s.monster.secondaryTrait == MonsterTrait.ENRAGED
         var enraged = false
-        if (s.monster.trait == MonsterTrait.ENRAGED && s.monsterHp < s.monster.hp * 0.4) {
+        if (isEnraged && s.monsterHp < s.monster.hp * 0.45) {
             monsterAtk *= 1.4
             enraged = true
         }
         if (s.monsterChillTurns > 0) monsterAtk *= 0.65
 
-        val (raw, crit) = rollDamage(monsterAtk, s.playerStats.def.toDouble(), 10, rng)
-        var dmg = if (s.playerDefending) max(1, (raw * 0.45).roundToInt()) else raw
+        val effectivePlayerDef = (s.playerStats.def + if (s.defBuffTurns > 0) 30 else 0).toDouble()
+        val (raw, crit) = rollDamage(monsterAtk, effectivePlayerDef, 10, rng, armored = false)
+
+        var dmg = when {
+            s.playerDefending && s.guardPrecisionMult >= 1.95 -> max(1, (raw * 0.15).roundToInt()) // 85% mitigation on Perfect Guard
+            s.playerDefending && s.guardPrecisionMult >= 1.45 -> max(1, (raw * 0.35).roundToInt()) // 65% mitigation on Great Guard
+            s.playerDefending -> max(1, (raw * 0.45).roundToInt()) // 55% mitigation
+            else -> raw
+        }
+
         if (crit && s.equippedTraits.contains(GearTrait.WARDED)) {
             dmg = max(1, (dmg * 0.75).roundToInt())
         }
         if (s.playerStats.mitigationPercent > 0f) {
             dmg = max(1, (dmg * (1f - s.playerStats.mitigationPercent)).roundToInt())
         }
-        s = s.copy(playerHp = max(0, s.playerHp - dmg))
+
+        val wouldDie = s.playerHp - dmg <= 0
+        if (wouldDie && s.equippedTraits.contains(GearTrait.SECOND_WIND) && !s.secondWindUsed) {
+            val recovery = max(1, (s.playerStats.maxHp * 0.20).roundToInt())
+            s = s.copy(playerHp = recovery, secondWindUsed = true)
+            lines += "💫 Second Wind! Fatal blow absorbed \u2014 you hold on with $recovery HP!"
+        } else {
+            s = s.copy(playerHp = max(0, s.playerHp - dmg))
+        }
+
+        val adrenalineOnHit = min(100, s.adrenaline + 10)
+        s = s.copy(adrenaline = adrenalineOnHit)
+
         lines += when {
+            isCharging -> "⚠️💥 SPECIAL ATTACK! The ${s.monster.name} unleashed ${telegraphed?.name ?: "Cataclysm"} for $dmg damage!"
+            s.playerDefending && s.guardPrecisionMult >= 1.95 -> "🛡️⚡ PERFECT GUARD! You absorbed almost all force! Only $dmg damage taken."
             s.playerDefending -> "The ${s.monster.name} attacks, but your guard absorbs it. $dmg damage."
             enraged -> "😡 The ${s.monster.name} attacks in a frenzy! $dmg damage!"
             crit && s.equippedTraits.contains(GearTrait.WARDED) -> "🛡️ Warded! You blunted a critical blow to $dmg damage."
@@ -977,16 +1284,30 @@ object BattleEngine {
             else -> "The ${s.monster.name} hits you for $dmg damage."
         }
 
+        // Perfect Guard Counter-Strike (Deals 55% player ATK damage back to monster)
+        if (s.playerDefending && s.guardPrecisionMult >= 1.95) {
+            val counterDmg = max(3, (s.playerStats.atk * 0.55).roundToInt())
+            s = s.copy(monsterHp = max(0, s.monsterHp - counterDmg))
+            lines += "⚡ COUNTER-STRIKE! Flawless parry opens the enemy \u2014 you counter for $counterDmg damage!"
+        }
+
+        // Thorns trait
         if (s.equippedTraits.contains(GearTrait.THORNS) && dmg > 0) {
             val reflect = max(1, (dmg * 0.15).roundToInt())
             s = s.copy(monsterHp = max(0, s.monsterHp - reflect))
             lines += "🌵 Thorns: Reflected $reflect damage back to the ${s.monster.name}!"
         }
 
-        if (s.monster.trait == MonsterTrait.VENOMOUS && s.playerPoisonTurns == 0 && rng.nextInt(100) < 40) {
+        // Reset telegraphed charging after release
+        if (isCharging) {
+            s = s.copy(telegraphedCharging = false)
+        }
+
+        val isVenomous = s.monster.trait == MonsterTrait.VENOMOUS || s.monster.secondaryTrait == MonsterTrait.VENOMOUS
+        if (isVenomous && s.playerPoisonTurns == 0 && rng.nextInt(100) < 40) {
             val turns = max(2, 4 - s.willpower / 12)
             s = s.copy(playerPoisonTurns = turns)
-            lines += "☠️ Venom seeps into your veins — poisoned for $turns turns!"
+            lines += "☠️ Venom seeps into your veins \u2014 poisoned for $turns turns!"
         }
         return s
     }
@@ -1001,12 +1322,17 @@ object BattleEngine {
         if (s.equippedTraits.contains(GearTrait.EXECUTIONER) && s.monsterHp < (s.monster.hp * 0.3)) {
             mult *= 1.25
         }
+        if (s.equippedTraits.contains(GearTrait.MOMENTUM) && s.comboHits > 0) {
+            val momentumBonus = min(s.comboHits * 0.05, 0.25)
+            mult *= (1.0 + momentumBonus)
+        }
         return mult
     }
 
     private fun monsterDodgeChance(s: BattleState): Int {
         val base = ((s.monster.spd - s.playerStats.spd) * 1.5).roundToInt().coerceIn(0, 25)
-        val swift = if (s.monster.trait == MonsterTrait.SWIFT) 8 else 0
+        val isSwift = s.monster.trait == MonsterTrait.SWIFT || s.monster.secondaryTrait == MonsterTrait.SWIFT
+        val swift = if (isSwift) 8 else 0
         return base + swift
     }
 
