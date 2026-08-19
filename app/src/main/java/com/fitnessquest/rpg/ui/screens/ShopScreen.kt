@@ -23,6 +23,9 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
+import androidx.compose.ui.text.style.TextAlign
+import com.fitnessquest.rpg.data.db.gearBonusText
+import com.fitnessquest.rpg.data.db.itemBonusText
 import com.fitnessquest.rpg.domain.GearRarity
 import com.fitnessquest.rpg.domain.GearSockets
 import com.fitnessquest.rpg.domain.GearTrait
@@ -112,6 +115,8 @@ import com.fitnessquest.rpg.ui.components.SettingsIconButton
 import com.fitnessquest.rpg.ui.effects.AudioEffects
 import com.fitnessquest.rpg.ui.effects.HapticEffects
 import com.fitnessquest.rpg.ui.rememberDockContentPadding
+import com.fitnessquest.rpg.data.db.ClassProgressEntity
+import com.fitnessquest.rpg.domain.CharacterClass
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -122,6 +127,7 @@ data class ShopUiState(
     val character: CharacterEntity? = null,
     val items: List<ItemEntity> = emptyList(),
     val ownedGear: List<OwnedGear> = emptyList(),
+    val allClassProgress: List<ClassProgressEntity> = emptyList()
 )
 
 private enum class MarketTab(val label: String, val icon: ImageVector) {
@@ -154,7 +160,9 @@ private data class DisplayItem(
     val instance: GearInstanceEntity? = null,
     val owned: Boolean = false,
     val equipped: Boolean = false,
+    val inUseByJob: CharacterClass? = null
 ) {
+
     val key: String = instance?.let { "gear-${it.id}" } ?: "item-${item.id}"
     val power: Int get() = item.atk + item.def + (item.hp / 4) + (instance?.upgradeLevel ?: 0) * 2
 }
@@ -163,9 +171,10 @@ class ShopViewModel(private val container: AppContainer) : ViewModel() {
     val uiState: StateFlow<ShopUiState> = combine(
         container.repository.character,
         container.repository.items,
-        container.repository.ownedGear
-    ) { character, items, owned ->
-        ShopUiState(character, items, owned)
+        container.repository.ownedGear,
+        container.repository.allClassProgress
+    ) { character, items, owned, allProgress ->
+        ShopUiState(character, items, owned, allProgress)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ShopUiState())
 
     private val buyMutex = kotlinx.coroutines.sync.Mutex()
@@ -218,8 +227,20 @@ class ShopViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch { container.repository.clearRune(instanceId, slotIndex) }
     }
 
+    fun reforgeGear(instanceId: Long, onResult: (Result<List<GearTrait>>) -> Unit) {
+        viewModelScope.launch {
+            onResult(container.repository.reforgeGearInstanceTraits(instanceId))
+        }
+    }
+
     fun upgradeGear(instanceId: Long, onResult: (Boolean) -> Unit) {
         viewModelScope.launch { onResult(container.repository.upgradeGearInstance(instanceId)) }
+    }
+
+    fun gamble(slot: ItemSlot?, onResult: (Result<GearInstanceEntity>) -> Unit) {
+        viewModelScope.launch {
+            onResult(container.repository.gambleMysteryGear(slot))
+        }
     }
 
     fun fuseGear(instanceIds: List<Long>, onResult: (String?) -> Unit) {
@@ -266,6 +287,8 @@ fun ShopScreen(viewModel: ShopViewModel = viewModel(factory = ShopViewModel.Fact
             onSellGear = viewModel::sellGear,
             onSalvageGear = viewModel::salvageGear,
             onUpgradeGear = viewModel::upgradeGear,
+            onReforgeGear = viewModel::reforgeGear,
+            onGamble = viewModel::gamble,
             onFuseGear = { ids, onResult ->
                 viewModel.fuseGear(ids) { msg ->
                     if (msg != null) {
@@ -291,6 +314,8 @@ data class ShopActions(
     val onSellGear: (Long, (Boolean) -> Unit) -> Unit = { _, _ -> },
     val onSalvageGear: (Long, (RewardBatch?) -> Unit) -> Unit = { _, _ -> },
     val onUpgradeGear: (Long, (Boolean) -> Unit) -> Unit = { _, _ -> },
+    val onReforgeGear: (Long, (Result<List<GearTrait>>) -> Unit) -> Unit = { _, _ -> },
+    val onGamble: (ItemSlot?, (Result<GearInstanceEntity>) -> Unit) -> Unit = { _, _ -> },
     val onFuseGear: (List<Long>, (String?) -> Unit) -> Unit = { _, _ -> },
     val onSocketRune: (Long, Int, Long) -> Unit = { _, _, _ -> },
     val onClearRune: (Long, Int) -> Unit = { _, _ -> },
@@ -318,23 +343,27 @@ fun ShopScreenContent(
         item.classAffinity == null || item.classAffinity == character.characterClass
 
     val equippedIds = character.equippedIds().values.filterNotNull().toSet()
-    val ownedRows = remember(state.ownedGear, equippedIds) {
+    val ownedRows = remember(state.ownedGear, equippedIds, state.allClassProgress) {
         state.ownedGear.map {
+            val inUseJob = state.allClassProgress.firstOrNull { job ->
+                job.clazz != character.characterClass && it.instance.id in job.equippedIds().values
+            }?.clazz
             DisplayItem(
                 item = it.asDisplayItem(),
                 instance = it.instance,
                 owned = true,
-                equipped = it.instance.id in equippedIds
+                equipped = it.instance.id in equippedIds,
+                inUseByJob = inUseJob
             )
         }
     }
     val stackRows = remember(state.items) {
         state.items.filter { it.slot.isStackable() && it.quantity > 0 }.map { DisplayItem(it, owned = true) }
     }
-    val shopRows = remember(state.items, character, myClassOnly, canAffordOnly) {
+    val shopRows = remember(state.items, character, canAffordOnly) {
         state.items
-            .filter { it.tier <= 3 }
-            .filter { (!myClassOnly || usable(it)) && (!canAffordOnly || character.gold >= it.price) }
+            .filter { it.tier <= 3 && it.classAffinity == null }
+            .filter { (!canAffordOnly || character.gold >= it.price) }
             .map { DisplayItem(it) }
     }
 
@@ -379,6 +408,78 @@ fun ShopScreenContent(
                             filter = ItemFilter.All
                         })
                         MarketSummary(character, state.ownedGear, state.items)
+                        if (tab == MarketTab.Shop) {
+                            val gambleCost = ProgressionRules.mysteryGambleCost(character.level)
+                            Surface(
+                                shape = RoundedCornerShape(14.dp),
+                                color = Gold.copy(alpha = 0.10f),
+                                border = BorderStroke(1.dp, Gold.copy(alpha = 0.4f)),
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Text("🎲", fontSize = 22.sp)
+                                        Column(Modifier.weight(1f)) {
+                                            Text("The Mystic Goblin's Cache", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black, color = Gold)
+                                            Text("Gamble for mystery gear with high Rare/Epic/Legendary chances & procedural affixes!", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.75f))
+                                        }
+                                    }
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Button(
+                                            onClick = {
+                                                actions.onGamble(ItemSlot.WEAPON) { res ->
+                                                    res.onSuccess { inst ->
+                                                        AudioEffects.playLevelUp()
+                                                        actions.onNotify("🎲 Won: ${inst.rarity} weapon!")
+                                                    }.onFailure { err -> actions.onNotify(err.message ?: "Gamble failed") }
+                                                }
+                                            },
+                                            enabled = character.gold >= gambleCost,
+                                            modifier = Modifier.weight(1f),
+                                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 8.dp)
+                                        ) {
+                                            Text("Weapon\n($gambleCost g)", style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
+                                        }
+                                        Button(
+                                            onClick = {
+                                                actions.onGamble(ItemSlot.CHEST) { res ->
+                                                    res.onSuccess { inst ->
+                                                        AudioEffects.playLevelUp()
+                                                        actions.onNotify("🎲 Won: ${inst.rarity} armor!")
+                                                    }.onFailure { err -> actions.onNotify(err.message ?: "Gamble failed") }
+                                                }
+                                            },
+                                            enabled = character.gold >= gambleCost,
+                                            modifier = Modifier.weight(1f),
+                                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 8.dp)
+                                        ) {
+                                            Text("Armor\n($gambleCost g)", style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
+                                        }
+                                        Button(
+                                            onClick = {
+                                                actions.onGamble(ItemSlot.TRINKET) { res ->
+                                                    res.onSuccess { inst ->
+                                                        AudioEffects.playLevelUp()
+                                                        actions.onNotify("🎲 Won: ${inst.rarity} trinket!")
+                                                    }.onFailure { err -> actions.onNotify(err.message ?: "Gamble failed") }
+                                                }
+                                            },
+                                            enabled = character.gold >= gambleCost,
+                                            modifier = Modifier.weight(1f),
+                                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 8.dp)
+                                        ) {
+                                            Text("Trinket\n($gambleCost g)", style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
+                                        }
+                                    }
+                                }
+                            }
+                        }
                         if (tab == MarketTab.Armory) {
                             ArmorySlots(character, ownedRows) { slot ->
                                 selectedSlot = if (selectedSlot == slot) null else slot
@@ -424,6 +525,7 @@ fun ShopScreenContent(
                         row = row,
                         selected = row.instance?.id in selectedFuseIds,
                         forgeMode = tab == MarketTab.Forge,
+                        character = character,
                         onClick = { selectedItem = row },
                         onSelect = {
                             val id = row.instance?.id ?: return@ItemGridCard
@@ -662,6 +764,7 @@ private fun ItemGridCard(
     row: DisplayItem,
     selected: Boolean,
     forgeMode: Boolean,
+    character: CharacterEntity,
     onClick: () -> Unit,
     onSelect: () -> Unit,
 ) {
@@ -701,15 +804,21 @@ private fun ItemGridCard(
             FlowRow(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                 TinyPill(rarity.displayName, color = rarity.color)
                 TinyPill("T${row.item.tier}")
+                val reqLevel = ProgressionRules.requiredLevelFor(row.item.tier, rarity)
+                if (character.level < reqLevel) {
+                    TinyPill("Req. Lv $reqLevel", color = Color(0xFFEF5350))
+                }
                 if (row.instance != null && row.instance.upgradeLevel > 0) TinyPill("+${row.instance.upgradeLevel}")
                 if (row.equipped) TinyPill("Equipped", color = Gold)
+                if (row.inUseByJob != null) TinyPill("✦ In Use: ${row.inUseByJob.label}", color = Color(0xFF64B5F6))
                 if (row.item.quantity > 0) TinyPill("x${row.item.quantity}")
                 for (trait in traits) {
                     TinyPill("${trait.emoji} ${trait.displayName}", color = Gold)
                 }
             }
+            val bonusText = if (row.instance != null) gearBonusText(row.instance) else itemBonusText(row.item)
             Text(
-                itemBonusText(row.item).ifBlank { row.item.description },
+                bonusText.ifBlank { row.item.description },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 2,
@@ -827,7 +936,12 @@ private fun ItemDetailSheet(
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             TinyPill(rarity.displayName, color = rarity.color)
             TinyPill("Tier ${row.item.tier}")
+            val reqLevel = ProgressionRules.requiredLevelFor(row.item.tier, rarity)
+            if (character.level < reqLevel) {
+                TinyPill("Req. Level $reqLevel", color = Color(0xFFEF5350))
+            }
             if (row.instance != null) TinyPill("${row.instance.rarity.lowercase().replaceFirstChar { it.uppercase() }} +${row.instance.upgradeLevel}")
+            if (row.inUseByJob != null) TinyPill("✦ In Use: ${row.inUseByJob.label}", color = Color(0xFF64B5F6))
             row.instance?.originBiome?.takeIf { it.isNotBlank() }?.let { TinyPill(it.replace('_', ' ').lowercase().replaceFirstChar { c -> c.uppercase() }) }
             row.item.classAffinity?.let { TinyPill("${it.label} only") }
         }
@@ -990,6 +1104,7 @@ private fun ItemDetailSheet(
                     }
                 }
                 row.item.slot.isEquippable() && row.instance != null -> {
+                    val isEquippedAnywhere = row.equipped || row.inUseByJob != null
                     Button(onClick = onEquip, enabled = usable) {
                         Icon(if (row.equipped) Icons.Filled.Delete else Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(6.dp))
@@ -1000,12 +1115,12 @@ private fun ItemDetailSheet(
                         Spacer(Modifier.width(6.dp))
                         Text("Upgrade")
                     }
-                    OutlinedButton(onClick = onSalvage, enabled = !row.equipped) {
+                    OutlinedButton(onClick = onSalvage, enabled = !isEquippedAnywhere) {
                         Icon(Icons.Filled.AutoFixHigh, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(6.dp))
                         Text("Salvage")
                     }
-                    OutlinedButton(onClick = onSellGear, enabled = !row.equipped) {
+                    OutlinedButton(onClick = onSellGear, enabled = !isEquippedAnywhere) {
                         Icon(Icons.Filled.Toll, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(6.dp))
                         Text("Sell")
@@ -1099,15 +1214,6 @@ private fun tierUnlockRequirementText(tier: Int): String = when (tier) {
     else -> "Tier $tier gear is currently locked by progression rules."
 }
 
-private fun OwnedGear.asDisplayItem(): ItemEntity =
-    asEquippedItem().copy(
-        slot = catalog.slot,
-        tier = catalog.tier,
-        price = catalog.price,
-        description = catalog.description,
-        classAffinity = catalog.classAffinity,
-        style = catalog.style
-    )
 
 private fun DisplayItem.matches(filter: ItemFilter): Boolean = when (filter) {
     ItemFilter.All -> true

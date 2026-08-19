@@ -65,7 +65,7 @@ data class ArenaFx(
     val skillIndex: Int = 0
 )
 
-enum class FxKind { ATTACK, SKILL, DEFEND, MONSTER_HIT }
+enum class FxKind { ATTACK, SKILL, DEFEND, MONSTER_HIT, ULTIMATE, ITEM }
 
 /**
  * The battle stage: hero and monster face off over a biome-themed backdrop,
@@ -89,13 +89,13 @@ fun BattleArena(
     LaunchedEffect(fx?.id) {
         val f = fx ?: return@LaunchedEffect
         when (f.kind) {
-            FxKind.ATTACK, FxKind.SKILL -> {
+            FxKind.ATTACK, FxKind.SKILL, FxKind.ULTIMATE -> {
                 // Melee classes charge in; casters send the effect across instead.
-                val melee = f.kind == FxKind.ATTACK ||
+                val melee = f.kind == FxKind.ATTACK || f.kind == FxKind.ULTIMATE ||
                     f.clazz == CharacterClass.WARRIOR || f.clazz == CharacterClass.THIEF
                 launch {
                     if (melee) {
-                        playerLunge.animateTo(1f, tween(180))
+                        playerLunge.animateTo(1.2f, tween(180))
                         playerLunge.animateTo(0f, tween(260))
                     } else {
                         playerLunge.animateTo(-0.3f, tween(140))
@@ -105,7 +105,7 @@ fun BattleArena(
                 fxProgress.snapTo(0f)
                 fxProgress.animateTo(1f, tween(durationFor(f), easing = LinearEasing))
             }
-            FxKind.DEFEND -> {
+            FxKind.DEFEND, FxKind.ITEM -> {
                 fxProgress.snapTo(0f)
                 fxProgress.animateTo(1f, tween(600, easing = LinearEasing))
             }
@@ -137,8 +137,8 @@ fun BattleArena(
         Canvas(Modifier.fillMaxSize()) { drawScenery(biome) }
 
         // ---- Monster (right side) ----
-        val monsterEnraged = battle.monster.trait == MonsterTrait.ENRAGED &&
-            battle.monsterHp < battle.monster.hp * 0.4
+        val monsterEnraged = (battle.monster.trait == MonsterTrait.ENRAGED || battle.monster.secondaryTrait == MonsterTrait.ENRAGED) &&
+            battle.monsterHp < battle.monster.hp * 0.45
         Column(
             Modifier
                 .align(Alignment.CenterEnd)
@@ -153,19 +153,22 @@ fun BattleArena(
         ) {
             StatusBadges(
                 buildList {
+                    if (battle.bossPhase == 2) add("⚡P2")
+                    if (battle.telegraphedCharging) add("⚠️CHARGE")
+                    if (battle.monsterStaggerTurns > 0) add("💥STAGGER")
                     if (monsterEnraged) add("\uD83D\uDE21")
                     if (battle.monsterChillTurns > 0) add("\u2744\uFE0F${battle.monsterChillTurns}")
                     if (battle.monsterStunTurns > 0) add("\uD83D\uDCAB${battle.monsterStunTurns}")
                     if (battle.monsterBleedTurns > 0) add("\uD83E\uDE78${battle.monsterBleedTurns}")
                 }
             )
-            Text(battle.monster.emoji, fontSize = 64.sp)
+            Text(battle.monster.emoji, fontSize = if (battle.monster.isBoss) 74.sp else 64.sp)
             Spacer(Modifier.height(2.dp))
             MiniHpBar(
                 current = battle.monsterHp,
                 max = battle.monster.hp,
-                width = 110.dp,
-                color = Color(0xFFE85D5D)
+                width = if (battle.monster.isBoss) 130.dp else 110.dp,
+                color = if (battle.bossPhase == 2) Color(0xFFFF5252) else Color(0xFFE85D5D)
             )
         }
 
@@ -184,7 +187,9 @@ fun BattleArena(
         ) {
             StatusBadges(
                 buildList {
+                    if (battle.adrenaline >= 100) add("⚡ULT READY")
                     if (battle.atkBuffTurns > 0) add("\uD83D\uDCE3${battle.atkBuffTurns}")
+                    if (battle.defBuffTurns > 0) add("🛡️+30DEF")
                     if (battle.playerVanished) add("\uD83D\uDCA8")
                     if (battle.playerPoisonTurns > 0) add("\u2620\uFE0F${battle.playerPoisonTurns}")
                     if (battle.playerDefending) add("\uD83D\uDEE1\uFE0F")
@@ -447,6 +452,8 @@ private fun DrawScope.spike(base: Offset, halfWidth: Float, height: Float, color
 // ---------------------------------------------------------------------------
 
 private fun durationFor(fx: ArenaFx): Int = when (fx.kind) {
+    FxKind.ULTIMATE -> 950
+    FxKind.ITEM -> 600
     FxKind.SKILL -> when (fx.clazz) {
         CharacterClass.MAGE -> if (fx.skillIndex == 2) 900 else 650
         CharacterClass.RANGER -> if (fx.skillIndex == 2) 900 else 600
@@ -465,6 +472,15 @@ private fun DrawScope.drawFx(fx: ArenaFx, p: Float) {
     when (fx.kind) {
         FxKind.ATTACK -> slash(monster, p, Color.White, w * 0.09f)
         FxKind.DEFEND -> shield(player, p, w)
+        FxKind.ITEM -> {
+            rings(player, p, Color(0xFF69F0AE), w)
+            burst(player, p, Color(0xFFB9F6CA), w * 0.18f)
+        }
+        FxKind.ULTIMATE -> {
+            meteor(monster, p, w, h)
+            burst(monster, p, Color(0xFFFFD54F), w * 0.35f)
+            slash(monster, p, Color(0xFFFF5252), w * 0.25f)
+        }
         FxKind.MONSTER_HIT -> {
             claw(player, p, w * 0.10f)
             // Red flash over the hero's side of the arena

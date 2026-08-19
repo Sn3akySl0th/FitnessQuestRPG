@@ -53,6 +53,12 @@ fun itemBonusText(item: ItemEntity): String = buildList {
     if (item.hp > 0) add("+${item.hp} HP")
 }.joinToString(" ")
 
+fun gearBonusText(instance: GearInstanceEntity): String = buildList {
+    if (instance.atk > 0) add("+${instance.atk} ATK")
+    if (instance.def > 0) add("+${instance.def} DEF")
+    if (instance.hp > 0) add("+${instance.hp} HP")
+}.joinToString(" ")
+
 @Entity(tableName = "character")
 data class CharacterEntity(
     @PrimaryKey val id: Long = 1L,
@@ -78,6 +84,12 @@ data class CharacterEntity(
     val legsId: Long? = null,
     val feetId: Long? = null,
     val trinketId: Long? = null,
+    val glamourHeadId: Long? = null,
+    val glamourChestId: Long? = null,
+    val glamourHandsId: Long? = null,
+    val glamourLegsId: Long? = null,
+    val glamourFeetId: Long? = null,
+    val glamourWeaponId: Long? = null,
     val battlesWon: Int = 0,
     val sessionsCompleted: Int = 0,
     /** Consecutive days with at least one completed workout. */
@@ -161,6 +173,15 @@ data class CharacterEntity(
         ItemSlot.LEGS to legsId,
         ItemSlot.FEET to feetId,
         ItemSlot.TRINKET to trinketId
+    )
+
+    fun glamourIds(): Map<ItemSlot, Long?> = mapOf(
+        ItemSlot.HEAD to glamourHeadId,
+        ItemSlot.CHEST to glamourChestId,
+        ItemSlot.HANDS to glamourHandsId,
+        ItemSlot.LEGS to glamourLegsId,
+        ItemSlot.FEET to glamourFeetId,
+        ItemSlot.WEAPON to glamourWeaponId
     )
 
     /** Returns a copy of this character with a new job's stats but the same identity and global progress. */
@@ -325,7 +346,8 @@ data class BiomeProgressEntity(
     val bossUnlocked: Boolean = false,
     val bossDefeated: Boolean = false,
     val progressPoints: Int = 0,
-    val firstClearRewardClaimed: Boolean = false
+    val firstClearRewardClaimed: Boolean = false,
+    val lastBossDefeatedEpochMs: Long = 0L
 )
 
 /**

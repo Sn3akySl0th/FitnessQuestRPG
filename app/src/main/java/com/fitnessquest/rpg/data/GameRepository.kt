@@ -42,6 +42,8 @@ import com.fitnessquest.rpg.domain.ExerciseCategories
 import com.fitnessquest.rpg.domain.GameMath
 import com.fitnessquest.rpg.domain.GearRarity
 import com.fitnessquest.rpg.domain.GearSockets
+import com.fitnessquest.rpg.domain.GearTrait
+import com.fitnessquest.rpg.domain.ProceduralStatEngine
 import com.fitnessquest.rpg.domain.ItemCatalog
 import com.fitnessquest.rpg.domain.LootChests
 import com.fitnessquest.rpg.domain.LootGrant
@@ -96,6 +98,11 @@ data class OwnedGear(
             }
         }
         return catalog.copy(id = instance.id, atk = atk, def = def, hp = hp, owned = true)
+    }
+
+    /** Returns catalog row carrying the true rolled instance stats. */
+    fun asDisplayItem(): ItemEntity {
+        return catalog.copy(id = instance.id, atk = instance.atk, def = instance.def, hp = instance.hp, owned = true)
     }
 }
 
@@ -1426,12 +1433,13 @@ class GameRepository(
     ): GearInstanceEntity {
         val finalTraits = if (traits.isNotEmpty()) traits else com.fitnessquest.rpg.domain.GearTrait.rollTraitsForRarity(rarity)
         val traitStr = finalTraits.joinToString(",") { it.id }
+        val proceduralStats = com.fitnessquest.rpg.domain.ProceduralStatEngine.generateStats(catalog, rarity)
         val id = db.gearInstanceDao().insert(
             GearInstanceEntity(
                 catalogId = catalog.id,
-                atk = rarity.scaleStat(catalog.atk),
-                def = rarity.scaleStat(catalog.def),
-                hp = rarity.scaleStat(catalog.hp),
+                atk = proceduralStats.atk,
+                def = proceduralStats.def,
+                hp = proceduralStats.hp,
                 rarity = rarity.name,
                 traitIds = traitStr,
                 originBiome = originBiome
@@ -1523,6 +1531,7 @@ class GameRepository(
     }
 
     suspend fun salvageGearInstance(instanceId: Long): RewardBatch? {
+        if (isEquippedOnAnyClass(instanceId)) return null
         val instance = db.gearInstanceDao().get(instanceId) ?: return null
         val catalog = db.itemDao().get(instance.catalogId) ?: return null
         if (!catalog.slot.isEquippable()) return null
@@ -1539,6 +1548,79 @@ class GameRepository(
         }
         val flat = LootResult(grants = listOf(LootGrant.Stack(material, quantity)))
         return RewardBatch(RewardSource.FORGE, flat.toRewards())
+    }
+
+    suspend fun gambleMysteryGear(targetSlot: ItemSlot? = null): Result<GearInstanceEntity> {
+        val character = getCharacter()
+        val cost = ProgressionRules.mysteryGambleCost(character.level)
+        if (character.gold < cost) {
+            return Result.failure(IllegalStateException("Need $cost gold to gamble."))
+        }
+        val maxTier = ProgressionRules.maxUnlockedGearTier(character, db.biomeProgressDao().getAll())
+        val pool = db.itemDao().getAll().filter { it.slot.isEquippable() && it.tier <= maxTier && (it.classAffinity == null || it.classAffinity == character.characterClass) }
+        val slotPool = if (targetSlot != null) pool.filter { it.slot == targetSlot } else pool
+        val chosenCatalog = (slotPool.ifEmpty { pool }).randomOrNull()
+            ?: return Result.failure(IllegalStateException("No gear templates available."))
+
+        val rarity = LootTables.rollRarity(LootSource.CHEST, character.level)
+        val traits = GearTrait.rollTraitsForRarity(rarity)
+        val proceduralStats = com.fitnessquest.rpg.domain.ProceduralStatEngine.generateStats(chosenCatalog, rarity)
+
+        var newInstance: GearInstanceEntity? = null
+        db.withTransaction {
+            db.characterDao().upsert(character.copy(gold = character.gold - cost))
+            val id = db.gearInstanceDao().insert(
+                GearInstanceEntity(
+                    catalogId = chosenCatalog.id,
+                    atk = proceduralStats.atk,
+                    def = proceduralStats.def,
+                    hp = proceduralStats.hp,
+                    rarity = rarity.name,
+                    traitIds = traits.joinToString(",") { it.id },
+                    originBiome = character.currentBiome
+                )
+            )
+            newInstance = db.gearInstanceDao().get(id)
+        }
+        return newInstance?.let { Result.success(it) } ?: Result.failure(IllegalStateException("Failed to generate gear."))
+    }
+
+    suspend fun setGlamour(slot: ItemSlot, catalogItemId: Long?): Result<Unit> {
+        val character = getCharacter()
+        if (catalogItemId == null) {
+            clearGlamour(slot)
+            return Result.success(Unit)
+        }
+        val targetItem = db.itemDao().get(catalogItemId) ?: return Result.failure(IllegalStateException("Item not found."))
+        val cost = ProgressionRules.transmogGoldCost(targetItem.tier)
+        if (character.gold < cost) {
+            return Result.failure(IllegalStateException("Need $cost gold for styling."))
+        }
+        val updated = when (slot) {
+            ItemSlot.HEAD -> character.copy(glamourHeadId = catalogItemId, gold = character.gold - cost)
+            ItemSlot.CHEST -> character.copy(glamourChestId = catalogItemId, gold = character.gold - cost)
+            ItemSlot.HANDS -> character.copy(glamourHandsId = catalogItemId, gold = character.gold - cost)
+            ItemSlot.LEGS -> character.copy(glamourLegsId = catalogItemId, gold = character.gold - cost)
+            ItemSlot.FEET -> character.copy(glamourFeetId = catalogItemId, gold = character.gold - cost)
+            ItemSlot.WEAPON -> character.copy(glamourWeaponId = catalogItemId, gold = character.gold - cost)
+            else -> return Result.failure(IllegalArgumentException("Slot not valid for glamour."))
+        }
+        db.characterDao().upsert(updated)
+        return Result.success(Unit)
+    }
+
+    suspend fun clearGlamour(slot: ItemSlot) {
+        val character = getCharacter()
+        val updated = when (slot) {
+            ItemSlot.HEAD -> character.copy(glamourHeadId = null)
+            ItemSlot.CHEST -> character.copy(glamourChestId = null)
+            ItemSlot.HANDS -> character.copy(glamourHandsId = null)
+            ItemSlot.LEGS -> character.copy(glamourLegsId = null)
+            ItemSlot.FEET -> character.copy(glamourFeetId = null)
+            ItemSlot.WEAPON -> character.copy(glamourWeaponId = null)
+            else -> character
+        }
+        db.characterDao().upsert(updated)
     }
 
     suspend fun grantImportReward(importedCount: Int): RewardBatch? {
@@ -1654,25 +1736,86 @@ class GameRepository(
         db.characterDao().upsert(updated.copy(freeStatPoints = character.freeStatPoints - 1))
     }
 
-    suspend fun equipItem(instanceId: Long) {
-        val instance = db.gearInstanceDao().get(instanceId) ?: return
-        val catalog = db.itemDao().get(instance.catalogId) ?: return
-        if (!catalog.slot.isEquippable()) return
+    suspend fun equippedJobFor(instanceId: Long): CharacterClass? {
+        val character = getCharacter()
+        if (instanceId in character.equippedIds().values) return character.characterClass
+        val jobs = db.classProgressDao().getAll()
+        return jobs.firstOrNull { instanceId in it.equippedIds().values }?.clazz
+    }
+
+    suspend fun isEquippedOnAnyClass(instanceId: Long): Boolean =
+        equippedJobFor(instanceId) != null
+
+    suspend fun equipItem(instanceId: Long): Boolean {
+        val instance = db.gearInstanceDao().get(instanceId) ?: return false
+        val catalog = db.itemDao().get(instance.catalogId) ?: return false
+        if (!catalog.slot.isEquippable()) return false
         val character = getCharacter()
         val alreadyEquipped = instanceId in character.equippedIds().values
-        if (!alreadyEquipped && (catalog.classAffinity != null) && (catalog.classAffinity != character.characterClass)) return
-        fun toggle(current: Long?): Long? = if (current == instanceId) null else instanceId
-        val updated = when (catalog.slot) {
-            ItemSlot.WEAPON -> character.copy(weaponId = toggle(character.weaponId))
-            ItemSlot.HEAD -> character.copy(headId = toggle(character.headId))
-            ItemSlot.CHEST -> character.copy(chestId = toggle(character.chestId))
-            ItemSlot.HANDS -> character.copy(handsId = toggle(character.handsId))
-            ItemSlot.LEGS -> character.copy(legsId = toggle(character.legsId))
-            ItemSlot.FEET -> character.copy(feetId = toggle(character.feetId))
-            ItemSlot.TRINKET -> character.copy(trinketId = toggle(character.trinketId))
-            else -> return
+        val rarity = GearRarity.fromName(instance.rarity)
+        val reqLevel = ProgressionRules.requiredLevelFor(catalog.tier, rarity)
+        if (!alreadyEquipped) {
+            if (catalog.classAffinity != null && catalog.classAffinity != character.characterClass) return false
+            if (character.level < reqLevel) return false
         }
-        db.characterDao().upsert(updated)
+        db.withTransaction {
+            // Unbind from any other job's saved loadout
+            val jobs = db.classProgressDao().getAll()
+            for (job in jobs) {
+                if (instanceId in job.equippedIds().values && job.clazz != character.characterClass) {
+                    db.classProgressDao().upsert(unequipInstanceFromJob(job, instanceId))
+                }
+            }
+            fun toggle(current: Long?): Long? = if (current == instanceId) null else instanceId
+            val updated = when (catalog.slot) {
+                ItemSlot.WEAPON -> character.copy(weaponId = toggle(character.weaponId))
+                ItemSlot.HEAD -> character.copy(headId = toggle(character.headId))
+                ItemSlot.CHEST -> character.copy(chestId = toggle(character.chestId))
+                ItemSlot.HANDS -> character.copy(handsId = toggle(character.handsId))
+                ItemSlot.LEGS -> character.copy(legsId = toggle(character.legsId))
+                ItemSlot.FEET -> character.copy(feetId = toggle(character.feetId))
+                ItemSlot.TRINKET -> character.copy(trinketId = toggle(character.trinketId))
+                else -> return@withTransaction
+            }
+            db.characterDao().upsert(updated)
+        }
+        return true
+    }
+
+    suspend fun reforgeGearInstanceTraits(instanceId: Long): Result<List<com.fitnessquest.rpg.domain.GearTrait>> {
+        val instance = db.gearInstanceDao().get(instanceId)
+            ?: return Result.failure(IllegalArgumentException("Gear instance not found."))
+        val catalog = db.itemDao().get(instance.catalogId)
+            ?: return Result.failure(IllegalArgumentException("Item template not found."))
+        if (!catalog.slot.isEquippable()) {
+            return Result.failure(IllegalStateException("Only equippable gear can be reforged."))
+        }
+        val rarity = GearRarity.fromName(instance.rarity)
+        if (!ProgressionRules.canReforge(rarity)) {
+            return Result.failure(IllegalStateException("Gear must be Rare or higher to reforge."))
+        }
+        val goldCost = ProgressionRules.reforgeGoldCost(catalog.tier, rarity)
+        val materialCost = ProgressionRules.reforgeMaterialCost(catalog.tier, rarity)
+        val materialId = ProgressionRules.primaryMaterialFor(catalog)
+        val material = db.itemDao().get(materialId)
+            ?: return Result.failure(IllegalStateException("Reforge material not found."))
+        val character = getCharacter()
+        if (character.gold < goldCost) {
+            return Result.failure(IllegalStateException("Not enough gold (requires $goldCost gold)."))
+        }
+        if (material.quantity < materialCost) {
+            return Result.failure(IllegalStateException("Not enough materials (requires $materialCost ${material.name})."))
+        }
+
+        val newTraits = com.fitnessquest.rpg.domain.GearTrait.rollTraitsForRarity(rarity)
+        val traitStr = newTraits.joinToString(",") { it.id }
+
+        db.withTransaction {
+            db.itemDao().update(material.copy(quantity = material.quantity - materialCost))
+            db.gearInstanceDao().update(instance.copy(traitIds = traitStr))
+            db.characterDao().upsert(character.copy(gold = character.gold - goldCost))
+        }
+        return Result.success(newTraits)
     }
 
     suspend fun socketRune(instanceId: Long, slotIndex: Int, runeCatalogId: Long): Boolean {
@@ -2025,11 +2168,12 @@ class GameRepository(
 
     suspend fun applyVictory(monster: Monster, ambush: Boolean = false): RewardBatch = db.withTransaction {
         val character = getCharacter()
+        val traits = equippedTraits(character)
         val afterBattle = if (ambush) {
-            val withXp = GameMath.applyBattleRewards(character, monster)
+            val withXp = GameMath.applyBattleRewards(character, monster, traits)
             withXp.copy(energy = character.energy)
         } else {
-            GameMath.applyBattleRewards(character, monster)
+            GameMath.applyBattleRewards(character, monster, traits)
         }
 
         val isBoss = MonsterCatalog.isBoss(monster)
@@ -2057,8 +2201,9 @@ class GameRepository(
             }
             isBoss -> {
                 val tier = lootTierFor(LootSource.BOSS, character, monster.tier)
-                LootTables.rollBattleLoot(
-                    monster = monster,
+                LootTables.rollBossFarmLoot(
+                    biome = monster.biome,
+                    character = character,
                     gearPool = eligibleGearTemplates(character, tier),
                     stackPool = stackTemplates(),
                 )
@@ -2084,6 +2229,7 @@ class GameRepository(
                 bossDefeated = true,
                 bossUnlocked = true,
                 firstClearRewardClaimed = true,
+                lastBossDefeatedEpochMs = System.currentTimeMillis()
             )
             db.biomeProgressDao().upsert(updatedProgress)
         } else if (!ambush) {
@@ -2269,6 +2415,17 @@ class GameRepository(
             legsId = character.legsId?.takeUnless { it == instanceId },
             feetId = character.feetId?.takeUnless { it == instanceId },
             trinketId = character.trinketId?.takeUnless { it == instanceId }
+        )
+
+    private fun unequipInstanceFromJob(progress: ClassProgressEntity, instanceId: Long): ClassProgressEntity =
+        progress.copy(
+            weaponId = progress.weaponId?.takeUnless { it == instanceId },
+            headId = progress.headId?.takeUnless { it == instanceId },
+            chestId = progress.chestId?.takeUnless { it == instanceId },
+            handsId = progress.handsId?.takeUnless { it == instanceId },
+            legsId = progress.legsId?.takeUnless { it == instanceId },
+            feetId = progress.feetId?.takeUnless { it == instanceId },
+            trinketId = progress.trinketId?.takeUnless { it == instanceId }
         )
 
     private fun GearInstanceEntity.duplicateKey(): String = listOf(

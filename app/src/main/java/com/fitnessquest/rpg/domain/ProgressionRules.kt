@@ -200,10 +200,51 @@ object ProgressionRules {
     }
 
     fun upgradeGoldCost(tier: Int, upgradeLevel: Int): Int =
-        35 + tier.coerceAtLeast(1) * 30 + upgradeLevel.coerceAtLeast(0) * 25
+        50 + tier.coerceAtLeast(1) * 45 + upgradeLevel.coerceAtLeast(0) * 35
 
     fun upgradeMaterialCost(tier: Int, upgradeLevel: Int): Int =
         1 + (tier.coerceAtLeast(1) / 2) + (upgradeLevel.coerceAtLeast(0) / 2)
+
+    fun requiredLevelFor(tier: Int, rarity: GearRarity = GearRarity.COMMON): Int {
+        val tierBase = when (tier.coerceIn(1, MAX_GEAR_TIER)) {
+            1 -> 1
+            2 -> 4
+            3 -> 8
+            4 -> 12
+            5 -> 16
+            else -> 1
+        }
+        return maxOf(tierBase, rarity.minLevelGate)
+    }
+
+    fun canReforge(rarity: GearRarity): Boolean =
+        rarity.ordinal >= GearRarity.RARE.ordinal
+
+    fun reforgeGoldCost(tier: Int, rarity: GearRarity): Int =
+        60 + tier.coerceAtLeast(1) * 50 + rarity.ordinal * 40
+
+    fun reforgeMaterialCost(tier: Int, rarity: GearRarity): Int =
+        1 + (tier.coerceAtLeast(1) / 2) + (rarity.salvageBonus / 2)
+
+    fun mysteryGambleCost(characterLevel: Int): Int =
+        (100 + characterLevel * 15).coerceIn(120, 800)
+
+    fun transmogGoldCost(tier: Int): Int =
+        50 + tier.coerceIn(1, MAX_GEAR_TIER) * 25
+
+    const val BOSS_COOLDOWN_MS: Long = 4 * 60 * 60 * 1000L // 4 hours
+
+    fun isBossOnCooldown(progress: BiomeProgressEntity?, now: Long = System.currentTimeMillis()): Boolean {
+        if (progress == null || !progress.bossDefeated || progress.lastBossDefeatedEpochMs <= 0L) return false
+        val elapsed = now - progress.lastBossDefeatedEpochMs
+        return elapsed in 0 until BOSS_COOLDOWN_MS
+    }
+
+    fun bossCooldownRemainingMs(progress: BiomeProgressEntity?, now: Long = System.currentTimeMillis()): Long {
+        if (progress == null || !progress.bossDefeated || progress.lastBossDefeatedEpochMs <= 0L) return 0L
+        val elapsed = now - progress.lastBossDefeatedEpochMs
+        return (BOSS_COOLDOWN_MS - elapsed).coerceAtLeast(0L)
+    }
 
     fun maxUpgradeLevel(tier: Int): Int =
         2 + tier.coerceAtLeast(1)

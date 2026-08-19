@@ -119,6 +119,40 @@ data class CombatStats(
     val mitigationPercent: Float = 0f
 )
 
+enum class SetBonusTier(
+    val piecesRequired: Int,
+    val title: String,
+    val shortLabel: String,
+    val atkMultiplier: Float,
+    val hpMultiplier: Float,
+    val flatDef: Int,
+    val critBonus: Int,
+    val spdBonus: Int,
+    val description: String
+) {
+    NONE(0, "No Set Bonus", "None", 1.0f, 1.0f, 0, 0, 0, "Equip matching class armor pieces to unlock set synergies."),
+    TIER_1(2, "Minor Synergy", "2-pc", 1.05f, 1.05f, 1, 0, 0, "+5% ATK, +5% HP, +1 DEF"),
+    TIER_2(4, "Tactical Power", "4-pc", 1.10f, 1.10f, 3, 5, 0, "+10% ATK, +10% HP, +3 DEF, +5% Crit"),
+    TIER_3(5, "Mastery Awakening", "5-pc", 1.15f, 1.15f, 5, 10, 5, "+15% ATK, +15% HP, +5 DEF, +10% Crit, +5 SPD");
+
+    companion object {
+        fun forPieceCount(count: Int): SetBonusTier = when {
+            count >= 5 -> TIER_3
+            count >= 4 -> TIER_2
+            count >= 2 -> TIER_1
+            else -> NONE
+        }
+    }
+}
+
+data class SetBonusInfo(
+    val pieceCount: Int,
+    val maxPieces: Int = 5,
+    val activeTier: SetBonusTier,
+    val nextTier: SetBonusTier?
+)
+
+
 object GameMath {
 
     fun calculate1RM(weight: Double, reps: Int): Double =
@@ -367,17 +401,26 @@ object GameMath {
         return character.copy(level = level, xp = max(0, xp))
     }
 
-    fun applyBattleRewards(character: CharacterEntity, monster: Monster): CharacterEntity {
+    fun applyBattleRewards(
+        character: CharacterEntity,
+        monster: Monster,
+        equippedTraits: List<GearTrait> = emptyList()
+    ): CharacterEntity {
         val now = System.currentTimeMillis()
+        val xpMult = if (equippedTraits.contains(GearTrait.SCHOLAR)) 1.15 else 1.0
+        val goldMult = if (equippedTraits.contains(GearTrait.FORTUNE_SEEKER)) 1.20 else 1.0
+        val xpGain = (monster.xpReward * xpMult).roundToInt()
+        val goldGain = (monster.goldReward * goldMult).roundToInt()
         val next = character.copy(
-            xp = character.xp + monster.xpReward,
-            gold = character.gold + monster.goldReward,
+            xp = character.xp + xpGain,
+            gold = character.gold + goldGain,
             energy = max(0, character.energy - BATTLE_ENERGY_COST),
             lastEnergyUpdate = now,
             battlesWon = character.battlesWon + 1
         )
         return applyLevelUps(next)
     }
+
 
     /** Number of equipped armor pieces that match the hero's class (max 5). */
     fun setPieceCount(character: CharacterEntity, equipped: List<ItemEntity>): Int {
@@ -387,6 +430,21 @@ object GameMath {
 
     fun hasFullSetBonus(character: CharacterEntity, equipped: List<ItemEntity>): Boolean =
         setPieceCount(character, equipped) >= ArmorSlots.size
+
+    fun activeSetBonusTier(character: CharacterEntity, equipped: List<ItemEntity>): SetBonusTier =
+        SetBonusTier.forPieceCount(setPieceCount(character, equipped))
+
+    fun setBonusInfo(character: CharacterEntity, equipped: List<ItemEntity>): SetBonusInfo {
+        val count = setPieceCount(character, equipped)
+        val active = SetBonusTier.forPieceCount(count)
+        val next = when (active) {
+            SetBonusTier.NONE -> SetBonusTier.TIER_1
+            SetBonusTier.TIER_1 -> SetBonusTier.TIER_2
+            SetBonusTier.TIER_2 -> SetBonusTier.TIER_3
+            SetBonusTier.TIER_3 -> null
+        }
+        return SetBonusInfo(pieceCount = count, activeTier = active, nextTier = next)
+    }
 
     fun combatStats(
         character: CharacterEntity,
@@ -467,17 +525,19 @@ object GameMath {
         if (cls == CharacterClass.DRAGOON && character.druidForm == "WYVERN") def += 15
         if (cls == CharacterClass.RANGER && character.druidForm == "BEAR") def += 15
 
-        // Full class armor set: +10% ATK and HP, +3 DEF.
-        if (hasFullSetBonus(character, equipped)) {
-            atk = (atk * 1.1).roundToInt()
-            maxHp = (maxHp * 1.1).roundToInt()
-            def += 3
+        // Tiered class armor set bonuses (2-piece, 4-piece, 5-piece)
+        val setTier = activeSetBonusTier(character, equipped)
+        if (setTier != SetBonusTier.NONE) {
+            atk = (atk * setTier.atkMultiplier).roundToInt()
+            maxHp = (maxHp * setTier.hpMultiplier).roundToInt()
+            def += setTier.flatDef
         }
 
         // Mastery stat bonuses
         atk += masteryBonus.flatAtk
         def += masteryBonus.flatDef
         maxHp += masteryBonus.flatMaxHp
+
 
         val baseCrit = when (cls) {
             CharacterClass.THIEF -> min(10 + character.agility, 50)
@@ -516,11 +576,12 @@ object GameMath {
             maxHp = maxHp,
             atk = atk,
             def = def,
-            spd = (character.agility * 2 + character.level + runeSpd + masteryBonus.flatSpd + rangerSpdBonus + druidSpdBonus + (if (cls == CharacterClass.SUMMONER && character.druidForm == "SHIVA") 40 else 0)),
-            critPercent = min(baseCrit + runeCrit + masteryBonus.flatCritPercent, 70),
+            spd = (character.agility * 2 + character.level + runeSpd + setTier.spdBonus + masteryBonus.flatSpd + rangerSpdBonus + druidSpdBonus + (if (cls == CharacterClass.SUMMONER && character.druidForm == "SHIVA") 40 else 0)),
+            critPercent = min(baseCrit + runeCrit + setTier.critBonus + masteryBonus.flatCritPercent, 70),
             siphonHeal = if (masteryBonus.siphonBonusPercent > 0f) (siphonHeal * (1f + masteryBonus.siphonBonusPercent)).roundToInt() else siphonHeal,
             mitigationPercent = masteryBonus.mitigationPercent
         )
+
     }
 
     /** One-time attribute bonus applied when a class is first chosen. */
