@@ -1500,24 +1500,26 @@ class GameRepository(
         return message
     }
 
-    suspend fun openLootChest(chestCatalogId: Long): RewardBatch? {
-        val chest = db.itemDao().get(chestCatalogId) ?: return null
-        if ((chest.slot != ItemSlot.LOOT_CHEST) || (chest.quantity <= 0)) return null
-        db.itemDao().update(chest.copy(quantity = chest.quantity - 1))
-        val character = getCharacter()
-        val tier = lootTierFor(
-            source = LootSource.CHEST,
-            character = character,
-            contentTier = chest.tier
-        )
-        val contents = LootTables.openChest(
-            tier = tier,
-            gearPool = eligibleGearTemplates(character, tier),
-            stackPool = stackTemplates()
-        )
-        val flat = LootResult(grants = contents)
-        db.characterDao().upsert(applyLootToCharacter(character, flat))
-        return RewardBatch(RewardSource.CHEST_OPENING, flat.toRewards())
+    suspend fun openLootChest(chestCatalogId: Long): RewardBatch? = shopMutex.withLock {
+        db.withTransaction {
+            val chest = db.itemDao().get(chestCatalogId) ?: return@withTransaction null
+            if ((chest.slot != ItemSlot.LOOT_CHEST) || (chest.quantity <= 0)) return@withTransaction null
+            db.itemDao().update(chest.copy(quantity = chest.quantity - 1))
+            val character = getCharacter()
+            val tier = lootTierFor(
+                source = LootSource.CHEST,
+                character = character,
+                contentTier = chest.tier
+            )
+            val contents = LootTables.openChest(
+                tier = tier,
+                gearPool = eligibleGearTemplates(character, tier),
+                stackPool = stackTemplates()
+            )
+            val flat = LootResult(grants = contents)
+            db.characterDao().upsert(applyLootToCharacter(character, flat))
+            RewardBatch(RewardSource.CHEST_OPENING, flat.toRewards())
+        }
     }
 
     suspend fun sellMaterial(itemId: Long, qty: Int = 1): Boolean {
@@ -1550,25 +1552,55 @@ class GameRepository(
         return RewardBatch(RewardSource.FORGE, flat.toRewards())
     }
 
-    suspend fun gambleMysteryGear(targetSlot: ItemSlot? = null): Result<GearInstanceEntity> {
+    suspend fun gambleMysteryGear(
+        targetSlot: ItemSlot? = null,
+        targetSlots: Set<ItemSlot>? = if (targetSlot != null) setOf(targetSlot) else null
+    ): Result<GearInstanceEntity> = shopMutex.withLock {
+        val now = System.currentTimeMillis()
         val character = getCharacter()
-        val cost = ProgressionRules.mysteryGambleCost(character.level)
+        val resetNeeded = ProgressionRules.isGambleResetNeeded(character.lastGambleResetEpochMs, now)
+        val attemptsToday = if (resetNeeded) 0 else character.dailyGambleCount
+
+        if (attemptsToday >= ProgressionRules.MAX_DAILY_GAMBLES) {
+            return Result.failure(IllegalStateException("Daily gamble limit reached (5/5). Log workouts or return tomorrow!"))
+        }
+
+        val cost = ProgressionRules.mysteryGambleCost(character.level, attemptsToday)
         if (character.gold < cost) {
             return Result.failure(IllegalStateException("Need $cost gold to gamble."))
         }
         val maxTier = ProgressionRules.maxUnlockedGearTier(character, db.biomeProgressDao().getAll())
         val pool = db.itemDao().getAll().filter { it.slot.isEquippable() && it.tier <= maxTier && (it.classAffinity == null || it.classAffinity == character.characterClass) }
-        val slotPool = if (targetSlot != null) pool.filter { it.slot == targetSlot } else pool
+        val slotPool = if (targetSlots != null) pool.filter { it.slot in targetSlots } else pool
         val chosenCatalog = (slotPool.ifEmpty { pool }).randomOrNull()
             ?: return Result.failure(IllegalStateException("No gear templates available."))
 
-        val rarity = LootTables.rollRarity(LootSource.CHEST, character.level)
+        val todayEpochDay = now / (86400 * 1000L)
+        val workedOutToday = character.lastWorkoutDay == todayEpochDay
+        val rarity = LootTables.rollRarity(
+            source = LootSource.CHEST,
+            characterLevel = character.level,
+            workoutStreak = character.streak,
+            workedOutToday = workedOutToday
+        )
         val traits = GearTrait.rollTraitsForRarity(rarity)
         val proceduralStats = com.fitnessquest.rpg.domain.ProceduralStatEngine.generateStats(chosenCatalog, rarity)
 
         var newInstance: GearInstanceEntity? = null
         db.withTransaction {
-            db.characterDao().upsert(character.copy(gold = character.gold - cost))
+            val freshChar = getCharacter()
+            val freshReset = ProgressionRules.isGambleResetNeeded(freshChar.lastGambleResetEpochMs, now)
+            val freshAttempts = if (freshReset) 0 else freshChar.dailyGambleCount
+            if (freshAttempts >= ProgressionRules.MAX_DAILY_GAMBLES || freshChar.gold < cost) {
+                return@withTransaction
+            }
+            db.characterDao().upsert(
+                freshChar.copy(
+                    gold = freshChar.gold - cost,
+                    dailyGambleCount = freshAttempts + 1,
+                    lastGambleResetEpochMs = now
+                )
+            )
             val id = db.gearInstanceDao().insert(
                 GearInstanceEntity(
                     catalogId = chosenCatalog.id,
@@ -1577,7 +1609,7 @@ class GameRepository(
                     hp = proceduralStats.hp,
                     rarity = rarity.name,
                     traitIds = traits.joinToString(",") { it.id },
-                    originBiome = character.currentBiome
+                    originBiome = freshChar.currentBiome
                 )
             )
             newInstance = db.gearInstanceDao().get(id)

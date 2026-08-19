@@ -226,8 +226,19 @@ object ProgressionRules {
     fun reforgeMaterialCost(tier: Int, rarity: GearRarity): Int =
         1 + (tier.coerceAtLeast(1) / 2) + (rarity.salvageBonus / 2)
 
-    fun mysteryGambleCost(characterLevel: Int): Int =
-        (100 + characterLevel * 15).coerceIn(120, 800)
+    const val MAX_DAILY_GAMBLES = 5
+
+    fun mysteryGambleCost(characterLevel: Int, attemptsToday: Int = 0): Int {
+        val base = (100 + characterLevel * 15).coerceIn(120, 800)
+        return (base * (1.0 + attemptsToday.coerceAtLeast(0) * 0.5)).toInt()
+    }
+
+    fun isGambleResetNeeded(lastResetMs: Long, nowMs: Long = System.currentTimeMillis()): Boolean {
+        if (lastResetMs <= 0L) return true
+        val dayLast = lastResetMs / (86400 * 1000L)
+        val dayNow = nowMs / (86400 * 1000L)
+        return dayNow > dayLast
+    }
 
     fun transmogGoldCost(tier: Int): Int =
         50 + tier.coerceIn(1, MAX_GEAR_TIER) * 25

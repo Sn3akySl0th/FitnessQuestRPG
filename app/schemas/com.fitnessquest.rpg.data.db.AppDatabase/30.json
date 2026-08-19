@@ -2,11 +2,11 @@
   "formatVersion": 1,
   "database": {
     "version": 30,
-    "identityHash": "b9173c2481743d3ab0a68319cab15f10",
+    "identityHash": "36da7b6b6e4ea6c9afbe82086e2c2529",
     "entities": [
       {
         "tableName": "character",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `name` TEXT NOT NULL, `characterClass` TEXT, `level` INTEGER NOT NULL, `xp` INTEGER NOT NULL, `gold` INTEGER NOT NULL, `energy` INTEGER NOT NULL, `strength` INTEGER NOT NULL, `endurance` INTEGER NOT NULL, `agility` INTEGER NOT NULL, `willpower` INTEGER NOT NULL, `strProgress` INTEGER NOT NULL, `endProgress` INTEGER NOT NULL, `agiProgress` INTEGER NOT NULL, `wilProgress` INTEGER NOT NULL, `weaponId` INTEGER, `headId` INTEGER, `chestId` INTEGER, `handsId` INTEGER, `legsId` INTEGER, `feetId` INTEGER, `trinketId` INTEGER, `glamourHeadId` INTEGER, `glamourChestId` INTEGER, `glamourHandsId` INTEGER, `glamourLegsId` INTEGER, `glamourFeetId` INTEGER, `glamourWeaponId` INTEGER, `battlesWon` INTEGER NOT NULL, `sessionsCompleted` INTEGER NOT NULL, `streak` INTEGER NOT NULL, `lastWorkoutDay` INTEGER NOT NULL, `pendingXpBoost` INTEGER NOT NULL, `freeStatPoints` INTEGER NOT NULL, `currentBiome` TEXT NOT NULL, `travelTarget` TEXT, `travelProgress` REAL NOT NULL, `idleSteps` INTEGER NOT NULL, `idleKills` INTEGER NOT NULL, `idleGold` INTEGER NOT NULL, `idleXp` INTEGER NOT NULL, `idlePendingLoot` TEXT NOT NULL, `skinColor` INTEGER NOT NULL, `hairColor` INTEGER NOT NULL, `underwearColor` INTEGER NOT NULL, `eyeColor` INTEGER NOT NULL, `hairStyle` TEXT NOT NULL, `gender` TEXT NOT NULL, `braColor` INTEGER NOT NULL, `race` TEXT NOT NULL, `currentHp` INTEGER, `druidForm` TEXT NOT NULL, `lastWellnessDay` INTEGER NOT NULL, `lastEnergyUpdate` INTEGER NOT NULL, `partyId` TEXT, `guildId` TEXT, `bodyWeightKg` REAL, `heightM` REAL, `dateOfBirthEpoch` INTEGER, `trainingEquipment` TEXT NOT NULL, `trainingDaysPerWeek` INTEGER NOT NULL, `trainingSplit` TEXT NOT NULL, `trainingLevel` TEXT NOT NULL, `fitnessGoal` TEXT NOT NULL, `muscleFocus` TEXT NOT NULL, `cardioPlacement` TEXT NOT NULL, `workoutDuration` TEXT NOT NULL, `effortMethod` TEXT NOT NULL, `plateBarKg` REAL, `claimedTrophies` TEXT NOT NULL, `bountyDay` INTEGER NOT NULL, `bountyBattlesStart` INTEGER NOT NULL, `waterGlasses` INTEGER NOT NULL, `stretchDone` INTEGER NOT NULL, `claimedBounties` TEXT NOT NULL, `campaignWeek` INTEGER NOT NULL, `campaignBattlesStart` INTEGER NOT NULL, `claimedCampaigns` TEXT NOT NULL, `encounterClaimedThisTravel` INTEGER NOT NULL, `pendingEncounterStrBoost` INTEGER NOT NULL, `firstWorkoutDone` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `name` TEXT NOT NULL, `characterClass` TEXT, `level` INTEGER NOT NULL, `xp` INTEGER NOT NULL, `gold` INTEGER NOT NULL, `energy` INTEGER NOT NULL, `strength` INTEGER NOT NULL, `endurance` INTEGER NOT NULL, `agility` INTEGER NOT NULL, `willpower` INTEGER NOT NULL, `strProgress` INTEGER NOT NULL, `endProgress` INTEGER NOT NULL, `agiProgress` INTEGER NOT NULL, `wilProgress` INTEGER NOT NULL, `weaponId` INTEGER, `headId` INTEGER, `chestId` INTEGER, `handsId` INTEGER, `legsId` INTEGER, `feetId` INTEGER, `trinketId` INTEGER, `glamourHeadId` INTEGER, `glamourChestId` INTEGER, `glamourHandsId` INTEGER, `glamourLegsId` INTEGER, `glamourFeetId` INTEGER, `glamourWeaponId` INTEGER, `battlesWon` INTEGER NOT NULL, `sessionsCompleted` INTEGER NOT NULL, `streak` INTEGER NOT NULL, `lastWorkoutDay` INTEGER NOT NULL, `pendingXpBoost` INTEGER NOT NULL, `freeStatPoints` INTEGER NOT NULL, `currentBiome` TEXT NOT NULL, `travelTarget` TEXT, `travelProgress` REAL NOT NULL, `idleSteps` INTEGER NOT NULL, `idleKills` INTEGER NOT NULL, `idleGold` INTEGER NOT NULL, `idleXp` INTEGER NOT NULL, `idlePendingLoot` TEXT NOT NULL, `skinColor` INTEGER NOT NULL, `hairColor` INTEGER NOT NULL, `underwearColor` INTEGER NOT NULL, `eyeColor` INTEGER NOT NULL, `hairStyle` TEXT NOT NULL, `gender` TEXT NOT NULL, `braColor` INTEGER NOT NULL, `race` TEXT NOT NULL, `currentHp` INTEGER, `druidForm` TEXT NOT NULL, `lastWellnessDay` INTEGER NOT NULL, `lastEnergyUpdate` INTEGER NOT NULL, `partyId` TEXT, `guildId` TEXT, `dailyGambleCount` INTEGER NOT NULL, `lastGambleResetEpochMs` INTEGER NOT NULL, `bodyWeightKg` REAL, `heightM` REAL, `dateOfBirthEpoch` INTEGER, `trainingEquipment` TEXT NOT NULL, `trainingDaysPerWeek` INTEGER NOT NULL, `trainingSplit` TEXT NOT NULL, `trainingLevel` TEXT NOT NULL, `fitnessGoal` TEXT NOT NULL, `muscleFocus` TEXT NOT NULL, `cardioPlacement` TEXT NOT NULL, `workoutDuration` TEXT NOT NULL, `effortMethod` TEXT NOT NULL, `plateBarKg` REAL, `claimedTrophies` TEXT NOT NULL, `bountyDay` INTEGER NOT NULL, `bountyBattlesStart` INTEGER NOT NULL, `waterGlasses` INTEGER NOT NULL, `stretchDone` INTEGER NOT NULL, `claimedBounties` TEXT NOT NULL, `campaignWeek` INTEGER NOT NULL, `campaignBattlesStart` INTEGER NOT NULL, `claimedCampaigns` TEXT NOT NULL, `encounterClaimedThisTravel` INTEGER NOT NULL, `pendingEncounterStrBoost` INTEGER NOT NULL, `firstWorkoutDone` INTEGER NOT NULL, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -325,6 +325,18 @@
             "fieldPath": "guildId",
             "columnName": "guildId",
             "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "dailyGambleCount",
+            "columnName": "dailyGambleCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastGambleResetEpochMs",
+            "columnName": "lastGambleResetEpochMs",
+            "affinity": "INTEGER",
+            "notNull": true
           },
           {
             "fieldPath": "bodyWeightKg",
@@ -1737,7 +1749,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'b9173c2481743d3ab0a68319cab15f10')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '36da7b6b6e4ea6c9afbe82086e2c2529')"
     ]
   }
 }

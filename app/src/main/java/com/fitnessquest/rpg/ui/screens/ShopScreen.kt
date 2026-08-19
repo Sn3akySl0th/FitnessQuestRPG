@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.ui.text.style.TextAlign
+import com.fitnessquest.rpg.data.db.ArmorSlots
 import com.fitnessquest.rpg.data.db.gearBonusText
 import com.fitnessquest.rpg.data.db.itemBonusText
 import com.fitnessquest.rpg.domain.GearRarity
@@ -178,6 +179,8 @@ class ShopViewModel(private val container: AppContainer) : ViewModel() {
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ShopUiState())
 
     private val buyMutex = kotlinx.coroutines.sync.Mutex()
+    private val gambleMutex = kotlinx.coroutines.sync.Mutex()
+    private val chestMutex = kotlinx.coroutines.sync.Mutex()
 
     fun buy(itemId: Long, onResult: (Boolean) -> Unit) {
         viewModelScope.launch {
@@ -203,7 +206,15 @@ class ShopViewModel(private val container: AppContainer) : ViewModel() {
 
     fun openChest(itemId: Long, onResult: (RewardBatch?) -> Unit) {
         viewModelScope.launch {
-            onResult(container.repository.openLootChest(itemId))
+            if (!chestMutex.tryLock()) {
+                onResult(null)
+                return@launch
+            }
+            try {
+                onResult(container.repository.openLootChest(itemId))
+            } finally {
+                chestMutex.unlock()
+            }
         }
     }
 
@@ -237,9 +248,21 @@ class ShopViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch { onResult(container.repository.upgradeGearInstance(instanceId)) }
     }
 
-    fun gamble(slot: ItemSlot?, onResult: (Result<GearInstanceEntity>) -> Unit) {
+    fun gamble(
+        slot: ItemSlot? = null,
+        targetSlots: Set<ItemSlot>? = null,
+        onResult: (Result<GearInstanceEntity>) -> Unit
+    ) {
         viewModelScope.launch {
-            onResult(container.repository.gambleMysteryGear(slot))
+            if (!gambleMutex.tryLock()) {
+                onResult(Result.failure(IllegalStateException("Transaction in progress...")))
+                return@launch
+            }
+            try {
+                onResult(container.repository.gambleMysteryGear(targetSlot = slot, targetSlots = targetSlots))
+            } finally {
+                gambleMutex.unlock()
+            }
         }
     }
 
@@ -315,7 +338,7 @@ data class ShopActions(
     val onSalvageGear: (Long, (RewardBatch?) -> Unit) -> Unit = { _, _ -> },
     val onUpgradeGear: (Long, (Boolean) -> Unit) -> Unit = { _, _ -> },
     val onReforgeGear: (Long, (Result<List<GearTrait>>) -> Unit) -> Unit = { _, _ -> },
-    val onGamble: (ItemSlot?, (Result<GearInstanceEntity>) -> Unit) -> Unit = { _, _ -> },
+    val onGamble: (ItemSlot?, Set<ItemSlot>?, (Result<GearInstanceEntity>) -> Unit) -> Unit = { _, _, _ -> },
     val onFuseGear: (List<Long>, (String?) -> Unit) -> Unit = { _, _ -> },
     val onSocketRune: (Long, Int, Long) -> Unit = { _, _, _ -> },
     val onClearRune: (Long, Int) -> Unit = { _, _ -> },
@@ -409,7 +432,13 @@ fun ShopScreenContent(
                         })
                         MarketSummary(character, state.ownedGear, state.items)
                         if (tab == MarketTab.Shop) {
-                            val gambleCost = ProgressionRules.mysteryGambleCost(character.level)
+                            val resetNeeded = ProgressionRules.isGambleResetNeeded(character.lastGambleResetEpochMs)
+                            val attemptsToday = if (resetNeeded) 0 else character.dailyGambleCount
+                            val gamblesLeft = (ProgressionRules.MAX_DAILY_GAMBLES - attemptsToday).coerceAtLeast(0)
+                            val gambleCost = ProgressionRules.mysteryGambleCost(character.level, attemptsToday)
+                            val canGamble = gamblesLeft > 0 && character.gold >= gambleCost
+                            val workedOutToday = character.lastWorkoutDay == (System.currentTimeMillis() / (86400 * 1000L))
+
                             Surface(
                                 shape = RoundedCornerShape(14.dp),
                                 color = Gold.copy(alpha = 0.10f),
@@ -423,8 +452,16 @@ fun ShopScreenContent(
                                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                         Text("🎲", fontSize = 22.sp)
                                         Column(Modifier.weight(1f)) {
-                                            Text("The Mystic Goblin's Cache", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black, color = Gold)
-                                            Text("Gamble for mystery gear with high Rare/Epic/Legendary chances & procedural affixes!", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.75f))
+                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                                                Text("The Mystic Goblin's Cache", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black, color = Gold)
+                                                Text("Daily: $attemptsToday/${ProgressionRules.MAX_DAILY_GAMBLES}", style = MaterialTheme.typography.labelSmall, color = if (gamblesLeft > 0) Gold else androidx.compose.ui.graphics.Color.Red)
+                                            }
+                                            Text(
+                                                if (workedOutToday || character.streak > 0) "⚡ Workout Luck Active! (+Streak Rarity Bonus)"
+                                                else "Gamble for mystery gear! (Log workouts to boost Epic/Legendary luck)",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = Color.White.copy(alpha = 0.75f)
+                                            )
                                         }
                                     }
                                     Row(
@@ -433,14 +470,14 @@ fun ShopScreenContent(
                                     ) {
                                         Button(
                                             onClick = {
-                                                actions.onGamble(ItemSlot.WEAPON) { res ->
+                                                actions.onGamble(null, setOf(ItemSlot.WEAPON)) { res ->
                                                     res.onSuccess { inst ->
                                                         AudioEffects.playLevelUp()
                                                         actions.onNotify("🎲 Won: ${inst.rarity} weapon!")
                                                     }.onFailure { err -> actions.onNotify(err.message ?: "Gamble failed") }
                                                 }
                                             },
-                                            enabled = character.gold >= gambleCost,
+                                            enabled = canGamble,
                                             modifier = Modifier.weight(1f),
                                             contentPadding = PaddingValues(horizontal = 6.dp, vertical = 8.dp)
                                         ) {
@@ -448,14 +485,14 @@ fun ShopScreenContent(
                                         }
                                         Button(
                                             onClick = {
-                                                actions.onGamble(ItemSlot.CHEST) { res ->
+                                                actions.onGamble(null, ArmorSlots) { res ->
                                                     res.onSuccess { inst ->
                                                         AudioEffects.playLevelUp()
                                                         actions.onNotify("🎲 Won: ${inst.rarity} armor!")
                                                     }.onFailure { err -> actions.onNotify(err.message ?: "Gamble failed") }
                                                 }
                                             },
-                                            enabled = character.gold >= gambleCost,
+                                            enabled = canGamble,
                                             modifier = Modifier.weight(1f),
                                             contentPadding = PaddingValues(horizontal = 6.dp, vertical = 8.dp)
                                         ) {
@@ -463,14 +500,14 @@ fun ShopScreenContent(
                                         }
                                         Button(
                                             onClick = {
-                                                actions.onGamble(ItemSlot.TRINKET) { res ->
+                                                actions.onGamble(null, setOf(ItemSlot.TRINKET)) { res ->
                                                     res.onSuccess { inst ->
                                                         AudioEffects.playLevelUp()
                                                         actions.onNotify("🎲 Won: ${inst.rarity} trinket!")
                                                     }.onFailure { err -> actions.onNotify(err.message ?: "Gamble failed") }
                                                 }
                                             },
-                                            enabled = character.gold >= gambleCost,
+                                            enabled = canGamble,
                                             modifier = Modifier.weight(1f),
                                             contentPadding = PaddingValues(horizontal = 6.dp, vertical = 8.dp)
                                         ) {

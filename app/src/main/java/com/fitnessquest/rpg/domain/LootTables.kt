@@ -134,6 +134,8 @@ object LootTables {
         source: LootSource,
         characterLevel: Int,
         prCount: Int = 0,
+        workoutStreak: Int = 0,
+        workedOutToday: Boolean = false,
         rng: Random = Random.Default
     ): GearRarity {
         val roll = rng.nextInt(1000)
@@ -157,11 +159,12 @@ object LootTables {
                 }
             }
             LootSource.AMBUSH, LootSource.CHEST -> {
+                val streakBonus = (workoutStreak * 10).coerceAtMost(50) + (if (workedOutToday) 30 else 0)
                 when {
-                    characterLevel >= GearRarity.LEGENDARY.minLevelGate && roll < 25 -> GearRarity.LEGENDARY
-                    characterLevel >= GearRarity.EPIC.minLevelGate && roll < 120 -> GearRarity.EPIC
-                    characterLevel >= GearRarity.RARE.minLevelGate && roll < 400 -> GearRarity.RARE
-                    roll < 750 -> GearRarity.UNCOMMON
+                    characterLevel >= GearRarity.LEGENDARY.minLevelGate && roll < (25 + streakBonus / 2) -> GearRarity.LEGENDARY
+                    characterLevel >= GearRarity.EPIC.minLevelGate && roll < (120 + streakBonus) -> GearRarity.EPIC
+                    characterLevel >= GearRarity.RARE.minLevelGate && roll < (400 + streakBonus * 2) -> GearRarity.RARE
+                    roll < (750 + streakBonus * 2) -> GearRarity.UNCOMMON
                     else -> GearRarity.COMMON
                 }
             }
@@ -257,7 +260,7 @@ object LootTables {
         // Direct gear drop with tactical traits for strong workouts
         if ((setCount >= 6 || prCount > 0) && rng.nextInt(100) < 35) {
             pickGear(gearPool, stackTier, rng)?.let { gearTemplate ->
-                val rarity = rollRarity(LootSource.WORKOUT, level, prCount, rng)
+                val rarity = rollRarity(LootSource.WORKOUT, level, prCount, rng = rng)
                 val traits = GearTrait.rollTraitsForRarity(rarity, rng)
                 grants += LootGrant.Gear(gearTemplate, rarity, traits)
             }

@@ -138,6 +138,11 @@ data class CharacterEntity(
     /** Current joined guild ID from Firestore, if any. */
     val guildId: String? = null,
 
+    /** Mystic Goblin Cache gambles performed today. */
+    val dailyGambleCount: Int = 0,
+    /** Epoch millis of the last daily gamble reset. */
+    val lastGambleResetEpochMs: Long = 0L,
+
     // ---- Profile & Progress (migrated from SharedPreferences) ----
     val bodyWeightKg: Double? = null,
     val heightM: Double? = null,
