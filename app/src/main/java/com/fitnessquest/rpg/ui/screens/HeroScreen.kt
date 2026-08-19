@@ -12,6 +12,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -558,6 +559,13 @@ fun HeroScreenContent(
     val snackbar = LocalSnackbarHostState.current
     val scope = rememberCoroutineScope()
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val statsListState = rememberLazyListState()
+    val onAllocatePointsClick: () -> Unit = {
+        selectedTab = 0
+        scope.launch {
+            statsListState.animateScrollToItem(2)
+        }
+    }
 
     val equipAnimState = rememberEquipAnimationState()
     val highestEquippedRarity = remember(state.gear, state.ownedGear, state.character) {
@@ -585,12 +593,12 @@ fun HeroScreenContent(
                         equipAnimState = equipAnimState,
                         onAvatarClick = { showAvatarDialog = true },
                         onDruidFormChange = actions.onDruidFormChange,
-                        onAllocateClick = { selectedTab = 0 }
+                        onAllocateClick = onAllocatePointsClick
                     )
                     HeroCurrencyBarContent(character, wearLinked)
                     HeroNextObjectiveCard(
                         character = character,
-                        onAllocateClick = { selectedTab = 0 },
+                        onAllocateClick = onAllocatePointsClick,
                         onStartWorkout = actions.onStartWorkout,
                         modifier = Modifier.padding(bottom = 8.dp)
                     )
@@ -634,6 +642,7 @@ fun HeroScreenContent(
                     }
 
                     LazyColumn(
+                        state = statsListState,
                         modifier = Modifier.weight(1f).fillMaxWidth(),
                         contentPadding = PaddingValues(12.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -658,14 +667,14 @@ fun HeroScreenContent(
                     equipAnimState = equipAnimState,
                     onAvatarClick = { showAvatarDialog = true },
                     onDruidFormChange = actions.onDruidFormChange,
-                    onAllocateClick = { selectedTab = 0 }
+                    onAllocateClick = onAllocatePointsClick
                 )
 
                 HeroCurrencyBarContent(character, wearLinked)
 
                 HeroNextObjectiveCard(
                     character = character,
-                    onAllocateClick = { selectedTab = 0 },
+                    onAllocateClick = onAllocatePointsClick,
                     onStartWorkout = actions.onStartWorkout
                 )
 
@@ -700,6 +709,7 @@ fun HeroScreenContent(
                 }
 
                 LazyColumn(
+                    state = statsListState,
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -1057,15 +1067,15 @@ private fun HeroNextObjectiveCard(
     onStartWorkout: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val hasUnallocatedPoints = character.freeStatPoints > 0
+    if (character.freeStatPoints <= 0) return
 
     Surface(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 6.dp),
         shape = RoundedCornerShape(12.dp),
-        color = if (hasUnallocatedPoints) Gold.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.05f),
-        border = BorderStroke(1.dp, if (hasUnallocatedPoints) Gold.copy(alpha = 0.5f) else Color.White.copy(alpha = 0.1f))
+        color = Gold.copy(alpha = 0.12f),
+        border = BorderStroke(1.dp, Gold.copy(alpha = 0.5f))
     ) {
         Column(
             modifier = Modifier.padding(12.dp),
@@ -1077,22 +1087,18 @@ private fun HeroNextObjectiveCard(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
-                    text = if (hasUnallocatedPoints) "✨" else "🎯",
+                    text = "✨",
                     fontSize = 18.sp
                 )
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = if (hasUnallocatedPoints) "Attribute Points Ready" else "Continue Your Training",
+                        text = "Attribute Points Ready",
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
-                        color = if (hasUnallocatedPoints) Gold else Color.White
+                        color = Gold
                     )
                     Text(
-                        text = if (hasUnallocatedPoints) {
-                            "You have ${character.freeStatPoints} unspent points to strengthen your Hero."
-                        } else {
-                            "Complete workouts to earn XP, gold, and progress your Hero."
-                        },
+                        text = "You have ${character.freeStatPoints} unspent points to strengthen your Hero.",
                         style = MaterialTheme.typography.bodySmall,
                         color = Color.White.copy(alpha = 0.7f)
                     )
@@ -1100,26 +1106,18 @@ private fun HeroNextObjectiveCard(
             }
 
             Button(
-                onClick = if (hasUnallocatedPoints) onAllocateClick else onStartWorkout,
+                onClick = onAllocateClick,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = 48.dp)
+                    .heightIn(min = 44.dp)
                     .semantics {
-                        contentDescription = if (hasUnallocatedPoints) {
-                            "Allocate ${character.freeStatPoints} attribute points"
-                        } else {
-                            "Start next workout"
-                        }
+                        contentDescription = "Allocate ${character.freeStatPoints} attribute points"
                     },
-                colors = if (hasUnallocatedPoints) {
-                    ButtonDefaults.buttonColors(containerColor = Gold, contentColor = NightBg)
-                } else {
-                    ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                },
+                colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = NightBg),
                 shape = RoundedCornerShape(8.dp)
             ) {
                 Text(
-                    text = if (hasUnallocatedPoints) "Allocate Points" else "Start Workout",
+                    text = "Allocate Points",
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold
                 )
@@ -1190,31 +1188,69 @@ private fun statsTabContent(
         }
     }
 
-    if (character.freeStatPoints > 0) {
-        listScope.item {
-            FantasyCard {
-                Text("Allocate Attribute Points", style = MaterialTheme.typography.titleMedium, color = Gold)
-                Text("${character.freeStatPoints} points to spend", style = MaterialTheme.typography.bodySmall)
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf("STR", "END", "AGI", "WIL").forEach { stat ->
-                        Button(
-                            onClick = { actions.onAllocateStat(stat) },
-                            modifier = Modifier.weight(1f),
-                            contentPadding = PaddingValues(0.dp)
-                        ) { Text("+$stat", fontSize = 12.sp) }
+    listScope.item {
+        FantasyCard {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Attributes", style = MaterialTheme.typography.titleMedium, color = Gold)
+                if (character.freeStatPoints > 0) {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = Gold.copy(alpha = 0.2f),
+                        border = BorderStroke(1.dp, Gold.copy(alpha = 0.6f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text("✨", fontSize = 12.sp)
+                            Text(
+                                text = "${character.freeStatPoints} to spend",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = Gold
+                            )
+                        }
                     }
                 }
             }
-        }
-    }
-
-    listScope.item {
-        FantasyCard {
-            Text("Attributes", style = MaterialTheme.typography.titleMedium, color = Gold)
-            BarMeter("STR ${character.strength}", "${character.strProgress}/${GameMath.statThreshold(character.strength)}", (character.strProgress.toFloat() / GameMath.statThreshold(character.strength).coerceAtLeast(1)).coerceIn(0f, 1f), StatStr)
-            BarMeter("END ${character.endurance}", "${character.endProgress}/${GameMath.statThreshold(character.endurance)}", (character.endProgress.toFloat() / GameMath.statThreshold(character.endurance).coerceAtLeast(1)).coerceIn(0f, 1f), StatEnd)
-            BarMeter("AGI ${character.agility}", "${character.agiProgress}/${GameMath.statThreshold(character.agility)}", (character.agiProgress.toFloat() / GameMath.statThreshold(character.agility).coerceAtLeast(1)).coerceIn(0f, 1f), StatAgi)
-            BarMeter("WIL ${character.willpower}", character.willpower.toString(), (character.willpower.toFloat() / GameMath.statThreshold(character.willpower).coerceAtLeast(1)).coerceIn(0f, 1f), StatWil)
+            Spacer(Modifier.height(4.dp))
+            StatMeterRow(
+                label = "STR ${character.strength}",
+                valueText = "${character.strProgress}/${GameMath.statThreshold(character.strength)}",
+                progress = (character.strProgress.toFloat() / GameMath.statThreshold(character.strength).coerceAtLeast(1)).coerceIn(0f, 1f),
+                color = StatStr,
+                showAdd = character.freeStatPoints > 0,
+                onAdd = { actions.onAllocateStat("STR") }
+            )
+            StatMeterRow(
+                label = "END ${character.endurance}",
+                valueText = "${character.endProgress}/${GameMath.statThreshold(character.endurance)}",
+                progress = (character.endProgress.toFloat() / GameMath.statThreshold(character.endurance).coerceAtLeast(1)).coerceIn(0f, 1f),
+                color = StatEnd,
+                showAdd = character.freeStatPoints > 0,
+                onAdd = { actions.onAllocateStat("END") }
+            )
+            StatMeterRow(
+                label = "AGI ${character.agility}",
+                valueText = "${character.agiProgress}/${GameMath.statThreshold(character.agility)}",
+                progress = (character.agiProgress.toFloat() / GameMath.statThreshold(character.agility).coerceAtLeast(1)).coerceIn(0f, 1f),
+                color = StatAgi,
+                showAdd = character.freeStatPoints > 0,
+                onAdd = { actions.onAllocateStat("AGI") }
+            )
+            StatMeterRow(
+                label = "WIL ${character.willpower}",
+                valueText = character.willpower.toString(),
+                progress = (character.willpower.toFloat() / GameMath.statThreshold(character.willpower).coerceAtLeast(1)).coerceIn(0f, 1f),
+                color = StatWil,
+                showAdd = character.freeStatPoints > 0,
+                onAdd = { actions.onAllocateStat("WIL") }
+            )
         }
     }
 
@@ -1267,6 +1303,43 @@ private fun statsTabContent(
                         Text(skill.blurb, style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = if (unlocked) 0.8f else 0.4f))
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatMeterRow(
+    label: String,
+    valueText: String,
+    progress: Float,
+    color: Color,
+    showAdd: Boolean,
+    onAdd: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Box(modifier = Modifier.weight(1f)) {
+            BarMeter(label, valueText, progress, color)
+        }
+        if (showAdd) {
+            FilledIconButton(
+                onClick = onAdd,
+                modifier = Modifier.size(32.dp),
+                colors = IconButtonDefaults.filledIconButtonColors(
+                    containerColor = Gold,
+                    contentColor = NightBg
+                ),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = "Allocate point to $label",
+                    modifier = Modifier.size(18.dp)
+                )
             }
         }
     }
