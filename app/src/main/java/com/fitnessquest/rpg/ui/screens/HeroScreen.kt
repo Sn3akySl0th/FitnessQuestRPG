@@ -56,6 +56,8 @@ import com.fitnessquest.rpg.ui.components.*
 import com.fitnessquest.rpg.ui.theme.*
 import androidx.compose.material.icons.outlined.FitnessCenter
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import com.fitnessquest.rpg.domain.mastery.CanonicalMovement
 import com.fitnessquest.rpg.domain.mastery.MasteryProgression
 import kotlin.math.roundToInt
@@ -387,7 +389,10 @@ class HeroViewModel(private val container: AppContainer) : ViewModel() {
 }
 
 @Composable
-fun HeroScreen(viewModel: HeroViewModel = viewModel(factory = HeroViewModel.Factory)) {
+fun HeroScreen(
+    viewModel: HeroViewModel = viewModel(factory = HeroViewModel.Factory),
+    onStartWorkout: () -> Unit = {}
+) {
     val state by viewModel.uiState.collectAsState()
     val isPremium by viewModel.isPremium.collectAsState()
     val imperial by viewModel.imperial.collectAsState()
@@ -429,6 +434,7 @@ fun HeroScreen(viewModel: HeroViewModel = viewModel(factory = HeroViewModel.Fact
             onLogBountyProgress = viewModel::logBountyProgress,
             onClaimCampaign = viewModel::claimCampaign,
             onRecordManualSteps = viewModel::recordManualSteps,
+            onStartWorkout = onStartWorkout,
             updateAppearance = viewModel::updateAppearance
         )
     )
@@ -450,6 +456,7 @@ data class HeroActions(
     val onClaimBounty: (Bounty) -> Unit = {},
     val onLogBountyProgress: (Bounty) -> Unit = {},
     val onClaimCampaign: (WeeklyCampaign) -> Unit = {},
+    val onStartWorkout: () -> Unit = {},
     val updateAppearance: (Long, Long, Long, Long, String, String, Long, String) -> Unit = { _, _, _, _, _, _, _, _ -> }
 )
 
@@ -581,6 +588,12 @@ fun HeroScreenContent(
                         onAllocateClick = { selectedTab = 0 }
                     )
                     HeroCurrencyBarContent(character, wearLinked)
+                    HeroNextObjectiveCard(
+                        character = character,
+                        onAllocateClick = { selectedTab = 0 },
+                        onStartWorkout = actions.onStartWorkout,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
                 }
 
                 VerticalDivider(color = Color.White.copy(alpha = 0.1f))
@@ -649,6 +662,12 @@ fun HeroScreenContent(
                 )
 
                 HeroCurrencyBarContent(character, wearLinked)
+
+                HeroNextObjectiveCard(
+                    character = character,
+                    onAllocateClick = { selectedTab = 0 },
+                    onStartWorkout = actions.onStartWorkout
+                )
 
                 PrimaryTabRow(
                     selectedTabIndex = selectedTab,
@@ -1028,6 +1047,84 @@ private fun HeroCurrencyBarContent(character: CharacterEntity, wearLinked: Boole
             color = if (wearLinked) Color(0xFF35C46A) else Color(0xFFE34D59)
         )
         Spacer(Modifier.width(16.dp))
+    }
+}
+
+@Composable
+private fun HeroNextObjectiveCard(
+    character: CharacterEntity,
+    onAllocateClick: () -> Unit,
+    onStartWorkout: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val hasUnallocatedPoints = character.freeStatPoints > 0
+
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        shape = RoundedCornerShape(12.dp),
+        color = if (hasUnallocatedPoints) Gold.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.05f),
+        border = BorderStroke(1.dp, if (hasUnallocatedPoints) Gold.copy(alpha = 0.5f) else Color.White.copy(alpha = 0.1f))
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = if (hasUnallocatedPoints) "✨" else "🎯",
+                    fontSize = 18.sp
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = if (hasUnallocatedPoints) "Attribute Points Ready" else "Continue Your Training",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = if (hasUnallocatedPoints) Gold else Color.White
+                    )
+                    Text(
+                        text = if (hasUnallocatedPoints) {
+                            "You have ${character.freeStatPoints} unspent points to strengthen your Hero."
+                        } else {
+                            "Complete workouts to earn XP, gold, and progress your Hero."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White.copy(alpha = 0.7f)
+                    )
+                }
+            }
+
+            Button(
+                onClick = if (hasUnallocatedPoints) onAllocateClick else onStartWorkout,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp)
+                    .semantics {
+                        contentDescription = if (hasUnallocatedPoints) {
+                            "Allocate ${character.freeStatPoints} attribute points"
+                        } else {
+                            "Start next workout"
+                        }
+                    },
+                colors = if (hasUnallocatedPoints) {
+                    ButtonDefaults.buttonColors(containerColor = Gold, contentColor = NightBg)
+                } else {
+                    ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                },
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text(
+                    text = if (hasUnallocatedPoints) "Allocate Points" else "Start Workout",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
     }
 }
 

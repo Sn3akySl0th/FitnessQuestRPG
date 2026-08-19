@@ -242,7 +242,19 @@ fun FitQuestNav() {
                     .fillMaxSize()
                     .padding(start = if (showBottomBar && isLandscape) 68.dp else 0.dp)
             ) {
-                composable(Routes.HERO) { HeroScreen() }
+                composable(Routes.HERO) {
+                    HeroScreen(
+                        onStartWorkout = {
+                            navController.navigate(Routes.TRAIN) {
+                                popUpTo(navController.graph.findStartDestination().id) {
+                                    saveState = true
+                                }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        }
+                    )
+                }
                 composable(Routes.TRAIN) {
                     WorkoutsScreen(
                         onNewWorkout = { navController.navigate(Routes.EDITOR) },

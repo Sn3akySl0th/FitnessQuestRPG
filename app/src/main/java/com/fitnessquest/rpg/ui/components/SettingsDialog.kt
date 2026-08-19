@@ -802,7 +802,10 @@ fun SettingsDialog(
                 var keyVisible by remember { mutableStateOf(false) }
                 OutlinedTextField(
                     value = key,
-                    onValueChange = { key = it },
+                    onValueChange = {
+                        key = it
+                        viewModel.saveApiKey(it)
+                    },
                     singleLine = true,
                     label = { Text("API key") },
                     visualTransformation = if (keyVisible) VisualTransformation.None else PasswordVisualTransformation(),
@@ -839,10 +842,7 @@ fun SettingsDialog(
             TextButton(onClick = {
                 viewModel.saveApiKey(key)
                 close()
-            }) { Text("Save") }
-        },
-        dismissButton = {
-            TextButton(onClick = ::close) { Text("Close") }
+            }) { Text("Done") }
         }
     )
 
@@ -1291,9 +1291,10 @@ private fun LocalAiModelSection(
                 }
             }
 
-            if (playAssetState.statusCode != com.google.android.play.core.assetpacks.model.AssetPackStatus.UNKNOWN ||
+            if (BuildConfig.DEBUG && (
+                playAssetState.statusCode != com.google.android.play.core.assetpacks.model.AssetPackStatus.UNKNOWN ||
                 playAssetState.errorCode != com.google.android.play.core.assetpacks.model.AssetPackErrorCode.NO_ERROR
-            ) {
+            )) {
                 Text(
                     "Play diagnostics: status ${playAssetState.statusCode}, error ${playAssetState.errorCode}",
                     style = MaterialTheme.typography.labelSmall,
@@ -1352,6 +1353,7 @@ private fun HevySyncSection(
     var keyInput by remember(apiKey) { mutableStateOf(apiKey) }
     var isSyncing by remember { mutableStateOf(false) }
     var syncMessage by remember { mutableStateOf<String?>(null) }
+    var syncIsError by remember { mutableStateOf(false) }
     var isRepairing by remember { mutableStateOf(false) }
 
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -1408,7 +1410,7 @@ private fun HevySyncSection(
             Text(
                 syncMessage!!,
                 style = MaterialTheme.typography.bodySmall,
-                color = if (syncMessage!!.contains("Error") || syncMessage!!.contains("Invalid")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                color = if (syncIsError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
             )
         }
 
@@ -1416,6 +1418,7 @@ private fun HevySyncSection(
             onClick = {
                 scope.launch {
                     isSyncing = true
+                    syncIsError = false
                     syncMessage = "Syncing with Hevy..."
                     val res = com.fitnessquest.rpg.data.importexport.WorkoutImportService.performBackgroundSync(
                         apiKey = keyInput,
@@ -1425,12 +1428,14 @@ private fun HevySyncSection(
                         renameTemplates = true
                     )
                     isSyncing = false
-                    syncMessage = if (res.isSuccess) {
+                    if (res.isSuccess) {
+                        syncIsError = false
                         val result = res.getOrDefault(com.fitnessquest.rpg.data.importexport.ImportPersistResult())
-                        if (result.totalAdded > 0) "Hevy synced ${result.templatesAdded} training quests and ${result.sessionsAdded} history sessions."
+                        syncMessage = if (result.totalAdded > 0) "Hevy synced ${result.templatesAdded} training quests and ${result.sessionsAdded} history sessions."
                         else "Hevy is already up to date (0 new items)."
                     } else {
-                        "⚠️ Sync Error: ${res.exceptionOrNull()?.message}"
+                        syncIsError = true
+                        syncMessage = "⚠️ Sync Error: ${res.exceptionOrNull()?.message}"
                     }
                 }
             },
