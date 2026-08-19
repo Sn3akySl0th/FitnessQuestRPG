@@ -25,7 +25,7 @@ android {
 
     defaultConfig {
         applicationId = "com.fitnessquest.rpg"
-        minSdk = 30
+        minSdk = 26
         targetSdk = 36
         versionCode = versionProps.get().getProperty("wearVersionCode", "21").toInt()
         versionName = versionProps.get().getProperty("versionName", "0.11.0")

@@ -236,6 +236,7 @@ class WearExerciseEngine(
     }
 
     private suspend fun startHealthServices(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return false
         if (!hasHrPermission()) return false
         val capabilities = exerciseClient.getCapabilitiesAsync().await(mainExecutor)
         val type = listOf(ExerciseType.STRENGTH_TRAINING, ExerciseType.WORKOUT, ExerciseType.WALKING)
