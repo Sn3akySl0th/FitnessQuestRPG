@@ -53,7 +53,7 @@ class ExerciseInfoService(private val context: Context) {
         custom[key]?.let { return@withContext it }
         val list = load()
         exactIndex[key]?.let { return@withContext it }
-        aliases[key]?.let { alias -> exactIndex[normalize(alias)]?.let { return@withContext it } }
+        resolveExplicitAlias(name, aliases)?.let { alias -> exactIndex[normalize(alias)]?.let { return@withContext it } }
         fuzzyMatch(key, list)
     }
 
@@ -267,14 +267,6 @@ class ExerciseInfoService(private val context: Context) {
         return short.length >= 3 && long.startsWith(short)
     }
 
-    private fun normalize(name: String): String =
-        name.lowercase()
-            .replace(Regex("[^a-z0-9]+"), " ")
-            .split(' ')
-            .filter { it.isNotBlank() }
-            .map { it.removeSuffix("s") }
-            .sorted()
-            .joinToString(" ")
 
     private fun DocumentSnapshot.getStringList(field: String): List<String> =
         (get(field) as? List<*>).orEmpty().mapNotNull { it?.toString()?.takeIf(String::isNotBlank) }
@@ -326,11 +318,28 @@ class ExerciseInfoService(private val context: Context) {
         return if (capped.last() in ".!?") capped else "$capped."
     }
 
-    private companion object {
+    internal companion object {
         const val CLOUD_TTL_MS = 5 * 60 * 1000L
 
         /** Coil loads these from the APK: `app/src/main/assets/exercises/…`. */
         const val ASSET_IMAGE_PREFIX = "file:///android_asset/exercises/"
+
+        internal fun normalize(name: String): String =
+            name.lowercase()
+                .replace(Regex("[^a-z0-9]+"), " ")
+                .split(' ')
+                .filter { it.isNotBlank() }
+                .map { it.removeSuffix("s") }
+                .sorted()
+                .joinToString(" ")
+
+        internal fun resolveExplicitAlias(
+            query: String,
+            aliases: Map<String, String> = ExerciseInfoService.aliases
+        ): String? {
+            val key = normalize(query)
+            return aliases[key]
+        }
 
         /** Curated matches for catalog exercises (keys are normalized names). */
         val aliases = mapOf(
@@ -384,7 +393,8 @@ class ExerciseInfoService(private val context: Context) {
             "swivel crunch" to "Twisting Vertical Crunch",
             "seated ab crunch" to "Ab Crunch Machine",
             "machine crunch" to "Ab Crunch Machine",
-            "ab crunch" to "Ab Crunch Machine"
+            "ab crunch" to "Ab Crunch Machine",
+            "heel tap" to "Alternate Heel Touchers"
         )
 
         /** Exercises the database doesn't cover; hand-written guides, no photos. */
