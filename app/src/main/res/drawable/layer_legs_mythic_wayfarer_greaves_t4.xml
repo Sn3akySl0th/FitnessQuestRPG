@@ -4,11 +4,11 @@
     android:viewportWidth="500"
     android:viewportHeight="600">
 
-    <!-- Tier 4: Mythic Wayfarer Greaves (Legs layer Z: 05, Y=365 to 510) -->
-    <!-- Obsidian & Void Cloth Underlay -->
+    <!-- Tier 4: Mythic Wayfarer Greaves (Legs layer Z: 05, Y=360 to 506) -->
+    <!-- Obsidian & Void Cloth Underlay (Continuous waist, crotch, and full legs) -->
     <path
         android:fillColor="#0F172A"
-        android:pathData="M182,366 L318,366 L316,420 L270,425 L250,405 L230,425 L184,420 Z M184,410 L234,415 L238,506 L188,506 Z M316,410 L266,415 L262,506 L312,506 Z" />
+        android:pathData="M180,360 L320,360 L318,420 L312,506 L262,506 L264,424 Q250,428 236,424 L238,506 L188,506 L182,420 Z" />
 
     <!-- Mythic Gold Plated Cuisses -->
     <path
@@ -56,11 +56,11 @@
     <!-- Golden Waist Tassets & Gem -->
     <path
         android:fillColor="#B45309"
-        android:pathData="M180,364 L320,364 L318,380 L182,380 Z" />
+        android:pathData="M180,360 L320,360 L318,378 L182,378 Z" />
     <path
         android:fillColor="#F59E0B"
-        android:pathData="M184,378 L220,378 L216,412 L186,412 Z M316,378 L280,378 L284,412 L314,412 Z" />
+        android:pathData="M184,376 L220,376 L216,412 L186,412 Z M316,376 L280,376 L284,412 L314,412 Z" />
     <path
         android:fillColor="#E11D48"
-        android:pathData="M242,364 L258,364 L258,380 L242,380 Z" />
+        android:pathData="M242,360 L258,360 L258,378 L242,378 Z" />
 </vector>

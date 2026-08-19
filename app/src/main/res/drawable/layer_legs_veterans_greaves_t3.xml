@@ -4,11 +4,11 @@
     android:viewportWidth="500"
     android:viewportHeight="600">
 
-    <!-- Tier 3: Veteran's Greaves (Legs layer Z: 05, Y=365 to 510) -->
-    <!-- Chainmail Underlay -->
+    <!-- Tier 3: Veteran's Greaves (Legs layer Z: 05, Y=360 to 506) -->
+    <!-- Chainmail Underlay (Continuous waist, crotch, and full legs) -->
     <path
         android:fillColor="#1E293B"
-        android:pathData="M182,366 L318,366 L316,420 L270,425 L250,405 L230,425 L184,420 Z M184,410 L234,415 L238,506 L188,506 Z M316,410 L266,415 L262,506 L312,506 Z" />
+        android:pathData="M180,360 L320,360 L318,420 L312,506 L262,506 L264,424 Q250,428 236,424 L238,506 L188,506 L182,420 Z" />
 
     <!-- Thigh Cuisses (Steel Armor Plates) -->
     <path
@@ -55,12 +55,12 @@
     <!-- Heavy Plated Tassets & Belt -->
     <path
         android:fillColor="#0F172A"
-        android:pathData="M180,364 L320,364 L318,380 L182,380 Z" />
+        android:pathData="M180,360 L320,360 L318,378 L182,378 Z" />
     <!-- Tassets (hanging thigh armor plates) -->
     <path
         android:fillColor="#475569"
-        android:pathData="M186,378 L218,378 L214,410 L188,410 Z M314,378 L282,378 L286,410 L312,410 Z" />
+        android:pathData="M186,376 L218,376 L214,410 L188,410 Z M314,376 L282,376 L286,410 L312,410 Z" />
     <path
         android:fillColor="#94A3B8"
-        android:pathData="M240,362 L260,362 L260,382 L240,382 Z" />
+        android:pathData="M240,358 L260,358 L260,380 L240,380 Z" />
 </vector>

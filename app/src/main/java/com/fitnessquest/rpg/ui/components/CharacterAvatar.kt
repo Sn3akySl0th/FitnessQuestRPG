@@ -13,6 +13,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -332,10 +334,11 @@ fun CharacterAvatar(
     detail: AvatarDetail = AvatarDetail.FULL,
     highlightMuscles: Set<String> = emptySet(),
     facingBack: Boolean = false,
+    enableBreathing: Boolean = true,
     focus: AvatarFocus = AvatarFocus.FULL_BODY
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "heroIdle")
-    val breatheScale by infiniteTransition.animateFloat(
+    val internalBreatheScale by infiniteTransition.animateFloat(
         initialValue = 0.985f,
         targetValue = 1.015f,
         animationSpec = infiniteRepeatable(
@@ -344,6 +347,8 @@ fun CharacterAvatar(
         ),
         label = "breathe"
     )
+    val breatheScale = if (enableBreathing) internalBreatheScale else 1f
+    
     val animPhase by infiniteTransition.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
@@ -358,7 +363,11 @@ fun CharacterAvatar(
     Canvas(
         modifier
             .aspectRatio(100f / 120f)
-            .scale(breatheScale)
+            .graphicsLayer {
+                scaleX = breatheScale
+                scaleY = breatheScale
+                transformOrigin = TransformOrigin(0.5f, 0.9f)
+            }
             .clipToBounds()
     ) {
         val frame = AvatarFrame(
@@ -864,7 +873,11 @@ private fun DrawScope.drawLowerBodyLayer(f: AvatarFrame, pose: AvatarPose) {
     withTransform({
         translate(pose.bodyOffset.x, pose.bodyOffset.y)
     }) {
-        drawRoundRect(f.appearance.underwearColor, topLeft = f.p(36f, 71f), size = f.s(28f, 13f), cornerRadius = CornerRadius(4f * f.u))
+        val modestyColor = legPal?.main ?: f.appearance.underwearColor
+        drawRoundRect(modestyColor, topLeft = f.p(36f, 71f), size = f.s(28f, 13f), cornerRadius = CornerRadius(4f * f.u))
+        if (legPal != null) {
+            drawRect(legPal.dark, topLeft = f.p(36f, 71f), size = f.s(28f, 3f))
+        }
         
         // Glute highlight overlay (draw over underwear if sore, back view only)
         if (f.facingBack && f.hasHighlight("glutes", "legs")) {

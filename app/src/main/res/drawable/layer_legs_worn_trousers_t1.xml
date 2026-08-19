@@ -4,26 +4,26 @@
     android:viewportWidth="500"
     android:viewportHeight="600">
 
-    <!-- Tier 1: Worn Trousers (Legs layer Z: 05, Y=365 to 510) -->
-    <!-- Base Waist & Crotch -->
+    <!-- Tier 1: Worn Trousers (Legs layer Z: 05, Y=360 to 506) -->
+    <!-- Base Solid Trousers Body (Continuous waist, crotch, and full legs) -->
     <path
         android:fillColor="#3E2723"
-        android:pathData="M182,366 L318,366 L316,420 L270,425 L250,405 L230,425 L184,420 Z" />
+        android:pathData="M180,360 L320,360 L318,420 L312,506 L262,506 L264,424 Q250,428 236,424 L238,506 L188,506 L182,420 Z" />
 
     <!-- Left & Right Trouser Legs -->
     <path
         android:fillColor="#4E342E"
-        android:pathData="M184,410 L234,415 L238,506 L188,506 Z M316,410 L266,415 L262,506 L312,506 Z" />
+        android:pathData="M184,400 L234,408 L238,506 L188,506 Z M316,400 L266,408 L262,506 L312,506 Z" />
 
     <!-- Thigh Highlight Panels -->
     <path
         android:fillColor="#5D4037"
-        android:pathData="M188,414 L228,418 L232,460 L192,460 Z M312,414 L272,418 L268,460 L308,460 Z" />
+        android:pathData="M188,410 L228,414 L232,456 L192,456 Z M312,410 L272,414 L268,456 L308,456 Z" />
 
     <!-- Knee Stitched Patches -->
     <path
         android:fillColor="#6D4C41"
-        android:pathData="M188,446 L230,448 L232,476 L190,474 Z M312,446 L270,448 L268,476 L310,474 Z" />
+        android:pathData="M188,446 L230,448 L232,476 L190,476 Z M312,446 L270,448 L268,476 L310,476 Z" />
 
     <!-- Patch Stitches & Wrinkles -->
     <path
@@ -32,14 +32,21 @@
         android:strokeLineCap="round"
         android:pathData="M186,444 L232,446 M188,478 L234,476 M314,444 L268,446 M312,478 L266,476 M200,488 L222,492 M300,488 L278,492" />
 
+    <!-- Central Trouser Seam / Fly -->
+    <path
+        android:strokeColor="#271105"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:pathData="M250,376 L250,408 Q250,422 242,424" />
+
     <!-- Leather Waist Belt & Buckle -->
     <path
         android:fillColor="#271105"
-        android:pathData="M180,364 L320,364 L318,378 L182,378 Z" />
+        android:pathData="M180,360 L320,360 L318,376 L182,376 Z" />
     <path
         android:fillColor="#D97706"
-        android:pathData="M242,362 L258,362 L258,380 L242,380 Z" />
+        android:pathData="M242,358 L258,358 L258,378 L242,378 Z" />
     <path
         android:fillColor="#1F2937"
-        android:pathData="M246,366 L254,366 L254,376 L246,376 Z" />
+        android:pathData="M246,362 L254,362 L254,374 L246,374 Z" />
 </vector>

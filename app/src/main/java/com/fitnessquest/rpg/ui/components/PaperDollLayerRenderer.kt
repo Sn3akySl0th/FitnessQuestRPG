@@ -18,6 +18,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -86,6 +87,15 @@ fun PaperDollLayerRenderer(
     val tilt by rememberDeviceTilt()
 
     val infiniteTransition = rememberInfiniteTransition(label = "paperDollPhysics")
+    val breatheScale by infiniteTransition.animateFloat(
+        initialValue = 0.985f,
+        targetValue = 1.015f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1400, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "breathe"
+    )
     val capeFlutter by infiniteTransition.animateFloat(
         initialValue = -1.5f,
         targetValue = 1.5f,
@@ -125,7 +135,13 @@ fun PaperDollLayerRenderer(
     Box(
         modifier = modifier
             .aspectRatio(500f / 600f)
-            .fillMaxSize(),
+            .fillMaxSize()
+            .graphicsLayer {
+                // Shared breathing animation for the entire stack (Avatar + Gear)
+                scaleX = breatheScale
+                scaleY = breatheScale
+                transformOrigin = TransformOrigin(0.5f, 0.9f)
+            },
         contentAlignment = Alignment.Center
     ) {
         if (!hasAny2DLayer) {
@@ -137,7 +153,8 @@ fun PaperDollLayerRenderer(
                 modifier = Modifier.fillMaxSize(),
                 animation = animation,
                 expression = expression,
-                detail = AvatarDetail.FULL
+                detail = AvatarDetail.FULL,
+                enableBreathing = false
             )
         } else {
             // 2D Layer Compositor (rendered strictly in z-index order 00 to 13)
@@ -164,7 +181,8 @@ fun PaperDollLayerRenderer(
                         modifier = Modifier.fillMaxSize(),
                         animation = animation,
                         expression = expression,
-                        detail = AvatarDetail.FULL
+                        detail = AvatarDetail.FULL,
+                        enableBreathing = false
                     )
                 }
 

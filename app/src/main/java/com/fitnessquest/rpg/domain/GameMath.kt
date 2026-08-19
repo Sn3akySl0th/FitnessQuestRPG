@@ -136,6 +136,9 @@ object GameMath {
     /** Bonus XP awarded for each personal record set in a session. */
     const val PR_BONUS_XP = 25
 
+    /** Stat points awarded automatically on every level up (Retroactive). */
+    const val STAT_POINTS_PER_LEVEL = 2
+
     /**
      * Autoregulation: suggests the next set from the effort of the last one.
      * Effort is reps-in-reserve (RIR); the 1-3 range is the productive sweet
@@ -266,12 +269,22 @@ object GameMath {
         val sessionAgiXp = logs.asSequence().filter { it.category == ExerciseCategory.BODYWEIGHT }.sumOf { it.xp }
         val sessionWilXp = logs.asSequence().filter { it.category == ExerciseCategory.FLEXIBILITY }.sumOf { it.xp }
         
-        // Distribute bonus XP (Elixirs, PRs) proportionally across active stats
-        val baseSessionXp = (sessionStrXp + sessionEndXp + sessionAgiXp + sessionWilXp).toDouble().coerceAtLeast(1.0)
-        val strP = character.strProgress + sessionStrXp + (bonusXp * (sessionStrXp / baseSessionXp)).toInt()
-        val endP = character.endProgress + sessionEndXp + (bonusXp * (sessionEndXp / baseSessionXp)).toInt()
-        val agiP = character.agiProgress + sessionAgiXp + (bonusXp * (sessionAgiXp / baseSessionXp)).toInt()
-        val wilP = character.wilProgress + sessionWilXp + (bonusXp * (sessionWilXp / baseSessionXp)).toInt()
+        // Universal Success Mechanism: Cross-Training XP Distribution (80/20 Split)
+        // 80% of category XP goes to its primary stat, 20% is distributed equally (5% to each of the 4 stats).
+        // Result: Primary gets 85%, and every other stat gets 5% of that category's XP.
+        val strGainXp = (sessionStrXp * 0.85 + (sessionEndXp + sessionAgiXp + sessionWilXp) * 0.05).toInt()
+        val endGainXp = (sessionEndXp * 0.85 + (sessionStrXp + sessionAgiXp + sessionWilXp) * 0.05).toInt()
+        val agiGainXp = (sessionAgiXp * 0.85 + (sessionStrXp + sessionEndXp + sessionWilXp) * 0.05).toInt()
+        val wilGainXp = (sessionWilXp * 0.85 + (sessionStrXp + sessionEndXp + sessionAgiXp) * 0.05).toInt()
+
+        // Distribute bonus XP (Elixirs, PRs) equally among all 4 stats to ensure catch-up.
+        val bonusPerStat = bonusXp / 4
+        val bonusRemainder = bonusXp % 4
+
+        val strP = character.strProgress + strGainXp + bonusPerStat + bonusRemainder
+        val endP = character.endProgress + endGainXp + bonusPerStat
+        val agiP = character.agiProgress + agiGainXp + bonusPerStat
+        val wilP = character.wilProgress + wilGainXp + bonusPerStat
 
         var strProgress = strP
         var endProgress = endP
@@ -304,6 +317,7 @@ object GameMath {
             lastEnergyUpdate = now,
             strength = str, endurance = end, agility = agi, willpower = wil,
             strProgress = strProgress, endProgress = endProgress, agiProgress = agiProgress, wilProgress = wilProgress,
+            freeStatPoints = character.freeStatPoints + (levelsGained * STAT_POINTS_PER_LEVEL),
             sessionsCompleted = character.sessionsCompleted + 1
         )
 
@@ -333,11 +347,13 @@ object GameMath {
     fun applyLevelUps(character: CharacterEntity): CharacterEntity {
         var level = character.level
         var xp = character.xp
+        var points = character.freeStatPoints
         while (xp >= xpToNextLevel(level)) {
             xp -= xpToNextLevel(level)
             level++
+            points += STAT_POINTS_PER_LEVEL
         }
-        return character.copy(level = level, xp = xp)
+        return character.copy(level = level, xp = xp, freeStatPoints = points)
     }
 
     /** Safely subtracts XP from a character, handling potential level-downs. */

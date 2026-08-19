@@ -155,6 +155,19 @@ class GameRepository(
                 db.biomeProgressDao().upsert(BiomeProgressEntity(biome.name))
             }
         }
+
+        // Retroactive Stat Points Grant: One-time catch-up for existing players to match new +2/level rule.
+        if (prefs?.isStatPointsRetroApplied() == false) {
+            db.characterDao().get()?.let { char ->
+                if (char.level > 1) {
+                    val missingPoints = (char.level - 1) * GameMath.STAT_POINTS_PER_LEVEL
+                    if (missingPoints > 0) {
+                        db.characterDao().upsert(char.copy(freeStatPoints = char.freeStatPoints + missingPoints))
+                    }
+                }
+            }
+            prefs.setStatPointsRetroApplied(true)
+        }
     }
 
     suspend fun getCharacter(): CharacterEntity {

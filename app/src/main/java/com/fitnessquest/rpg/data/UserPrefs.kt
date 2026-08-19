@@ -447,6 +447,7 @@ class UserPrefs(context: Context) {
         const val KEY_PERMISSIONS_REPAIR_SHOWN = "permissions_repair_shown"
         const val KEY_USE_LOCAL_AI = "use_local_ai_by_default"
         const val KEY_LAST_SEEN_VERSION = "last_seen_version_code"
+        const val KEY_STAT_POINTS_RETRO_APPLIED = "stat_points_retroactive_applied"
     }
 
     // ---- Local AI ----
@@ -511,5 +512,11 @@ class UserPrefs(context: Context) {
 
     fun setLastSeenVersion(versionCode: Int) {
         prefs.edit { putInt(KEY_LAST_SEEN_VERSION, versionCode) }
+    }
+
+    // ---- Stat Points Migration ----
+    fun isStatPointsRetroApplied(): Boolean = prefs.getBoolean(KEY_STAT_POINTS_RETRO_APPLIED, false)
+    fun setStatPointsRetroApplied(value: Boolean) {
+        prefs.edit { putBoolean(KEY_STAT_POINTS_RETRO_APPLIED, value) }
     }
 }

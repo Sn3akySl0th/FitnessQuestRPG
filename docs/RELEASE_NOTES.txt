@@ -1,12 +1,15 @@
-1.0.11
+0.11.0
 - Avatar V2 Overhaul: 5-piece head-to-toe gear visualization with high-definition vector layers for Legs and Boots across all tiers.
 - Back Slot Gear & Wings: Added cloaks, capes, and celestial wings with idle breathing flutter physics.
 - 3D Gyroscopic Parallax: Real-time depth displacement when tilting phone for a dynamic holographic card effect.
 - Procedural Diablo Dye Engine: Dynamic material and rarity color tinting (Iron, Gold, Blood-Steel, Glacial, Void).
 - Interactive Avatar Tap Physics: Tactile squash-and-stretch spring recoil on avatar interaction.
 - Anatomical Neck Layer & Scooped Collars: Enhanced facial profile and unobstructed neckline for all gear styles.
+- Fixed: Equipped gear rarity and upgrade level always showing as Common/+0 in the Hero Gear tab (instance ID namespace mismatch).
+- Fixed: Visual gap between waist and leg armor across all four tier leg drawables (T1–T4).
+- Fixed: Modesty undergarment layer now inherits the correct color palette from equipped leg gear.
 
-1.0.10
+0.10.0
 - Added Paper-Doll Avatar Showcase with layered equipment rendering, magical pedestal, and dynamic equip animations.
 - Introduced Mythic gear rarity tier with animated crimson auras, glowing frames, and visual shimmer effects.
 - Added Gear Traits & Affixes system (Vampiric, Berserk, Thorns, Swiftness, etc.) with active combat integration.
@@ -14,21 +17,21 @@
 - Added interactive Compose previews for high-tier equipment, paper-doll avatars, and loadout showcases.
 - Enhanced step counter lifecycle handling and map travel navigation stability.
 
-1.0.9
+0.9.0
 - Fixed Real-time "Ghost Damage" pulse monitoring to ensure damage strikes appear instantly.
 - Improved Raid Boss reliability with server-side idempotency and health clamping fixes.
 - Added "Wellness Energy" claim feature (20 energy/day).
 - Optimized Active Session performance and cleaned up redundant UI logic.
 - General data integrity and sync stability improvements.
 
-1.0.7
+0.7.0
 - Added Real-time "Ghost Damage" visualization to party raid bosses.
 - Added ability to delete shared party quests.
 - Redesigned Active Quest Banner with improved stats (Volume, Distance) and cleaner layout.
 - Hidden quest banners during battles to prevent UI obstruction.
 - Added unit preference (Metric/Imperial) support to the Active Quest Banner.
 
-1.0.6
+0.6.0
 - Improved update reliability for players restoring data from older FitQuest versions.
 - Strengthened database recovery safeguards to protect workout history during app upgrades.
 - Expanded automated migration and active-workout restoration coverage across every supported database version.

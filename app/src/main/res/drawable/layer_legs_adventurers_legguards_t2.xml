@@ -4,21 +4,21 @@
     android:viewportWidth="500"
     android:viewportHeight="600">
 
-    <!-- Tier 2: Adventurer's Legguards (Legs layer Z: 05, Y=365 to 510) -->
-    <!-- Base Hunter-Green Breeches -->
+    <!-- Tier 2: Adventurer's Legguards (Legs layer Z: 05, Y=360 to 506) -->
+    <!-- Base Hunter-Green Breeches (Continuous waist, crotch, and full legs) -->
     <path
         android:fillColor="#14532D"
-        android:pathData="M182,366 L318,366 L316,420 L270,425 L250,405 L230,425 L184,420 Z" />
+        android:pathData="M180,360 L320,360 L318,420 L312,506 L262,506 L264,424 Q250,428 236,424 L238,506 L188,506 L182,420 Z" />
 
     <!-- Left & Right Leg Breeches Body -->
     <path
         android:fillColor="#166534"
-        android:pathData="M184,410 L234,415 L238,506 L188,506 Z M316,410 L266,415 L262,506 L312,506 Z" />
+        android:pathData="M184,400 L234,408 L238,506 L188,506 Z M316,400 L266,408 L262,506 L312,506 Z" />
 
     <!-- Quilted Inner Thigh Linings -->
     <path
         android:fillColor="#15803D"
-        android:pathData="M188,414 L228,418 L232,455 L192,455 Z M312,414 L272,418 L268,455 L308,455 Z" />
+        android:pathData="M188,410 L228,414 L232,455 L192,455 Z M312,410 L272,414 L268,455 L308,455 Z" />
 
     <!-- Leather Thigh Holster / Straps -->
     <path
@@ -46,10 +46,17 @@
         android:strokeWidth="2.5"
         android:pathData="M184,458 L234,458 M186,472 L234,472 M316,458 L266,458 M314,472 L266,472" />
 
+    <!-- Central Seam -->
+    <path
+        android:strokeColor="#052E16"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:pathData="M250,376 L250,408 Q250,422 242,424" />
+
     <!-- Leather Adventurer Belt with Pouches -->
     <path
         android:fillColor="#451A03"
-        android:pathData="M180,364 L320,364 L318,378 L182,378 Z" />
+        android:pathData="M180,360 L320,360 L318,376 L182,376 Z" />
     <!-- Left Pouch -->
     <path
         android:fillColor="#78350F"
@@ -57,5 +64,5 @@
     <!-- Brass Buckle -->
     <path
         android:fillColor="#F59E0B"
-        android:pathData="M242,362 L258,362 L258,380 L242,380 Z" />
+        android:pathData="M242,358 L258,358 L258,378 L242,378 Z" />
 </vector>

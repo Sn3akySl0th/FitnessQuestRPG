@@ -12,6 +12,18 @@ object WhatNewContent {
      */
     val releases = listOf(
         ChangeLog(
+            version = "0.10.0",
+            date = "August 2026",
+            changes = listOf(
+                "🧍 Hero Avatar Overhaul: Your character now wears gear head-to-toe with stunning high-definition vector art for every slot and tier.",
+                "🗡️ Gear Rarity Fix: Equipped items now correctly display their true rarity glow and upgrade level (+1, +2…) in the Gear tab.",
+                "🌀 3D Parallax Effect: Tilt your phone to see your hero and gear shift with a dynamic depth effect.",
+                "🎨 Dye Engine: Gear now shows rarity-based color tinting — Iron, Gold, Blood-Steel, Glacial, and Void materials all look distinct.",
+                "🪶 Back Slot & Wings: Cloaks, capes, and celestial wings now appear on your avatar with idle flutter physics.",
+                "👆 Avatar Tap Physics: Tap your hero for a satisfying squash-and-stretch recoil animation."
+            )
+        ),
+        ChangeLog(
             version = "1.0.9",
             date = "August 2026",
             changes = listOf(

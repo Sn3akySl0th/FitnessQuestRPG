@@ -1146,7 +1146,7 @@ private fun gearTab(
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 EquippableSlots.forEach { slot ->
                     val item = state.gear[slot]
-                    val instance = state.ownedGear.find { it.catalog.id == item?.id }?.instance
+                    val instance = state.ownedGear.find { it.instance.id == item?.id }?.instance
                     val rarity = instance?.rarity?.let { GearRarity.fromName(it) } ?: GearRarity.COMMON
                     EquipmentSlot(
                         slot = slot,
