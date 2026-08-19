@@ -468,25 +468,25 @@ private fun SessionScreen(
                         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                             Button(
                                 onClick = onToggleCardioTimer,
-                                modifier = Modifier.size(28.dp),
+                                modifier = Modifier.size(32.dp),
                                 colors = ButtonDefaults.secondaryButtonColors()
                             ) {
                                 Icon(
                                     imageVector = if (state.cardioTimerActive) Icons.Default.Pause else Icons.Default.PlayArrow,
                                     contentDescription = if (state.cardioTimerActive) "Pause" else "Start",
-                                    modifier = Modifier.size(14.dp)
+                                    modifier = Modifier.size(16.dp)
                                 )
                             }
                             if (totalSecs > 0) {
                                 Button(
                                     onClick = onResetCardioTimer,
-                                    modifier = Modifier.size(28.dp),
+                                    modifier = Modifier.size(32.dp),
                                     colors = ButtonDefaults.secondaryButtonColors()
                                 ) {
                                     Icon(
                                         Icons.Default.Refresh,
                                         contentDescription = "Reset",
-                                        modifier = Modifier.size(14.dp)
+                                        modifier = Modifier.size(16.dp)
                                     )
                                 }
                             }
@@ -508,17 +508,17 @@ private fun SessionScreen(
                             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Button(
                                     onClick = { onAdjustDistance(if (session.imperial) -0.1 else -0.2) },
-                                    modifier = Modifier.size(28.dp),
+                                    modifier = Modifier.size(32.dp),
                                     colors = ButtonDefaults.secondaryButtonColors()
                                 ) {
-                                    Icon(Icons.Default.Remove, contentDescription = "-", modifier = Modifier.size(14.dp))
+                                    Icon(Icons.Default.Remove, contentDescription = "-", modifier = Modifier.size(16.dp))
                                 }
                                 Button(
                                     onClick = { onAdjustDistance(if (session.imperial) 0.1 else 0.2) },
-                                    modifier = Modifier.size(28.dp),
+                                    modifier = Modifier.size(32.dp),
                                     colors = ButtonDefaults.secondaryButtonColors()
                                 ) {
-                                    Icon(Icons.Default.Add, contentDescription = "+", modifier = Modifier.size(14.dp))
+                                    Icon(Icons.Default.Add, contentDescription = "+", modifier = Modifier.size(16.dp))
                                 }
                             }
                         }
@@ -553,17 +553,17 @@ private fun SessionScreen(
                         ) {
                             Button(
                                 onClick = { onAdjustWeight(-weightStep) },
-                                modifier = Modifier.size(26.dp),
+                                modifier = Modifier.size(32.dp),
                                 colors = ButtonDefaults.secondaryButtonColors()
                             ) {
-                                Icon(Icons.Default.Remove, contentDescription = "-", modifier = Modifier.size(12.dp))
+                                Icon(Icons.Default.Remove, contentDescription = "-", modifier = Modifier.size(14.dp))
                             }
                             Button(
                                 onClick = { onAdjustWeight(weightStep) },
-                                modifier = Modifier.size(26.dp),
+                                modifier = Modifier.size(32.dp),
                                 colors = ButtonDefaults.secondaryButtonColors()
                             ) {
-                                Icon(Icons.Default.Add, contentDescription = "+", modifier = Modifier.size(12.dp))
+                                Icon(Icons.Default.Add, contentDescription = "+", modifier = Modifier.size(14.dp))
                             }
                         }
                     }
@@ -590,17 +590,17 @@ private fun SessionScreen(
                         ) {
                             Button(
                                 onClick = { onAdjustReps(-1) },
-                                modifier = Modifier.size(26.dp),
+                                modifier = Modifier.size(32.dp),
                                 colors = ButtonDefaults.secondaryButtonColors()
                             ) {
-                                Icon(Icons.Default.Remove, contentDescription = "-", modifier = Modifier.size(12.dp))
+                                Icon(Icons.Default.Remove, contentDescription = "-", modifier = Modifier.size(14.dp))
                             }
                             Button(
                                 onClick = { onAdjustReps(1) },
-                                modifier = Modifier.size(26.dp),
+                                modifier = Modifier.size(32.dp),
                                 colors = ButtonDefaults.secondaryButtonColors()
                             ) {
-                                Icon(Icons.Default.Add, contentDescription = "+", modifier = Modifier.size(12.dp))
+                                Icon(Icons.Default.Add, contentDescription = "+", modifier = Modifier.size(14.dp))
                             }
                         }
                     }
