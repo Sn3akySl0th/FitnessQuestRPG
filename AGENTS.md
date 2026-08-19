@@ -30,15 +30,22 @@ Never commit, merge, rebase, push, tag, delete a branch, or create a release unl
 
 ## Current protected history
 
-As of the progression integration:
+Immutable rollback tags and preserved source branches:
 
-- `main` / `origin/main`: merge commit `7e7ffc2` — `merge: progression schema v30 for internal testing`
-- `feature/progression-schema-v30`: `3342ff2` — `feat(progression): gear reforge, procedural combat traits & Room schema v30`
 - `pre-internal-progression-merge`: `ad5d1f0` — `merge: closed-beta stabilization and UX safeguards`
 - `pre-release-freeze`: `e186ea7`
 - `pre-closed-beta-freeze`: `e885d8c`
+- `feature/progression-schema-v30`: `3342ff2` — `feat(progression): gear reforge, procedural combat traits & Room schema v30`
 
-These SHAs are historical reference points, not permission to rewrite history.
+Verify current branch heads dynamically with:
+
+```powershell
+git rev-parse HEAD
+git rev-parse origin/main
+git status -sb
+```
+
+These tags and branches are historical reference points and rollback anchors, not permission to rewrite history.
 
 ## Required preflight for changes
 
@@ -158,3 +165,34 @@ For every Git operation, report only facts verified by command output. Include:
 - Exact commands run.
 - Commit, merge, push, tag, or release SHA/identifier when applicable.
 - What was deliberately not done, such as “no push,” “no force push,” or “no release artifacts created.”
+
+### Multi-release bug-fix policy
+
+When a bug affects `main` and one or more supported `release/*` branches:
+
+1. Create a small, self-contained bug-fix branch from `main`.
+2. Add or update a regression test where practical.
+3. Merge the canonical fix into `main` first.
+4. For each affected supported release branch, create a short-lived `backport/<release>-<fix>` branch from that release branch.
+5. Backport the exact approved fix using:
+
+   ```powershell
+   git cherry-pick -x <canonical-fix-commit-sha>
+   ```
+
+6. Resolve conflicts only after reviewing whether the fix remains correct for that release line.
+7. Run relevant verification on every target release branch.
+8. Merge each approved backport through its own review/approval step.
+9. Record which supported branches received the fix and why any affected branch did not.
+
+Do not merge `main` wholesale into a stabilized `release/*` branch merely to obtain a bug fix. Do not cherry-pick a broad feature commit or merge commit when a small, dedicated fix commit can be used.
+
+For an emergency release-only hotfix:
+
+1. Branch from the affected `release/*` branch.
+2. Fix and validate it there.
+3. Merge it into that release branch.
+4. Immediately forward-port the equivalent fix into `main`.
+5. Backport it to any other affected supported release branch as needed.
+
+Never allow a release-only hotfix to remain absent from `main`.
