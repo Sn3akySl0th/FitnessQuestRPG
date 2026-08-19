@@ -1,0 +1,46 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="500dp"
+    android:height="600dp"
+    android:viewportWidth="500"
+    android:viewportHeight="600">
+
+    <!-- Tier 1: Novice Oathblade (Paladin sword: Polished steel, gold crossguard with radiant aura) -->
+    <!-- Holy Aura Glow -->
+    <path
+        android:fillColor="#15FBBF24"
+        android:pathData="M357.5,280 m-25,0 a25,90 0 1,0 50,0 a25,90 0 1,0 -50,0" />
+
+    <!-- Polished Steel Blade -->
+    <path
+        android:fillColor="#CBD5E1"
+        android:pathData="M350,225 L357.5,200 L365,225 L363,355 L352,355 Z" />
+
+    <!-- Blade Fuller with Subtle Light Beam -->
+    <path
+        android:strokeColor="#FEF08A"
+        android:strokeWidth="1.5"
+        android:pathData="M357.5,215 L357.5,350" />
+
+    <!-- Golden Crossguard (Cruciform Holy Guard) -->
+    <path
+        android:fillColor="#D97706"
+        android:pathData="M330,355 L385,355 L383,366 L332,366 Z" />
+    <!-- Guard Center Sunburst -->
+    <path
+        android:fillColor="#FBBF24"
+        android:pathData="M357.5,360 m-3,0 a3,3 0 1,0 6,0 a3,3 0 1,0 -6,0" />
+
+    <!-- White Leather Wrap Grip -->
+    <path
+        android:fillColor="#F8FAFC"
+        android:pathData="M353,366 L362,366 L362,415 L353,415 Z" />
+    <path
+        android:strokeColor="#D97706"
+        android:strokeWidth="1.5"
+        android:pathData="M353,375 L362,380 M353,388 L362,393 M353,401 L362,406" />
+
+    <!-- Golden Sphere Pommel -->
+    <path
+        android:fillColor="#D97706"
+        android:pathData="M357.5,422 m-5.5,0 a5.5,5.5 0 1,0 11,0 a5.5,5.5 0 1,0 -11,0" />
+</vector>

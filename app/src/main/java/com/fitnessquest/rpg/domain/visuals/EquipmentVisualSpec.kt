@@ -24,30 +24,59 @@ enum class PaperDollVisualSlot {
 
     companion object {
         fun fromDomainSlot(slot: ItemSlot, itemStyle: String = "", itemName: String = ""): PaperDollVisualSlot {
+            val nameLower = itemName.lowercase()
+            val styleLower = itemStyle.lowercase()
+            val isBackWearable = nameLower.contains("cape") ||
+                nameLower.contains("cloak") ||
+                nameLower.contains("towel") ||
+                nameLower.contains("quiver") ||
+                nameLower.contains("wings") ||
+                nameLower.contains("mantle") ||
+                styleLower == "cape" ||
+                styleLower == "cloak"
+
             return when (slot) {
                 ItemSlot.WEAPON -> WEAPON
                 ItemSlot.HEAD -> HEAD
-                ItemSlot.CHEST -> CHEST
+                ItemSlot.CHEST -> if (isBackWearable) BACK else CHEST
                 ItemSlot.HANDS -> HANDS
                 ItemSlot.LEGS -> LEGS
                 ItemSlot.FEET -> FEET
-                ItemSlot.TRINKET -> {
-                    val nameLower = itemName.lowercase()
-                    val styleLower = itemStyle.lowercase()
-                    if (nameLower.contains("cape") ||
-                        nameLower.contains("cloak") ||
-                        nameLower.contains("towel") ||
-                        nameLower.contains("quiver") ||
-                        nameLower.contains("wings") ||
-                        styleLower == "cape" ||
-                        styleLower == "cloak"
-                    ) {
-                        BACK
-                    } else {
-                        TRINKET
-                    }
-                }
+                ItemSlot.TRINKET -> if (isBackWearable) BACK else TRINKET
                 else -> TRINKET
+            }
+        }
+    }
+}
+
+/**
+ * Procedural material and rarity dyes for Diablo-style visual customization.
+ */
+enum class EquipmentDye(
+    val label: String,
+    val tintColor: androidx.compose.ui.graphics.Color?
+) {
+    NATURAL("Original", null),
+    IRON("Polished Iron", androidx.compose.ui.graphics.Color(0xFF94A3B8)),
+    GOLD("Burnished Gold", androidx.compose.ui.graphics.Color(0xFFF59E0B)),
+    BLOOD_STEEL("Blood Steel", androidx.compose.ui.graphics.Color(0xFFE11D48)),
+    GLACIAL("Glacial Frost", androidx.compose.ui.graphics.Color(0xFF38BDF8)),
+    VOID("Void Shadow", androidx.compose.ui.graphics.Color(0xFFA855F7)),
+    VERDANT("Emerald Wood", androidx.compose.ui.graphics.Color(0xFF10B981)),
+    CELESTIAL("Celestial Dawn", androidx.compose.ui.graphics.Color(0xFFFEF08A));
+
+    companion object {
+        fun fromItem(item: ItemEntity): EquipmentDye {
+            val nameLower = item.name.lowercase()
+            return when {
+                nameLower.contains("gold") || nameLower.contains("dawn") || nameLower.contains("solar") -> GOLD
+                nameLower.contains("blood") || nameLower.contains("rage") || nameLower.contains("ember") || nameLower.contains("fury") -> BLOOD_STEEL
+                nameLower.contains("frost") || nameLower.contains("glacial") || nameLower.contains("freeze") || nameLower.contains("storm") -> GLACIAL
+                nameLower.contains("void") || nameLower.contains("shadow") || nameLower.contains("soul") || nameLower.contains("eclipse") -> VOID
+                nameLower.contains("emerald") || nameLower.contains("wild") || nameLower.contains("oak") || nameLower.contains("briar") -> VERDANT
+                nameLower.contains("celestial") || nameLower.contains("seraph") || nameLower.contains("radiant") -> CELESTIAL
+                nameLower.contains("iron") || nameLower.contains("steel") || nameLower.contains("plate") -> IRON
+                else -> NATURAL
             }
         }
     }

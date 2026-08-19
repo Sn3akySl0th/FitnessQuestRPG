@@ -1,0 +1,44 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="500dp"
+    android:height="600dp"
+    android:viewportWidth="500"
+    android:viewportHeight="600">
+
+    <!-- Tier 1: Candlelit Wand (White Mage wand: Ivory shaft topped with a floating eternal candle flame) -->
+    <!-- Ivory Shaft -->
+    <path
+        android:fillColor="#F1F5F9"
+        android:pathData="M355,275 L360,275 L360,410 L355,410 Z" />
+
+    <!-- Wand Lantern / Candle Cup Base -->
+    <path
+        android:fillColor="#D97706"
+        android:pathData="M350,275 L365,275 L362,285 L353,285 Z" />
+
+    <!-- Candle Wax Column -->
+    <path
+        android:fillColor="#FEF3C7"
+        android:pathData="M354,250 L361,250 L361,275 L354,275 Z" />
+
+    <!-- Floating Healing Candle Flame Aura -->
+    <path
+        android:fillColor="#33FBBF24"
+        android:pathData="M357.5,240 m-16,0 a16,16 0 1,0 32,0 a16,16 0 1,0 -32,0" />
+
+    <!-- Golden Flame Core -->
+    <path
+        android:fillColor="#F59E0B"
+        android:pathData="M357.5,230 Q364,242 357.5,248 Q351,242 357.5,230 Z" />
+    <path
+        android:fillColor="#FEF08A"
+        android:pathData="M357.5,235 Q361,243 357.5,246 Q354,243 357.5,235 Z" />
+
+    <!-- Wand Grip Wrapping (Soft Sky Blue) -->
+    <path
+        android:fillColor="#38BDF8"
+        android:pathData="M354,365 L361,365 L361,412 L354,412 Z" />
+    <path
+        android:strokeColor="#BAE6FD"
+        android:strokeWidth="1.5"
+        android:pathData="M354,375 L361,380 M354,388 L361,393 M354,401 L361,406" />
+</vector>

@@ -1,0 +1,67 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="500dp"
+    android:height="600dp"
+    android:viewportWidth="500"
+    android:viewportHeight="600">
+
+    <!-- Tier 4: Dragonfang Greatsword (Weapon layer: Hand=(357.5,390), Tip Y=50, Guard Y=350) -->
+    <!-- Crimson Energy Aura -->
+    <path
+        android:fillColor="#22EF4444"
+        android:pathData="M357.5,200 m-35,0 a35,160 0 1,0 70,0 a35,160 0 1,0 -70,0" />
+
+    <!-- Colossal Greatsword Blade Body (Dark Obsidian Alloy) -->
+    <path
+        android:fillColor="#0F172A"
+        android:pathData="M342,120 L357.5,45 L373,120 L370,350 L345,350 Z" />
+
+    <!-- Dragon Bone Serrated Edge Inlay (Left & Right) -->
+    <path
+        android:fillColor="#F1F5F9"
+        android:pathData="M342,120 L330,145 L344,158 L328,190 L344,205 L328,240 L344,255 L328,290 L344,305 L344,120 Z" />
+    <path
+        android:fillColor="#F1F5F9"
+        android:pathData="M373,120 L385,145 L371,158 L387,190 L371,205 L387,240 L371,255 L387,290 L371,305 L371,120 Z" />
+
+    <!-- Crimson Core Dragonfire Fuller -->
+    <path
+        android:strokeColor="#EF4444"
+        android:strokeWidth="4.5"
+        android:strokeLineCap="round"
+        android:pathData="M357.5,75 L357.5,335" />
+    <path
+        android:strokeColor="#FCA5A5"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M357.5,85 L357.5,325" />
+
+    <!-- Dragon Wing Crossguard -->
+    <path
+        android:fillColor="#991B1B"
+        android:pathData="M312,342 Q357.5,356 403,342 L407,356 Q357.5,368 308,356 Z" />
+    <path
+        android:fillColor="#D97706"
+        android:pathData="M320,345 Q357.5,354 395,345 L397,353 Q357.5,362 318,353 Z" />
+
+    <!-- Dragon Eye Center Gem -->
+    <path
+        android:fillColor="#EF4444"
+        android:pathData="M357.5,356 m-5.5,0 a5.5,5.5 0 1,0 11,0 a5.5,5.5 0 1,0 -11,0" />
+    <path
+        android:fillColor="#FEF08A"
+        android:pathData="M357.5,356 L357.5,352 L358.5,356 L357.5,360 L356.5,356 Z" />
+
+    <!-- Two-Handed Extended Grip under and through hand -->
+    <path
+        android:fillColor="#451A03"
+        android:pathData="M351.5,358 L363.5,358 L363.5,435 L351.5,435 Z" />
+    <path
+        android:strokeColor="#F59E0B"
+        android:strokeWidth="2"
+        android:pathData="M351.5,368 L363.5,375 M351.5,382 L363.5,389 M351.5,396 L363.5,403 M351.5,410 L363.5,417 M351.5,424 L363.5,431" />
+
+    <!-- Dragon Claw / Horn Pommel -->
+    <path
+        android:fillColor="#B45309"
+        android:pathData="M346,435 L369,435 L364,455 L357.5,465 L351,455 Z" />
+</vector>

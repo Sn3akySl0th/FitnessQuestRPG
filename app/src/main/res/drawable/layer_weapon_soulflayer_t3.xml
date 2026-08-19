@@ -1,0 +1,54 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="500dp"
+    android:height="600dp"
+    android:viewportWidth="500"
+    android:viewportHeight="600">
+
+    <!-- Tier 3: Soulflayer (Necromancer Staff: Shaft aligned at X=362, Hand at (357.5, 390)) -->
+    <!-- Swirling Soul Mist Aura behind skull -->
+    <path
+        android:fillColor="#332DD4BF"
+        android:pathData="M362,80 m-28,0 a28,28 0 1,0 56,0 a28,28 0 1,0 -56,0" />
+
+    <!-- Dark Iron Bone Shaft -->
+    <path
+        android:fillColor="#0F172A"
+        android:pathData="M358.5,90 L365.5,90 L365.5,445 L358.5,445 Z" />
+
+    <!-- Ancient Horned Skull (Centered at X=362, Y=80) -->
+    <path
+        android:fillColor="#E2E8F0"
+        android:pathData="M346,85 Q346,56 362,52 Q378,56 378,85 Q378,105 362,110 Q346,105 346,85 Z" />
+
+    <!-- Demon Horns (Left & Right) -->
+    <path
+        android:fillColor="#475569"
+        android:pathData="M348,70 Q328,48 338,32 Q348,42 352,58 Z M376,70 Q396,48 386,32 Q376,42 372,58 Z" />
+
+    <!-- Blazing Soul Eyes -->
+    <path
+        android:fillColor="#0D9488"
+        android:pathData="M352,78 m-4,0 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0 M372,78 m-4,0 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0" />
+    <path
+        android:fillColor="#5EEAD4"
+        android:pathData="M352,78 m-2,0 a2,2 0 1,0 4,0 a2,2 0 1,0 -2,0 M372,78 m-2,0 a2,2 0 1,0 4,0 a2,2 0 1,0 -2,0" />
+
+    <!-- Soul Flame Core in skull mouth -->
+    <path
+        android:fillColor="#2DD4BF"
+        android:pathData="M362,98 L367,104 L362,112 L357,104 Z" />
+
+    <!-- Spine Rib Rings along the haft -->
+    <path
+        android:fillColor="#CBD5E1"
+        android:pathData="M354,140 L370,140 L368,148 L356,148 Z M354,180 L370,180 L368,188 L356,188 Z M354,220 L370,220 L368,228 L356,228 Z" />
+
+    <!-- Leather Wrapped Grip directly in hand -->
+    <path
+        android:fillColor="#1E293B"
+        android:pathData="M356,365 L368,365 L368,415 L356,415 Z" />
+    <path
+        android:strokeColor="#2DD4BF"
+        android:strokeWidth="1.5"
+        android:pathData="M356,375 L368,380 M356,388 L368,393 M356,401 L368,406" />
+</vector>

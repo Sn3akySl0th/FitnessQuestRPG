@@ -1,0 +1,43 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="500dp"
+    android:height="600dp"
+    android:viewportWidth="500"
+    android:viewportHeight="600">
+
+    <!-- Tier 2: Adventurer's Boots (Feet layer Z: 07, Y=488 to 555) -->
+    <!-- Base Boot Shaft (Hunter Green & Sturdy Leather) -->
+    <path
+        android:fillColor="#14532D"
+        android:pathData="M184,490 L236,490 L240,530 L180,530 Z M316,490 L264,490 L260,530 L320,530 Z" />
+
+    <!-- Folded Leather Cuff -->
+    <path
+        android:fillColor="#78350F"
+        android:pathData="M180,488 L240,488 L238,506 L182,506 Z M320,488 L260,488 L262,506 L318,506 Z" />
+    <path
+        android:fillColor="#92400E"
+        android:pathData="M184,490 L236,490 L234,502 L186,502 Z M316,490 L264,490 L266,502 L314,502 Z" />
+
+    <!-- Hardened Leather Vamp & Reinforced Toe Cap -->
+    <path
+        android:fillColor="#451A03"
+        android:pathData="M176,524 L244,524 L244,548 L170,548 Z M324,524 L256,524 L256,548 L330,548 Z" />
+    <path
+        android:fillColor="#78350F"
+        android:pathData="M172,536 L206,536 L204,548 L170,548 Z M328,536 L294,536 L296,548 L330,548 Z" />
+
+    <!-- Heavy Lugged Tread Sole -->
+    <path
+        android:fillColor="#0F172A"
+        android:pathData="M168,546 L248,546 L248,555 L168,555 Z M332,546 L252,546 L252,555 L332,555 Z" />
+
+    <!-- Dual Buckle Straps & Brass Buckles -->
+    <path
+        android:strokeColor="#1F2937"
+        android:strokeWidth="3"
+        android:pathData="M180,512 L240,512 M176,530 L244,530 M320,512 L260,512 M324,530 L256,530" />
+    <!-- Brass Buckles -->
+    <path
+        android:fillColor="#F59E0B"
+        android:pathData="M232,509 L240,509 L240,515 L232,515 Z M236,527 L244,527 L244,533 L236,533 Z M260,509 L268,509 L268,515 L260,515 Z M256,527 L264,527 L264,533 L256,533 Z" />
+</vector>

@@ -19,6 +19,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
@@ -464,17 +465,27 @@ internal object AvatarPainter {
                 translate(bodyShift.x, bodyShift.y) {
                     if (frame.cls == CharacterClass.SUMMONER) {
                         when (frame.appearance.druidForm) {
-                            "IFRIT" -> drawIfritCompanion(frame)
                             "SHIVA" -> drawShivaCompanion(frame)
+                            "BAHAMUT" -> drawBahamutCompanion(frame)
+                            "IFRIT" -> drawIfritCompanion(frame)
+                            else -> {
+                                if ((frame.weapon?.tier ?: 1) >= 4) drawBahamutCompanion(frame)
+                                else if ((frame.weapon?.tier ?: 1) >= 2) drawShivaCompanion(frame)
+                                else drawIfritCompanion(frame)
+                            }
                         }
                     }
                     if (frame.cls == CharacterClass.NECROMANCER) {
                         when (frame.appearance.druidForm) {
-                            "SKELETON" -> drawSkeletonCompanion(frame)
                             "ARMY" -> drawUndeadArmyCompanion(frame)
+                            "SKELETON" -> drawSkeletonCompanion(frame)
+                            else -> {
+                                if ((frame.weapon?.tier ?: 1) >= 3) drawUndeadArmyCompanion(frame)
+                                else drawSkeletonCompanion(frame)
+                            }
                         }
                     }
-                    if (frame.cls == CharacterClass.DRAGOON && frame.appearance.druidForm == "WYVERN") {
+                    if (frame.cls == CharacterClass.DRAGOON && frame.appearance.druidForm != "NONE") {
                         drawWyvernCompanion(frame)
                     }
 
@@ -496,6 +507,7 @@ internal object AvatarPainter {
                                 withTransform({
                                     translate(pose.bodyOffset.x, pose.bodyOffset.y)
                                 }) {
+                                    drawNeckLayer(frame)
                                     drawTorsoLayer(frame)
                                     drawRaceBodyAccents(frame)
                                     drawChestGarmentLayer(frame)
@@ -885,13 +897,31 @@ private fun DrawScope.drawCostumeLowerBody(f: AvatarFrame) {
     drawRoundRect(Boots, topLeft = f.p(51f, 98f), size = f.s(13f, 10f), cornerRadius = CornerRadius(3f * f.u))
 }
 
+private fun DrawScope.drawNeckLayer(f: AvatarFrame) {
+    val neckColor = f.skinColor("neck")
+    val neckShade = f.skinShade("neck").copy(alpha = 0.65f)
+    // Strong neck cylinder connecting jawline (Y=38) down into clavicles (Y=48.5)
+    drawRoundRect(
+        neckColor,
+        topLeft = f.p(45.5f, 38f),
+        size = f.s(9f, 11.5f),
+        cornerRadius = CornerRadius(2.5f * f.u)
+    )
+    // Anatomical shadow directly under the jawline
+    drawRect(
+        neckShade,
+        topLeft = f.p(45.5f, 42.5f),
+        size = f.s(9f, 3.5f)
+    )
+}
+
 private fun DrawScope.drawTorsoLayer(f: AvatarFrame) {
     if (f.costume) {
         if (f.cls == CharacterClass.MAGE) {
-            drawRoundRect(f.look.outfit, topLeft = f.p(34f, 44f), size = f.s(32f, 30f), cornerRadius = CornerRadius(6f * f.u))
-            drawRect(f.look.accent, topLeft = f.p(47f, 44f), size = f.s(6f, 30f))
+            drawRoundRect(f.look.outfit, topLeft = f.p(34f, 48f), size = f.s(32f, 26f), cornerRadius = CornerRadius(6f * f.u))
+            drawRect(f.look.accent, topLeft = f.p(47f, 48f), size = f.s(6f, 26f))
         } else {
-            drawRoundRect(f.look.outfit, topLeft = f.p(34f, 44f), size = f.s(32f, 36f), cornerRadius = CornerRadius(6f * f.u))
+            drawRoundRect(f.look.outfit, topLeft = f.p(34f, 48f), size = f.s(32f, 32f), cornerRadius = CornerRadius(6f * f.u))
             drawRect(f.look.outfitDark, topLeft = f.p(34f, 70f), size = f.s(32f, 5f))
             drawRoundRect(f.look.accent, topLeft = f.p(46f, 69.5f), size = f.s(8f, 6f), cornerRadius = CornerRadius(1.5f * f.u))
         }
@@ -905,18 +935,18 @@ private fun DrawScope.drawTorsoLayer(f: AvatarFrame) {
         if (f.appearance.gender == "female") {
             val braColor = f.appearance.braColor
             if (!f.facingBack) {
-                drawRoundRect(braColor, topLeft = f.p(34f, 48f), size = f.s(32f, 12f), cornerRadius = CornerRadius(2f * f.u))
-                drawRect(braColor, topLeft = f.p(36f, 44f), size = f.s(6f, 6f))
-                drawRect(braColor, topLeft = f.p(58f, 44f), size = f.s(6f, 6f))
+                drawRoundRect(braColor, topLeft = f.p(34f, 50f), size = f.s(32f, 12f), cornerRadius = CornerRadius(2f * f.u))
+                drawRect(braColor, topLeft = f.p(36f, 48f), size = f.s(6f, 4f))
+                drawRect(braColor, topLeft = f.p(58f, 48f), size = f.s(6f, 4f))
 
                 val absShade = f.skinShade("abs", "abdominals", "core").copy(alpha = 0.8f)
                 drawLine(absShade, start = f.p(50f, 64f), end = f.p(50f, 74f), strokeWidth = 1.2f * f.u)
                 drawLine(absShade, start = f.p(44f, 66f), end = f.p(56f, 66f), strokeWidth = 1f * f.u)
                 drawLine(absShade, start = f.p(44f, 71f), end = f.p(56f, 71f), strokeWidth = 1f * f.u)
             } else {
-                drawRect(braColor, topLeft = f.p(34f, 50f), size = f.s(32f, 8f))
-                drawRect(braColor, topLeft = f.p(40f, 44f), size = f.s(6f, 8f))
-                drawRect(braColor, topLeft = f.p(54f, 44f), size = f.s(6f, 8f))
+                drawRect(braColor, topLeft = f.p(34f, 52f), size = f.s(32f, 8f))
+                drawRect(braColor, topLeft = f.p(40f, 48f), size = f.s(6f, 4f))
+                drawRect(braColor, topLeft = f.p(54f, 48f), size = f.s(6f, 4f))
 
                 val spine = f.skinShade("lower back", "lats", "traps", "back").copy(alpha = 0.8f)
                 drawLine(spine, start = f.p(50f, 60f), end = f.p(50f, 74f), strokeWidth = 1.2f * f.u)
@@ -925,8 +955,8 @@ private fun DrawScope.drawTorsoLayer(f: AvatarFrame) {
             val pecShade = f.skinShade("chest", "pecs").copy(alpha = 0.85f)
             val absShade = f.skinShade("abs", "abdominals", "core").copy(alpha = 0.85f)
             // Pec separation
-            drawLine(pecShade, start = f.p(42f, 52f), end = f.p(58f, 52f), strokeWidth = 1.2f * f.u)
-            drawLine(pecShade, start = f.p(50f, 46f), end = f.p(50f, 54f), strokeWidth = 1f * f.u)
+            drawLine(pecShade, start = f.p(42f, 54f), end = f.p(58f, 54f), strokeWidth = 1.2f * f.u)
+            drawLine(pecShade, start = f.p(50f, 48f), end = f.p(50f, 56f), strokeWidth = 1f * f.u)
             // Abs grid
             drawLine(absShade, start = f.p(50f, 58f), end = f.p(50f, 74f), strokeWidth = 1.2f * f.u)
             drawLine(absShade, start = f.p(44f, 62f), end = f.p(56f, 62f), strokeWidth = 1f * f.u)
@@ -935,7 +965,7 @@ private fun DrawScope.drawTorsoLayer(f: AvatarFrame) {
             val trapShade = f.skinShade("traps", "back").copy(alpha = 0.85f)
             val latShade = f.skinShade("lats", "middle back", "back").copy(alpha = 0.85f)
             val lowShade = f.skinShade("lower back", "back").copy(alpha = 0.85f)
-            drawLine(trapShade, start = f.p(50f, 46f), end = f.p(50f, 54f), strokeWidth = 1.2f * f.u)
+            drawLine(trapShade, start = f.p(50f, 48f), end = f.p(50f, 54f), strokeWidth = 1.2f * f.u)
             drawLine(latShade, start = f.p(50f, 54f), end = f.p(50f, 66f), strokeWidth = 1.2f * f.u)
             drawLine(lowShade, start = f.p(50f, 66f), end = f.p(50f, 74f), strokeWidth = 1.2f * f.u)
             drawLine(latShade, start = f.p(40f, 52f), end = f.p(46f, 64f), strokeWidth = 1f * f.u)
@@ -951,31 +981,31 @@ private fun DrawScope.drawBareTorsoSegments(f: AvatarFrame) {
         drawRoundRect(
             f.skinColor("lower back"),
             topLeft = f.p(34f, 64f),
-            size = f.s(32f, 7f), // Reduced height from 12f to 7f to end at y=71
+            size = f.s(32f, 7f),
             cornerRadius = CornerRadius(4f * f.u)
         )
         // Lats / middle back (side wedges + center)
         val latColor = f.skinColor("lats", "middle back")
-        drawRect(latColor, topLeft = f.p(34f, 50f), size = f.s(10f, 14f)) // Height reduced to 14f
-        drawRect(latColor, topLeft = f.p(56f, 50f), size = f.s(10f, 14f)) // Height reduced to 14f
-        drawRect(latColor, topLeft = f.p(44f, 52f), size = f.s(12f, 12f)) // Height reduced to 12f
+        drawRect(latColor, topLeft = f.p(34f, 50f), size = f.s(10f, 14f))
+        drawRect(latColor, topLeft = f.p(56f, 50f), size = f.s(10f, 14f))
+        drawRect(latColor, topLeft = f.p(44f, 52f), size = f.s(12f, 12f))
         // Traps (upper center)
         drawRoundRect(
             f.skinColor("traps"),
-            topLeft = f.p(38f, 44f),
-            size = f.s(24f, 10f),
-            cornerRadius = CornerRadius(5f * f.u)
+            topLeft = f.p(38f, 47.5f),
+            size = f.s(24f, 7.5f),
+            cornerRadius = CornerRadius(4f * f.u)
         )
         // Shoulder-blade corners so the silhouette stays full-width at top
-        drawRect(f.skinColor("traps", "lats"), topLeft = f.p(34f, 44f), size = f.s(6f, 8f))
-        drawRect(f.skinColor("traps", "lats"), topLeft = f.p(60f, 44f), size = f.s(6f, 8f))
+        drawRect(f.skinColor("traps", "lats"), topLeft = f.p(34f, 48f), size = f.s(6f, 6f))
+        drawRect(f.skinColor("traps", "lats"), topLeft = f.p(60f, 48f), size = f.s(6f, 6f))
     } else {
         // Full torso base (skin) so zones never leave holes; highlights paint on top.
         drawRoundRect(
             f.appearance.skinColor,
-            topLeft = f.p(34f, 44f),
-            size = f.s(32f, 27f), // Height reduced from 32f to 27f to end at y=71
-            cornerRadius = CornerRadius(6f * f.u)
+            topLeft = f.p(34f, 47.5f),
+            size = f.s(32f, 23.5f),
+            cornerRadius = CornerRadius(5f * f.u)
         )
         // Abs (lower band)
         if (f.hasHighlight("abs", "abdominals", "core")) {
@@ -996,9 +1026,9 @@ private fun DrawScope.drawBareTorsoSegments(f: AvatarFrame) {
         if (f.hasHighlight("chest", "pecs")) {
             drawRoundRect(
                 Color(0xFFE57373),
-                topLeft = f.p(34f, 44f),
-                size = f.s(32f, 14f),
-                cornerRadius = CornerRadius(6f * f.u)
+                topLeft = f.p(34f, 48f),
+                size = f.s(32f, 10f),
+                cornerRadius = CornerRadius(5f * f.u)
             )
         }
     }
@@ -1009,16 +1039,18 @@ private fun DrawScope.drawChestGarmentLayer(f: AvatarFrame) {
     val pal = GearVisuals.palette(armor)
     when (armor.style) {
         ItemStyle.ROBE -> {
-            // Full-length robe: covers torso and legs, boots peek below the hem.
+            // Full-length robe: covers torso and legs, low scooped neckline exposing neck.
             val robe = Path().apply {
-                moveTo(34f * f.u, 44f * f.u)
-                lineTo(66f * f.u, 44f * f.u)
+                moveTo(34f * f.u, 48.5f * f.u)
+                lineTo(43f * f.u, 48f * f.u)
+                quadraticTo(50f * f.u, 53.5f * f.u, 57f * f.u, 48f * f.u)
+                lineTo(66f * f.u, 48.5f * f.u)
                 lineTo(74f * f.u, 108f * f.u)
                 lineTo(26f * f.u, 108f * f.u)
                 close()
             }
             drawPath(robe, pal.main)
-            drawRect(pal.dark, topLeft = f.p(47f, 44f), size = f.s(6f, 30f))
+            drawRect(pal.dark, topLeft = f.p(47f, 53.5f), size = f.s(6f, 22f))
             f.feet?.let { item ->
                 val fp = GearVisuals.palette(item)
                 drawOval(fp.main, topLeft = f.p(36f, 103f), size = f.s(11f, 6f))
@@ -1029,7 +1061,7 @@ private fun DrawScope.drawChestGarmentLayer(f: AvatarFrame) {
             drawRect(hem, topLeft = f.p(26f, 104f), size = f.s(48f, 4f))
             if (armor.tier >= 3) {
                 val rune = pal.glow ?: Color(0xFF9C7BE3)
-                for (y in listOf(52f, 60f, 68f)) {
+                for (y in listOf(56f, 63f, 70f)) {
                     drawCircle(rune, radius = 1.4f * f.u, center = f.p(41f, y))
                     drawCircle(rune, radius = 1.4f * f.u, center = f.p(59f, y))
                 }
@@ -1039,51 +1071,51 @@ private fun DrawScope.drawChestGarmentLayer(f: AvatarFrame) {
             }
         }
         ItemStyle.LIGHT -> {
-            // Fitted leather vest with belt, straps, and lacing.
-            drawRoundRect(pal.main, topLeft = f.p(34f, 44f), size = f.s(32f, 32f), cornerRadius = CornerRadius(6f * f.u))
+            // Fitted leather vest with belt, straps, and deep scooped neckline.
+            drawRoundRect(pal.main, topLeft = f.p(34f, 48f), size = f.s(32f, 28f), cornerRadius = CornerRadius(6f * f.u))
             drawRect(pal.dark, topLeft = f.p(34f, 70f), size = f.s(32f, 5f))
-            drawRect(pal.dark, topLeft = f.p(40f, 44f), size = f.s(4f, 6f))
-            drawRect(pal.dark, topLeft = f.p(56f, 44f), size = f.s(4f, 6f))
+            drawRect(pal.dark, topLeft = f.p(40f, 48f), size = f.s(4f, 4f))
+            drawRect(pal.dark, topLeft = f.p(56f, 48f), size = f.s(4f, 4f))
             if (armor.tier >= 2) {
-                drawRect(pal.dark, topLeft = f.p(49.2f, 50f), size = f.s(1.6f, 16f))
-                for (y in listOf(52f, 56f, 60f, 64f)) {
+                drawRect(pal.dark, topLeft = f.p(49.2f, 53f), size = f.s(1.6f, 13f))
+                for (y in listOf(55f, 59f, 63f, 67f)) {
                     drawLine(pal.dark, start = f.p(46f, y), end = f.p(54f, y), strokeWidth = 1f * f.u)
                 }
             }
             if (armor.tier >= 3) {
-                drawCircle(pal.dark, radius = 1.8f * f.u, center = f.p(39f, 49f))
-                drawCircle(pal.dark, radius = 1.8f * f.u, center = f.p(61f, 49f))
+                drawCircle(pal.dark, radius = 1.8f * f.u, center = f.p(39f, 52f))
+                drawCircle(pal.dark, radius = 1.8f * f.u, center = f.p(61f, 52f))
             }
             pal.glow?.let { g ->
                 drawRoundRect(
                     g.copy(alpha = 0.8f),
-                    topLeft = f.p(34f, 44f),
-                    size = f.s(32f, 32f),
+                    topLeft = f.p(34f, 48f),
+                    size = f.s(32f, 28f),
                     cornerRadius = CornerRadius(6f * f.u),
                     style = Stroke(width = 1.3f * f.u)
                 )
             }
         }
         else -> {
-            // Full plate cuirass with pauldrons.
-            drawRoundRect(pal.main, topLeft = f.p(34f, 44f), size = f.s(32f, 28f), cornerRadius = CornerRadius(6f * f.u))
-            drawRect(pal.dark, topLeft = f.p(34f, 56f), size = f.s(32f, 3f))
+            // Full plate cuirass with low collar.
+            drawRoundRect(pal.main, topLeft = f.p(34f, 47.5f), size = f.s(32f, 25f), cornerRadius = CornerRadius(6f * f.u))
+            drawRect(pal.dark, topLeft = f.p(34f, 57f), size = f.s(32f, 3f))
             drawRect(pal.dark, topLeft = f.p(34f, 68f), size = f.s(32f, 4f))
-            drawCircle(pal.dark, radius = 6.5f * f.u, center = f.p(35f, 48f))
-            drawCircle(pal.main, radius = 5f * f.u, center = f.p(35f, 48f))
-            drawCircle(pal.dark, radius = 6.5f * f.u, center = f.p(65f, 48f))
-            drawCircle(pal.main, radius = 5f * f.u, center = f.p(65f, 48f))
+            drawCircle(pal.dark, radius = 6.5f * f.u, center = f.p(35f, 51f))
+            drawCircle(pal.main, radius = 5f * f.u, center = f.p(35f, 51f))
+            drawCircle(pal.dark, radius = 6.5f * f.u, center = f.p(65f, 51f))
+            drawCircle(pal.main, radius = 5f * f.u, center = f.p(65f, 51f))
             if (armor.tier >= 2) {
-                for ((x, y) in listOf(38f to 49f, 62f to 49f, 38f to 65f, 62f to 65f)) {
+                for ((x, y) in listOf(38f to 52f, 62f to 52f, 38f to 65f, 62f to 65f)) {
                     drawCircle(pal.dark, radius = 1.2f * f.u, center = f.p(x, y))
                 }
             }
             if (armor.tier >= 3) {
                 val emblem = Path().apply {
-                    moveTo(50f * f.u, 59f * f.u)
-                    lineTo(53f * f.u, 63f * f.u)
-                    lineTo(50f * f.u, 67f * f.u)
-                    lineTo(47f * f.u, 63f * f.u)
+                    moveTo(50f * f.u, 60f * f.u)
+                    lineTo(53f * f.u, 64f * f.u)
+                    lineTo(50f * f.u, 68f * f.u)
+                    lineTo(47f * f.u, 64f * f.u)
                     close()
                 }
                 drawPath(emblem, pal.glow ?: pal.dark)
@@ -1091,8 +1123,8 @@ private fun DrawScope.drawChestGarmentLayer(f: AvatarFrame) {
             pal.glow?.let { g ->
                 drawRoundRect(
                     g.copy(alpha = 0.8f),
-                    topLeft = f.p(34f, 44f),
-                    size = f.s(32f, 28f),
+                    topLeft = f.p(34f, 47.5f),
+                    size = f.s(32f, 25f),
                     cornerRadius = CornerRadius(6f * f.u),
                     style = Stroke(width = 1.3f * f.u)
                 )
@@ -2075,133 +2107,312 @@ private fun DrawScope.drawIfritCompanion(f: AvatarFrame) {
     val u = f.u
     val fire = Color(0xFFFF5722)
     val fireDark = Color(0xFFBF360C)
-    val glow = Color(0xFFFFEB3B).copy(alpha = 0.4f)
+    val fireCore = Color(0xFFFDE047)
+    val glow = Color(0xFFFF9800).copy(alpha = 0.4f)
     
-    // Floating over the left shoulder
-    val x = 15f * u
-    val y = (35f + 5f * sin(f.phase * 6.28f)) * u
+    // Floating over the left shoulder with heat breathing wave
+    val x = 16f * u
+    val y = (32f + 4f * sin(f.phase * 6.28f)) * u
     
-    drawCircle(glow, center = Offset(x, y), radius = 12f * u)
-    drawCircle(fireDark, center = Offset(x, y), radius = 8f * u)
-    drawCircle(fire, center = Offset(x, y - 2f * u), radius = 6f * u)
+    // Flame & Heat Aura
+    drawCircle(glow, center = Offset(x, y), radius = 15f * u)
     
-    // Horns
-    val path = Path().apply {
+    // Roaring Magma Body
+    drawCircle(fireDark, center = Offset(x, y), radius = 9f * u)
+    drawCircle(fire, center = Offset(x, y - 2f * u), radius = 7f * u)
+    drawCircle(fireCore, center = Offset(x, y - 2.5f * u), radius = 4f * u)
+    
+    // Swept Magma Horns (Curving outward and up)
+    val leftHorn = Path().apply {
         moveTo(x - 4f * u, y - 4f * u)
-        quadraticTo(x - 8f * u, y - 12f * u, x - 2f * u, y - 14f * u)
-        lineTo(x + 2f * u, y - 14f * u)
-        quadraticTo(x + 8f * u, y - 12f * u, x + 4f * u, y - 4f * u)
+        quadraticTo(x - 14f * u, y - 14f * u, x - 6f * u, y - 18f * u)
+        quadraticTo(x - 2f * u, y - 10f * u, x - 2f * u, y - 5f * u)
+        close()
     }
-    drawPath(path, fireDark)
+    val rightHorn = Path().apply {
+        moveTo(x + 4f * u, y - 4f * u)
+        quadraticTo(x + 14f * u, y - 14f * u, x + 6f * u, y - 18f * u)
+        quadraticTo(x + 2f * u, y - 10f * u, x + 2f * u, y - 5f * u)
+        close()
+    }
+    drawPath(leftHorn, Color(0xFF1F120E))
+    drawPath(rightHorn, Color(0xFF1F120E))
+    drawPath(leftHorn, fire, style = Stroke(width = 1.2f * u))
+    drawPath(rightHorn, fire, style = Stroke(width = 1.2f * u))
+
+    // Blazing Eyes
+    drawCircle(Color(0xFFFEF08A), center = Offset(x - 2.5f * u, y - 3f * u), radius = 1.2f * u)
+    drawCircle(Color(0xFFFEF08A), center = Offset(x + 2.5f * u, y - 3f * u), radius = 1.2f * u)
+    
+    // Rising Ember Particles
+    val emberY1 = y - (12f + (f.phase * 16f) % 16f) * u
+    val emberY2 = y - (8f + ((f.phase + 0.5f) * 16f) % 16f) * u
+    drawCircle(fireCore, center = Offset(x - 4f * u, emberY1), radius = 0.9f * u)
+    drawCircle(fire, center = Offset(x + 5f * u, emberY2), radius = 1.1f * u)
 }
 
 private fun DrawScope.drawShivaCompanion(f: AvatarFrame) {
     val u = f.u
-    val ice = Color(0xFF81D4FA)
-    val iceLight = Color(0xFFE1F5FE)
-    val aura = Color(0xFFB3E5FC).copy(alpha = 0.3f)
+    val ice = Color(0xFF38BDF8)
+    val iceLight = Color(0xFFE0F2FE)
+    val iceDeep = Color(0xFF0284C7)
+    val aura = Color(0xFF7DD3FC).copy(alpha = 0.35f)
     
     // Floating over the right shoulder
-    val x = 85f * u
-    val y = (30f + 4f * cos(f.phase * 6.28f)) * u
+    val x = 84f * u
+    val y = (30f + 3.5f * cos(f.phase * 6.28f)) * u
     
-    drawCircle(aura, center = Offset(x, y), radius = 14f * u)
+    // Frost Aura
+    drawCircle(aura, center = Offset(x, y), radius = 16f * u)
     
-    // Crystal body
-    val path = Path().apply {
-        moveTo(x, y - 10f * u)
-        lineTo(x + 6f * u, y)
-        lineTo(x, y + 10f * u)
-        lineTo(x - 6f * u, y)
+    // Multi-faceted Diamond Crystal Body
+    val crystalPath = Path().apply {
+        moveTo(x, y - 12f * u)
+        lineTo(x + 7f * u, y - 2f * u)
+        lineTo(x + 5f * u, y + 10f * u)
+        lineTo(x, y + 14f * u)
+        lineTo(x - 5f * u, y + 10f * u)
+        lineTo(x - 7f * u, y - 2f * u)
         close()
     }
-    drawPath(path, ice)
-    drawPath(path, iceLight, style = Stroke(width = 1f * u))
+    drawPath(crystalPath, iceDeep)
+    
+    // Inner Crystal Facet Highlights
+    val facetLeft = Path().apply {
+        moveTo(x, y - 12f * u)
+        lineTo(x, y + 14f * u)
+        lineTo(x - 7f * u, y - 2f * u)
+        close()
+    }
+    drawPath(facetLeft, ice)
+    
+    val facetCore = Path().apply {
+        moveTo(x, y - 8f * u)
+        lineTo(x + 3.5f * u, y)
+        lineTo(x, y + 8f * u)
+        lineTo(x - 3.5f * u, y)
+        close()
+    }
+    drawPath(facetCore, iceLight)
+    drawPath(crystalPath, Color.White, style = Stroke(width = 1f * u))
+    
+    // Orbiting Ice Shards
+    val shardAngle = f.phase * 6.28f
+    val shardR = 14f * u
+    val s1x = x + shardR * cos(shardAngle)
+    val s1y = y + (shardR * 0.5f) * sin(shardAngle)
+    val s2x = x + shardR * cos(shardAngle + 3.14f)
+    val s2y = y + (shardR * 0.5f) * sin(shardAngle + 3.14f)
+    
+    drawCircle(iceLight, center = Offset(s1x, s1y), radius = 2f * u)
+    drawCircle(iceLight, center = Offset(s2x, s2y), radius = 2f * u)
+}
+
+private fun DrawScope.drawBahamutCompanion(f: AvatarFrame) {
+    val u = f.u
+    val celestial = Color(0xFFA855F7)
+    val celestialLight = Color(0xFFF0ABFC)
+    val starGold = Color(0xFFFBBF24)
+    val aura = Color(0xFF818CF8).copy(alpha = 0.35f)
+    
+    // Hovering above head as an Astral Celestial Dragon Entity
+    val x = 50f * u
+    val y = (16f + 3f * sin(f.phase * 6.28f)) * u
+    
+    drawCircle(aura, center = Offset(x, y), radius = 20f * u)
+    
+    // Celestial Wings (Sweeping outward)
+    val leftWing = Path().apply {
+        moveTo(x - 4f * u, y)
+        lineTo(x - 22f * u, y - 10f * u)
+        lineTo(x - 16f * u, y + 4f * u)
+        lineTo(x - 6f * u, y + 2f * u)
+        close()
+    }
+    val rightWing = Path().apply {
+        moveTo(x + 4f * u, y)
+        lineTo(x + 22f * u, y - 10f * u)
+        lineTo(x + 16f * u, y + 4f * u)
+        lineTo(x + 6f * u, y + 2f * u)
+        close()
+    }
+    drawPath(leftWing, celestial)
+    drawPath(rightWing, celestial)
+    drawPath(leftWing, celestialLight, style = Stroke(width = 1.2f * u))
+    drawPath(rightWing, celestialLight, style = Stroke(width = 1.2f * u))
+    
+    // Astral Dragon Head & Crown
+    drawCircle(Color(0xFF3B0764), center = Offset(x, y), radius = 6f * u)
+    drawCircle(starGold, center = Offset(x, y), radius = 2.5f * u)
+    
+    // Cosmic Halo Crown
+    drawCircle(starGold, center = Offset(x, y - 8f * u), radius = 4f * u, style = Stroke(width = 1.5f * u))
 }
 
 private fun DrawScope.drawWyvernCompanion(f: AvatarFrame) {
     val u = f.u
-    val skin = Color(0xFF455A64)
-    val wing = Color(0xFF37474F)
-    val eye = Color(0xFF81C784)
+    val skin = Color(0xFF334155)
+    val skinLight = Color(0xFF475569)
+    val wingMembrane = Color(0xFF0F766E)
+    val wingBone = Color(0xFF1E293B)
+    val eye = Color(0xFF34D399)
     
-    // Hovering above the head
-    val x = (50f + 20f * sin(f.phase * 3.14f)) * u
-    val y = (15f + 3f * sin(f.phase * 6.28f)) * u
+    // Hovering above / around the Dragoon's head in a soaring arc
+    val x = (48f + 16f * sin(f.phase * 3.14f)) * u
+    val y = (18f + 3f * sin(f.phase * 6.28f)) * u
+    val wingFlap = sin(f.phase * 6.28f) * 4f * u
     
-    // Wyvern body
-    drawRoundRect(skin, topLeft = Offset(x - 6f * u, y - 3f * u), size = Size(12f * u, 6f * u), cornerRadius = CornerRadius(3f * u))
-    
-    // Wings
+    // Dragon Wing Membranes
     val leftWing = Path().apply {
-        moveTo(x - 2f * u, y)
-        lineTo(x - 14f * u, y - 8f * u)
-        lineTo(x - 10f * u, y + 2f * u)
+        moveTo(x - 3f * u, y)
+        lineTo(x - 18f * u, y - 10f * u + wingFlap)
+        lineTo(x - 14f * u, y + 4f * u + wingFlap * 0.5f)
+        lineTo(x - 8f * u, y + 1f * u)
         close()
     }
     val rightWing = Path().apply {
-        moveTo(x + 2f * u, y)
-        lineTo(x + 14f * u, y - 8f * u)
-        lineTo(x + 10f * u, y + 2f * u)
+        moveTo(x + 3f * u, y)
+        lineTo(x + 18f * u, y - 10f * u + wingFlap)
+        lineTo(x + 14f * u, y + 4f * u + wingFlap * 0.5f)
+        lineTo(x + 8f * u, y + 1f * u)
         close()
     }
-    drawPath(leftWing, wing)
-    drawPath(rightWing, wing)
+    drawPath(leftWing, wingMembrane)
+    drawPath(rightWing, wingMembrane)
+    drawPath(leftWing, wingBone, style = Stroke(width = 1.5f * u))
+    drawPath(rightWing, wingBone, style = Stroke(width = 1.5f * u))
     
-    // Head & Tail
-    drawCircle(skin, center = Offset(x + 8f * u, y), radius = 4f * u)
-    drawCircle(eye, center = Offset(x + 10f * u, y - 1f * u), radius = 1.2f * u)
-    drawLine(skin, start = Offset(x - 6f * u, y), end = Offset(x - 15f * u, y + 5f * u), strokeWidth = 2f * u)
+    // Wyvern Body & Ribbed Underbelly
+    drawRoundRect(skin, topLeft = Offset(x - 7f * u, y - 3.5f * u), size = Size(14f * u, 7f * u), cornerRadius = CornerRadius(3.5f * u))
+    drawRoundRect(skinLight, topLeft = Offset(x - 5f * u, y - 1f * u), size = Size(10f * u, 3.5f * u), cornerRadius = CornerRadius(1.5f * u))
+    
+    // Dragon Head & Horns
+    drawCircle(skin, center = Offset(x + 8f * u, y - 1f * u), radius = 4f * u)
+    // Swept Horn
+    val horn = Path().apply {
+        moveTo(x + 6f * u, y - 3f * u)
+        lineTo(x + 2f * u, y - 8f * u)
+        lineTo(x + 7f * u, y - 4f * u)
+        close()
+    }
+    drawPath(horn, Color(0xFF0F172A))
+    
+    // Glowing Emerald Dragon Eye
+    drawCircle(eye, center = Offset(x + 9.5f * u, y - 2f * u), radius = 1.3f * u)
+    
+    // Long Sinuous Tail with Fluke Barb
+    val tail = Path().apply {
+        moveTo(x - 7f * u, y)
+        quadraticTo(x - 14f * u, y + 6f * u, x - 18f * u, y + 2f * u)
+    }
+    drawPath(tail, skin, style = Stroke(width = 2f * u, cap = StrokeCap.Round))
+    // Tail Fluke Barb
+    val barb = Path().apply {
+        moveTo(x - 18f * u, y + 2f * u)
+        lineTo(x - 22f * u, y - 2f * u)
+        lineTo(x - 21f * u, y + 5f * u)
+        close()
+    }
+    drawPath(barb, wingMembrane)
 }
 
 private fun DrawScope.drawSkeletonCompanion(f: AvatarFrame) {
     val u = f.u
-    val bone = Color(0xFFE8E0D0)
-    val shade = Color(0xFF9A9080)
+    val bone = Color(0xFFF1F5F9)
+    val boneShade = Color(0xFF94A3B8)
+    val soulfire = Color(0xFF2DD4BF)
+    val mist = Color(0xFF0F172A).copy(alpha = 0.5f)
     
-    // Floating over the left shoulder, similar to Ifrit
-    val x = 18f * u
-    val y = (32f + 4f * sin(f.phase * 6.28f)) * u
+    // Floating over the left shoulder rising from necrotic mist
+    val x = 16f * u
+    val y = (32f + 3.5f * sin(f.phase * 6.28f)) * u
     
-    // Skull
-    drawOval(bone, topLeft = Offset(x - 6f * u, y - 6f * u), size = Size(12f * u, 10f * u))
-    drawOval(shade, topLeft = Offset(x - 4f * u, y + 2f * u), size = Size(8f * u, 5f * u)) // Jaw
+    // Necrotic Mist Cloud
+    drawCircle(mist, center = Offset(x, y + 8f * u), radius = 10f * u)
     
-    // Eyes
-    drawCircle(Color.Black, center = Offset(x - 2.5f * u, y - 1f * u), radius = 1.8f * u)
-    drawCircle(Color.Black, center = Offset(x + 2.5f * u, y - 1f * u), radius = 1.8f * u)
-    drawCircle(Color(0xFF7CF0C0), center = Offset(x - 2.5f * u, y - 1f * u), radius = 0.8f * u)
-    drawCircle(Color(0xFF7CF0C0), center = Offset(x + 2.5f * u, y - 1f * u), radius = 0.8f * u)
+    // Skull Dome
+    drawOval(bone, topLeft = Offset(x - 5.5f * u, y - 7f * u), size = Size(11f * u, 9f * u))
+    drawOval(boneShade, topLeft = Offset(x - 3.5f * u, y + 1f * u), size = Size(7f * u, 5f * u)) // Cheekbones / Maxilla
     
-    // Ribcage suggestion below
-    for (i in 0..2) {
-        drawLine(bone, start = Offset(x - 4f * u, y + 8f * u + i * 3f * u), end = Offset(x + 4f * u, y + 8f * u + i * 3f * u), strokeWidth = 1.5f * u)
+    // Skull Eye Sockets
+    drawCircle(Color.Black, center = Offset(x - 2.5f * u, y - 2f * u), radius = 1.8f * u)
+    drawCircle(Color.Black, center = Offset(x + 2.5f * u, y - 2f * u), radius = 1.8f * u)
+    // Pulsing Soulfire Eyes
+    drawCircle(soulfire, center = Offset(x - 2.5f * u, y - 2f * u), radius = 1.1f * u)
+    drawCircle(soulfire, center = Offset(x + 2.5f * u, y - 2f * u), radius = 1.1f * u)
+    
+    // Articulated Teeth
+    for (i in -2..2) {
+        drawLine(Color(0xFF334155), start = Offset(x + i * 1.2f * u, y + 2.5f * u), end = Offset(x + i * 1.2f * u, y + 5f * u), strokeWidth = 0.8f * u)
     }
+    
+    // Spine & Ribcage
+    drawLine(bone, start = Offset(x, y + 6f * u), end = Offset(x, y + 16f * u), strokeWidth = 2f * u)
+    for (i in 0..2) {
+        val ribY = y + (8f + i * 3f) * u
+        drawLine(bone, start = Offset(x - 4.5f * u, ribY), end = Offset(x + 4.5f * u, ribY), strokeWidth = 1.5f * u, cap = StrokeCap.Round)
+    }
+    
+    // Spectral Tomb Dagger
+    drawLine(Color(0xFFCBD5E1), start = Offset(x - 6f * u, y + 4f * u), end = Offset(x - 10f * u, y - 4f * u), strokeWidth = 2f * u)
+    drawCircle(soulfire, center = Offset(x - 6f * u, y + 4f * u), radius = 1.5f * u)
 }
 
 private fun DrawScope.drawUndeadArmyCompanion(f: AvatarFrame) {
     val u = f.u
-    val zombie = Color(0xFF6E8B57)
-    val zombieShade = Color(0xFF4E6B3E)
+    val bone = Color(0xFFF1F5F9)
+    val deathKnightHelm = Color(0xFF1E293B)
+    val soulfire = Color(0xFF2DD4BF)
+    val crimsonEye = Color(0xFFEF4444)
     
-    // Draw the skeleton first
+    // 1. Draw Left Flank: Skeleton Minion
     drawSkeletonCompanion(f)
     
-    // Add a zombie over the right shoulder
-    val x = 82f * u
-    val y = (38f + 3f * cos(f.phase * 6.28f)) * u
+    // 2. Draw Right Flank: Armored Death Knight
+    val x = 84f * u
+    val y = (34f + 3f * cos(f.phase * 6.28f)) * u
     
-    // Head
-    drawCircle(zombieShade, center = Offset(x, y), radius = 7.5f * u)
-    drawCircle(zombie, center = Offset(x, y), radius = 7f * u)
-    // One glowing eye, one hollow
-    drawCircle(Color.Black, center = Offset(x - 2.5f * u, y - 1f * u), radius = 1.5f * u)
-    drawCircle(Color(0xFF7CF0C0), center = Offset(x + 2.5f * u, y - 1f * u), radius = 1.5f * u)
+    // Death Knight Horned Iron Helm
+    drawRoundRect(deathKnightHelm, topLeft = Offset(x - 6f * u, y - 7f * u), size = Size(12f * u, 12f * u), cornerRadius = CornerRadius(3f * u))
     
-    // Torn clothes / shoulder
-    drawRect(Color(0xFF3E2723), topLeft = Offset(x - 8f * u, y + 5f * u), size = Size(16f * u, 12f * u))
+    // Spiked Horns
+    val leftHorn = Path().apply {
+        moveTo(x - 5f * u, y - 4f * u)
+        lineTo(x - 11f * u, y - 10f * u)
+        lineTo(x - 4f * u, y - 7f * u)
+        close()
+    }
+    val rightHorn = Path().apply {
+        moveTo(x + 5f * u, y - 4f * u)
+        lineTo(x + 11f * u, y - 10f * u)
+        lineTo(x + 4f * u, y - 7f * u)
+        close()
+    }
+    drawPath(leftHorn, deathKnightHelm)
+    drawPath(rightHorn, deathKnightHelm)
     
-    // Background silhouettes
-    drawCircle(Color.Black.copy(alpha = 0.3f), center = Offset(25f * u, 85f * u), radius = 12f * u)
-    drawCircle(Color.Black.copy(alpha = 0.3f), center = Offset(75f * u, 90f * u), radius = 10f * u)
+    // Glowing Crimson Visor Slit
+    drawRoundRect(Color.Black, topLeft = Offset(x - 4.5f * u, y - 2f * u), size = Size(9f * u, 3f * u), cornerRadius = CornerRadius(1f * u))
+    drawCircle(crimsonEye, center = Offset(x - 2f * u, y - 0.5f * u), radius = 1.2f * u)
+    drawCircle(crimsonEye, center = Offset(x + 2f * u, y - 0.5f * u), radius = 1.2f * u)
+    
+    // Iron Shoulder Spikes
+    drawRect(deathKnightHelm, topLeft = Offset(x - 7f * u, y + 5f * u), size = Size(14f * u, 8f * u))
+    drawPath(Path().apply {
+        moveTo(x + 5f * u, y + 5f * u)
+        lineTo(x + 10f * u, y)
+        lineTo(x + 7f * u, y + 8f * u)
+        close()
+    }, deathKnightHelm)
+    
+    // 3. Hovering Soul Wisps in the background
+    val wisp1X = 28f * u
+    val wisp1Y = (18f + 3f * sin((f.phase + 0.3f) * 6.28f)) * u
+    val wisp2X = 72f * u
+    val wisp2Y = (16f + 3f * cos((f.phase + 0.6f) * 6.28f)) * u
+    
+    drawCircle(soulfire.copy(alpha = 0.5f), center = Offset(wisp1X, wisp1Y), radius = 3.5f * u)
+    drawCircle(Color.White.copy(alpha = 0.8f), center = Offset(wisp1X, wisp1Y), radius = 1.5f * u)
+    drawCircle(soulfire.copy(alpha = 0.5f), center = Offset(wisp2X, wisp2Y), radius = 3f * u)
+    drawCircle(Color.White.copy(alpha = 0.8f), center = Offset(wisp2X, wisp2Y), radius = 1.2f * u)
 }

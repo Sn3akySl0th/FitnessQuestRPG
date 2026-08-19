@@ -1,0 +1,72 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="500dp"
+    android:height="600dp"
+    android:viewportWidth="500"
+    android:viewportHeight="600">
+
+    <!-- Tier 4: Mythic Wayfarer Crown (Head layer: sits on brow Y=125-145, spikes reach Y=40, X=180 to 320) -->
+    <!-- Crimson Aura behind crown peaks -->
+    <path
+        android:fillColor="#33EF4444"
+        android:pathData="M250,90 m-75,0 a75,50 0 1,0 150,0 a75,50 0 1,0 -150,0" />
+
+    <!-- Crown Base Band -->
+    <path
+        android:fillColor="#B45309"
+        android:pathData="M182,142 Q250,154 318,142 L320,126 Q250,138 180,126 Z" />
+    <path
+        android:fillColor="#F59E0B"
+        android:pathData="M186,138 Q250,148 314,138 L316,130 Q250,140 184,130 Z" />
+
+    <!-- Side Spikes (Left & Right) -->
+    <path
+        android:fillColor="#D97706"
+        android:pathData="M190,128 L176,78 L204,112 Z" />
+    <path
+        android:fillColor="#FBBF24"
+        android:pathData="M194,125 L182,86 L202,112 Z" />
+    <path
+        android:fillColor="#D97706"
+        android:pathData="M310,128 L324,78 L296,112 Z" />
+    <path
+        android:fillColor="#FBBF24"
+        android:pathData="M306,125 L318,86 L298,112 Z" />
+
+    <!-- Inner Mid Spikes -->
+    <path
+        android:fillColor="#F59E0B"
+        android:pathData="M212,128 L212,62 L234,118 Z" />
+    <path
+        android:fillColor="#FDE68A"
+        android:pathData="M216,125 L216,72 L230,115 Z" />
+    <path
+        android:fillColor="#F59E0B"
+        android:pathData="M288,128 L288,62 L266,118 Z" />
+    <path
+        android:fillColor="#FDE68A"
+        android:pathData="M284,125 L284,72 L270,115 Z" />
+
+    <!-- Center Majestic Sovereign Peak -->
+    <path
+        android:fillColor="#B45309"
+        android:pathData="M236,130 L250,38 L264,130 Z" />
+    <path
+        android:fillColor="#FBBF24"
+        android:pathData="M240,126 L250,48 L260,126 Z" />
+
+    <!-- Center Mythic Crimson Gem Eye -->
+    <path
+        android:fillColor="#991B1B"
+        android:pathData="M250,132 L260,118 L250,104 L240,118 Z" />
+    <path
+        android:fillColor="#EF4444"
+        android:pathData="M250,128 L256,118 L250,108 L244,118 Z" />
+    <path
+        android:fillColor="#FECACA"
+        android:pathData="M250,115 m-2.5,0 a2.5,2.5 0 1,0 5,0 a2.5,2.5 0 1,0 -5,0" />
+
+    <!-- Small Flanking Sapphires on Brow -->
+    <path
+        android:fillColor="#38BDF8"
+        android:pathData="M206,136 m-3,0 a3,3 0 1,0 6,0 a3,3 0 1,0 -6,0 M294,136 m-3,0 a3,3 0 1,0 6,0 a3,3 0 1,0 -6,0" />
+</vector>

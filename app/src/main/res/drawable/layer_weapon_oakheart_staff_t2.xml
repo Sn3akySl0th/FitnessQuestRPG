@@ -1,0 +1,42 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="500dp"
+    android:height="600dp"
+    android:viewportWidth="500"
+    android:viewportHeight="600">
+
+    <!-- Tier 2: Oakheart Staff (Hand=(357.5, 390), Length Y=70-435) -->
+    <!-- Living Wood Staff Body -->
+    <path
+        android:fillColor="#78350F"
+        android:pathData="M354.5,100 L360.5,100 L360.5,435 L354.5,435 Z" />
+
+    <!-- Staff Head Gnarled Branch Prongs -->
+    <path
+        android:fillColor="#92400E"
+        android:pathData="M354.5,110 Q340,90 342,70 Q348,70 354,85 Z M360.5,110 Q375,90 373,70 Q367,70 361,85 Z" />
+
+    <!-- Glowing Emerald Mana Core nestled in branches -->
+    <path
+        android:fillColor="#3310B981"
+        android:pathData="M357.5,80 m-20,0 a20,20 0 1,0 40,0 a20,20 0 1,0 -40,0" />
+    <path
+        android:fillColor="#10B981"
+        android:pathData="M357.5,80 m-8,0 a8,8 0 1,0 16,0 a8,8 0 1,0 -16,0" />
+    <path
+        android:fillColor="#A7F3D0"
+        android:pathData="M357.5,78 m-3,0 a3,3 0 1,0 6,0 a3,3 0 1,0 -3,0" />
+
+    <!-- Living Sprouts / Leaves -->
+    <path
+        android:fillColor="#34D399"
+        android:pathData="M342,70 Q334,60 344,56 Q348,64 342,70 Z M373,70 Q381,60 371,56 Q367,64 373,70 Z" />
+
+    <!-- Grip Wrap -->
+    <path
+        android:fillColor="#047857"
+        android:pathData="M353.5,365 L361.5,365 L361.5,415 L353.5,415 Z" />
+    <path
+        android:strokeColor="#10B981"
+        android:strokeWidth="2"
+        android:pathData="M353.5,375 L361.5,380 M353.5,388 L361.5,393 M353.5,401 L361.5,406" />
+</vector>

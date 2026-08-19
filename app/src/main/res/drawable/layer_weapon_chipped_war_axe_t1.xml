@@ -1,0 +1,44 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="500dp"
+    android:height="600dp"
+    android:viewportWidth="500"
+    android:viewportHeight="600">
+
+    <!-- Tier 1: Chipped War Axe (Berserker weapon: Heavy axe head Y=180-260, Shaft Y=180-435) -->
+    <!-- Haft (Rough Ash Wood) -->
+    <path
+        android:fillColor="#78350F"
+        android:pathData="M353.5,180 L361.5,180 L361.5,435 L353.5,435 Z" />
+
+    <!-- Heavy Iron Axe Blade (Left / Forward facing) -->
+    <path
+        android:fillColor="#475569"
+        android:pathData="M354,195 L310,165 Q300,225 310,285 L354,255 Z" />
+    <path
+        android:fillColor="#64748B"
+        android:pathData="M350,200 L314,175 Q306,225 314,275 L350,250 Z" />
+
+    <!-- Notches / Chips in Cutting Edge -->
+    <path
+        android:fillColor="#0F172A"
+        android:pathData="M304,210 L312,215 L304,220 Z M306,240 L314,245 L306,250 Z" />
+
+    <!-- Axe Head Socket & Iron Band -->
+    <path
+        android:fillColor="#334155"
+        android:pathData="M350,190 L365,190 L365,260 L350,260 Z" />
+
+    <!-- Top Spike -->
+    <path
+        android:fillColor="#64748B"
+        android:pathData="M353.5,180 L357.5,150 L361.5,180 Z" />
+
+    <!-- Berserker Rag Wrap Grip -->
+    <path
+        android:fillColor="#991B1B"
+        android:pathData="M352.5,365 L362.5,365 L362.5,415 L352.5,415 Z" />
+    <path
+        android:strokeColor="#FCA5A5"
+        android:strokeWidth="1.5"
+        android:pathData="M352.5,375 L362.5,380 M352.5,388 L362.5,393 M352.5,401 L362.5,406" />
+</vector>

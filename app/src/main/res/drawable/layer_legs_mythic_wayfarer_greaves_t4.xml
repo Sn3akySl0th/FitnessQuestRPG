@@ -1,0 +1,66 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="500dp"
+    android:height="600dp"
+    android:viewportWidth="500"
+    android:viewportHeight="600">
+
+    <!-- Tier 4: Mythic Wayfarer Greaves (Legs layer Z: 05, Y=365 to 510) -->
+    <!-- Obsidian & Void Cloth Underlay -->
+    <path
+        android:fillColor="#0F172A"
+        android:pathData="M182,366 L318,366 L316,420 L270,425 L250,405 L230,425 L184,420 Z M184,410 L234,415 L238,506 L188,506 Z M316,410 L266,415 L262,506 L312,506 Z" />
+
+    <!-- Mythic Gold Plated Cuisses -->
+    <path
+        android:fillColor="#78350F"
+        android:pathData="M184,408 L234,412 L232,448 L186,448 Z M316,408 L266,412 L268,448 L314,448 Z" />
+    <path
+        android:fillColor="#D97706"
+        android:pathData="M188,412 L230,416 L228,444 L190,444 Z M312,412 L270,416 L272,444 L310,444 Z" />
+    <path
+        android:fillColor="#FBBF24"
+        android:pathData="M192,416 L226,418 L224,440 L194,440 Z M308,416 L274,418 L276,440 L306,440 Z" />
+
+    <!-- Radiant Winged Knee Guards (Gold & Magenta) -->
+    <path
+        android:fillColor="#1E1B4B"
+        android:pathData="M178,448 L240,448 L234,484 L184,484 Z M322,448 L260,448 L266,484 L316,484 Z" />
+    <path
+        android:fillColor="#B45309"
+        android:pathData="M182,450 L236,450 L232,480 L186,480 Z M318,450 L264,450 L268,480 L314,480 Z" />
+    <path
+        android:fillColor="#F59E0B"
+        android:pathData="M186,452 L232,452 L228,476 L190,476 Z M314,452 L268,452 L272,476 L310,476 Z" />
+    <path
+        android:fillColor="#FEF08A"
+        android:pathData="M192,456 L226,456 L222,472 L196,472 Z M308,456 L274,456 L278,472 L304,472 Z" />
+
+    <!-- Mythic Purple / Cyan Runic Energy Core -->
+    <path
+        android:strokeColor="#C084FC"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:pathData="M196,464 L209,472 L222,464 M304,464 L291,472 L278,464" />
+
+    <!-- Mythic Greaves Shin Guards -->
+    <path
+        android:fillColor="#1E293B"
+        android:pathData="M186,484 L232,484 L236,508 L188,508 Z M314,484 L268,484 L264,508 L312,508 Z" />
+    <path
+        android:fillColor="#D97706"
+        android:pathData="M190,486 L228,486 L232,506 L192,506 Z M310,486 L272,486 L268,506 L308,506 Z" />
+    <path
+        android:fillColor="#FDE047"
+        android:pathData="M196,488 L222,488 L224,504 L198,504 Z M304,488 L278,488 L276,504 L302,504 Z" />
+
+    <!-- Golden Waist Tassets & Gem -->
+    <path
+        android:fillColor="#B45309"
+        android:pathData="M180,364 L320,364 L318,380 L182,380 Z" />
+    <path
+        android:fillColor="#F59E0B"
+        android:pathData="M184,378 L220,378 L216,412 L186,412 Z M316,378 L280,378 L284,412 L314,412 Z" />
+    <path
+        android:fillColor="#E11D48"
+        android:pathData="M242,364 L258,364 L258,380 L242,380 Z" />
+</vector>

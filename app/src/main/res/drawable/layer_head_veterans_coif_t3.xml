@@ -1,0 +1,45 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="500dp"
+    android:height="600dp"
+    android:viewportWidth="500"
+    android:viewportHeight="600">
+
+    <!-- Tier 3: Veteran's Coif (Head layer: fits head & chin Y=60 to 220, X=175 to 325) -->
+    <!-- Steel Coif Base (Covering head and chin) -->
+    <path
+        android:fillColor="#334155"
+        android:pathData="M176,185 Q174,66 250,58 Q326,66 324,185 Q305,218 250,222 Q195,218 176,185 Z" />
+
+    <!-- Polished Steel Dome -->
+    <path
+        android:fillColor="#64748B"
+        android:pathData="M180,150 Q180,68 250,62 Q320,68 320,150 Q250,160 180,150 Z" />
+
+    <!-- Highlight Reflection -->
+    <path
+        android:fillColor="#94A3B8"
+        android:pathData="M192,142 Q194,76 250,70 Q286,72 300,98 Q250,88 192,142 Z" />
+
+    <!-- Center Crest Reinforcement -->
+    <path
+        android:fillColor="#475569"
+        android:pathData="M244,48 L256,48 L256,155 L244,155 Z" />
+
+    <!-- Brow Guard / Visor Band -->
+    <path
+        android:fillColor="#1E293B"
+        android:pathData="M178,142 L322,142 L318,158 L182,158 Z" />
+
+    <!-- Cyan Runic Gem Inlay -->
+    <path
+        android:fillColor="#06B6D4"
+        android:pathData="M250,150 L256,144 L250,138 L244,144 Z" />
+    <path
+        android:fillColor="#A5F3FC"
+        android:pathData="M250,144 m-2,0 a2,2 0 1,0 4,0 a2,2 0 1,0 -2,0" />
+
+    <!-- Chin Guard / Mail links -->
+    <path
+        android:fillColor="#475569"
+        android:pathData="M196,186 Q250,198 304,186 L306,204 Q250,218 194,204 Z" />
+</vector>

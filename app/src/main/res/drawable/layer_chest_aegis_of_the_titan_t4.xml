@@ -1,0 +1,64 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="500dp"
+    android:height="600dp"
+    android:viewportWidth="500"
+    android:viewportHeight="600">
+
+    <!-- Tier 4: Aegis of the Titan (Torso layer: Y=236 to 385, Low neckline dipped to Y=265) -->
+    <!-- Mythic Crimson Aura Glow behind shoulders -->
+    <path
+        android:fillColor="#33EF4444"
+        android:pathData="M250,300 m-120,0 a120,80 0 1,0 240,0 a120,80 0 1,0 -240,0" />
+
+    <!-- Massive Heavy Pauldrons (Left & Right Titan Shoulders kept below neck level at Y=236) -->
+    <path
+        android:fillColor="#0F172A"
+        android:pathData="M118,236 L180,234 L170,298 L108,284 Z M382,236 L320,234 L330,298 L392,284 Z" />
+
+    <path
+        android:fillColor="#D97706"
+        android:pathData="M124,240 L172,238 L164,288 L116,276 Z M376,240 L328,238 L336,288 L384,276 Z" />
+
+    <path
+        android:fillColor="#FBBF24"
+        android:pathData="M130,244 L166,242 L160,276 L124,266 Z M370,244 L334,242 L340,276 L376,266 Z" />
+
+    <!-- Titan Chestplate Outer Shell -->
+    <path
+        android:fillColor="#1E293B"
+        android:pathData="M160,238 L220,236 L238,265 Q250,268 262,265 L280,236 L340,238 L348,328 L320,385 L180,385 L152,328 Z" />
+
+    <!-- Gold & Black Plate Trim -->
+    <path
+        android:fillColor="#F59E0B"
+        android:pathData="M168,242 L218,240 L238,322 L160,318 Z M332,242 L282,240 L262,322 L340,318 Z" />
+
+    <path
+        android:fillColor="#334155"
+        android:pathData="M176,248 L212,246 L230,312 L168,310 Z M324,248 L288,246 L270,312 L332,310 Z" />
+
+    <!-- Titan Power Core Frame -->
+    <path
+        android:fillColor="#0F172A"
+        android:pathData="M250,312 L274,288 L250,264 L226,288 Z" />
+    <path
+        android:fillColor="#B45309"
+        android:pathData="M250,306 L268,288 L250,270 L232,288 Z" />
+
+    <!-- Glowing Mythic Crimson Core Gem -->
+    <path
+        android:fillColor="#EF4444"
+        android:pathData="M250,302 L264,288 L250,274 L236,288 Z" />
+    <path
+        android:fillColor="#FCA5A5"
+        android:pathData="M250,288 m-4,0 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0" />
+
+    <!-- Lower Plated Faulds / Tassets -->
+    <path
+        android:fillColor="#475569"
+        android:pathData="M182,334 L318,334 L314,354 L186,354 Z M184,358 L316,358 L312,374 L188,374 Z M186,378 L314,378 L310,385 L190,385 Z" />
+    <path
+        android:strokeColor="#F59E0B"
+        android:strokeWidth="2"
+        android:pathData="M184,358 L316,358 M186,378 L314,378" />
+</vector>

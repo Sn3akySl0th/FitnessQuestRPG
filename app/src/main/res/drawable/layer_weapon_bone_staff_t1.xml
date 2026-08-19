@@ -1,0 +1,39 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="500dp"
+    android:height="600dp"
+    android:viewportWidth="500"
+    android:viewportHeight="600">
+
+    <!-- Tier 1: Bone Staff (Hand=(357.5, 390), Length Y=70-435) -->
+    <!-- Weathered Bone Shaft -->
+    <path
+        android:fillColor="#E2E8F0"
+        android:pathData="M354,100 L361,100 L361,435 L354,435 Z" />
+
+    <!-- Staff Skull Headpiece -->
+    <path
+        android:fillColor="#F1F5F9"
+        android:pathData="M344,80 Q344,55 357.5,52 Q371,55 371,80 Q371,98 357.5,102 Q344,98 344,80 Z" />
+
+    <!-- Skull Hollow Eye Sockets (Glowing Teal Soulfire) -->
+    <path
+        android:fillColor="#0F172A"
+        android:pathData="M349,74 m-3.5,0 a3.5,3.5 0 1,0 7,0 a3.5,3.5 0 1,0 -7,0 M366,74 m-3.5,0 a3.5,3.5 0 1,0 7,0 a3.5,3.5 0 1,0 -7,0" />
+    <path
+        android:fillColor="#2DD4BF"
+        android:pathData="M349,74 m-1.5,0 a1.5,1.5 0 1,0 3,0 a1.5,1.5 0 1,0 -3,0 M366,74 m-1.5,0 a1.5,1.5 0 1,0 3,0 a1.5,1.5 0 1,0 -3,0" />
+
+    <!-- Skull Jaw & Teeth -->
+    <path
+        android:fillColor="#CBD5E1"
+        android:pathData="M352,90 L363,90 L361,98 L354,98 Z" />
+
+    <!-- Leather Bone Wrap Grip -->
+    <path
+        android:fillColor="#1E293B"
+        android:pathData="M353,365 L362,365 L362,415 L353,415 Z" />
+    <path
+        android:strokeColor="#64748B"
+        android:strokeWidth="1.5"
+        android:pathData="M353,375 L362,380 M353,388 L362,393 M353,401 L362,406" />
+</vector>

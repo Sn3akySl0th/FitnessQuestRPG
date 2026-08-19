@@ -1,0 +1,41 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="500dp"
+    android:height="600dp"
+    android:viewportWidth="500"
+    android:viewportHeight="600">
+
+    <!-- Tier 4: Mythic Wayfarer Boots (Feet layer Z: 07, Y=488 to 555) -->
+    <!-- Void & Obsidian Base -->
+    <path
+        android:fillColor="#0F172A"
+        android:pathData="M184,490 L236,490 L240,530 L180,530 Z M316,490 L264,490 L260,530 L320,530 Z" />
+
+    <!-- Mythic Gold Sabaton Lames -->
+    <path
+        android:fillColor="#78350F"
+        android:pathData="M180,490 L240,490 L238,506 L182,506 Z M320,490 L260,490 L262,506 L318,506 Z" />
+    <path
+        android:fillColor="#B45309"
+        android:pathData="M178,504 L242,504 L240,518 L180,518 Z M322,504 L258,504 L260,518 L320,518 Z" />
+    <path
+        android:fillColor="#D97706"
+        android:pathData="M176,516 L244,516 L242,530 L178,530 Z M324,516 L256,516 L258,530 L322,530 Z" />
+
+    <!-- Radiant Gold Toe Box & Winged Accents -->
+    <path
+        android:fillColor="#F59E0B"
+        android:pathData="M174,528 L246,528 L246,548 L168,548 Z M326,528 L254,528 L254,548 L332,548 Z" />
+    <path
+        android:fillColor="#FDE047"
+        android:pathData="M170,532 L206,532 L204,546 L168,546 Z M330,532 L294,532 L296,546 L332,546 Z" />
+
+    <!-- Obsidian & Amethyst Sole -->
+    <path
+        android:fillColor="#1E1B4B"
+        android:pathData="M166,546 L248,546 L248,555 L166,555 Z M334,546 L252,546 L252,555 L334,555 Z" />
+
+    <!-- Mythic Purple / Cyan Gem on Instep -->
+    <path
+        android:fillColor="#A855F7"
+        android:pathData="M206,508 L214,508 L210,516 Z M294,508 L286,508 L290,516 Z" />
+</vector>

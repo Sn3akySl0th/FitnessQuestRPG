@@ -1,0 +1,41 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="500dp"
+    android:height="600dp"
+    android:viewportWidth="500"
+    android:viewportHeight="600">
+
+    <!-- Tier 1: Worn Harpoon (Dragoon spear: Shaft X=364, Head Y=80-145, Grip Y=365-415) -->
+    <!-- Wood Ash Shaft -->
+    <path
+        android:fillColor="#78350F"
+        android:pathData="M361,120 L367,120 L367,450 L361,450 Z" />
+
+    <!-- Harpoon Barbed Head (Iron) -->
+    <path
+        android:fillColor="#64748B"
+        android:pathData="M357.5,130 L364,70 L370.5,130 L364,125 Z" />
+
+    <!-- Harpoon Barbs (Left & Right Flukes) -->
+    <path
+        android:fillColor="#475569"
+        android:pathData="M357.5,110 L341.5,125 L354.5,128 Z M370.5,110 L386.5,125 L373.5,128 Z" />
+
+    <!-- Socket Reinforcement Band -->
+    <path
+        android:fillColor="#334155"
+        android:pathData="M358.5,130 L369.5,130 L369.5,145 L358.5,145 Z" />
+
+    <!-- Grip Wrap with Sky Blue Dragoon Ribbon in hand (X=364, Y=390) -->
+    <path
+        android:fillColor="#0284C7"
+        android:pathData="M359,365 L369,365 L369,415 L359,415 Z" />
+    <path
+        android:strokeColor="#38BDF8"
+        android:strokeWidth="1.5"
+        android:pathData="M359,375 L369,380 M359,388 L369,393 M359,401 L369,406" />
+
+    <!-- Ribbon Tail -->
+    <path
+        android:fillColor="#0284C7"
+        android:pathData="M360,415 Q346,430 354,450 L360,440 Z" />
+</vector>

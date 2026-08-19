@@ -1,0 +1,61 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="500dp"
+    android:height="600dp"
+    android:viewportWidth="500"
+    android:viewportHeight="600">
+
+    <!-- Tier 2: Adventurer's Legguards (Legs layer Z: 05, Y=365 to 510) -->
+    <!-- Base Hunter-Green Breeches -->
+    <path
+        android:fillColor="#14532D"
+        android:pathData="M182,366 L318,366 L316,420 L270,425 L250,405 L230,425 L184,420 Z" />
+
+    <!-- Left & Right Leg Breeches Body -->
+    <path
+        android:fillColor="#166534"
+        android:pathData="M184,410 L234,415 L238,506 L188,506 Z M316,410 L266,415 L262,506 L312,506 Z" />
+
+    <!-- Quilted Inner Thigh Linings -->
+    <path
+        android:fillColor="#15803D"
+        android:pathData="M188,414 L228,418 L232,455 L192,455 Z M312,414 L272,418 L268,455 L308,455 Z" />
+
+    <!-- Leather Thigh Holster / Straps -->
+    <path
+        android:strokeColor="#78350F"
+        android:strokeWidth="4"
+        android:strokeLineCap="round"
+        android:pathData="M184,428 L232,442 M186,442 L234,428 M316,428 L268,442 M314,442 L266,428" />
+
+    <!-- Golden Rivets on Cross Straps -->
+    <path
+        android:fillColor="#FBBF24"
+        android:pathData="M205,432 A3,3 0 1 1 211,432 A3,3 0 1 1 205,432 Z M289,432 A3,3 0 1 1 295,432 A3,3 0 1 1 289,432 Z" />
+
+    <!-- Hardened Leather Knee Guards -->
+    <path
+        android:fillColor="#92400E"
+        android:pathData="M186,450 L232,450 L234,480 L188,480 Z M314,450 L268,450 L266,480 L312,480 Z" />
+    <path
+        android:fillColor="#B45309"
+        android:pathData="M190,454 L228,454 L230,476 L192,476 Z M310,454 L272,454 L270,476 L308,476 Z" />
+
+    <!-- Dual Buckle Straps on Knee Guards -->
+    <path
+        android:strokeColor="#451A03"
+        android:strokeWidth="2.5"
+        android:pathData="M184,458 L234,458 M186,472 L234,472 M316,458 L266,458 M314,472 L266,472" />
+
+    <!-- Leather Adventurer Belt with Pouches -->
+    <path
+        android:fillColor="#451A03"
+        android:pathData="M180,364 L320,364 L318,378 L182,378 Z" />
+    <!-- Left Pouch -->
+    <path
+        android:fillColor="#78350F"
+        android:pathData="M184,374 L204,374 L202,392 L186,392 Z" />
+    <!-- Brass Buckle -->
+    <path
+        android:fillColor="#F59E0B"
+        android:pathData="M242,362 L258,362 L258,380 L242,380 Z" />
+</vector>

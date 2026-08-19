@@ -1,0 +1,31 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="500dp"
+    android:height="600dp"
+    android:viewportWidth="500"
+    android:viewportHeight="600">
+
+    <!-- Tier 1: Bent Shiv (Hand=(357.5, 390), Length Y=290-410) -->
+    <!-- Curved Jagged Blade -->
+    <path
+        android:fillColor="#64748B"
+        android:pathData="M354,300 L357.5,285 L366,310 L362,365 L353,365 Z" />
+
+    <!-- Notches / Bloodstain -->
+    <path
+        android:fillColor="#991B1B"
+        android:pathData="M355,320 L360,324 L355,330 Z" />
+
+    <!-- Small Brass Crossguard -->
+    <path
+        android:fillColor="#78350F"
+        android:pathData="M344,365 L371,365 L369,372 L346,372 Z" />
+
+    <!-- Grip (Worn Cloth Wrap) -->
+    <path
+        android:fillColor="#334155"
+        android:pathData="M353,372 L362,372 L362,410 L353,410 Z" />
+    <path
+        android:strokeColor="#CBD5E1"
+        android:strokeWidth="1.5"
+        android:pathData="M353,380 L362,385 M353,392 L362,397 M353,404 L362,409" />
+</vector>

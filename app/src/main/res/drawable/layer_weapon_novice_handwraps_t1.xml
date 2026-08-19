@@ -1,0 +1,30 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="500dp"
+    android:height="600dp"
+    android:viewportWidth="500"
+    android:viewportHeight="600">
+
+    <!-- Tier 1: Novice Handwraps (Monk fists wrapped at Right (357.5, 390) and Left (142.5, 390)) -->
+    <!-- Right Fist Wraps -->
+    <path
+        android:fillColor="#E2E8F0"
+        android:pathData="M342,370 L373,370 L373,410 L342,410 Z" />
+    <path
+        android:strokeColor="#94A3B8"
+        android:strokeWidth="2"
+        android:pathData="M342,378 L373,382 M342,388 L373,392 M342,398 L373,402 M342,374 L373,406" />
+
+    <!-- Left Fist Wraps -->
+    <path
+        android:fillColor="#E2E8F0"
+        android:pathData="M127,370 L158,370 L158,410 L127,410 Z" />
+    <path
+        android:strokeColor="#94A3B8"
+        android:strokeWidth="2"
+        android:pathData="M127,378 L158,382 M127,388 L158,392 M127,398 L158,402 M127,374 L158,406" />
+
+    <!-- Red Training Chi Accents -->
+    <path
+        android:fillColor="#EF4444"
+        android:pathData="M355,386 L360,386 L360,394 L355,394 Z M140,386 L145,386 L145,394 L140,394 Z" />
+</vector>

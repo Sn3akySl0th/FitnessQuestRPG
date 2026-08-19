@@ -1,0 +1,53 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="500dp"
+    android:height="600dp"
+    android:viewportWidth="500"
+    android:viewportHeight="600">
+
+    <!-- Tier 4: Celestial Wings (Back layer Z: 02, Expansive Mythic Wings) -->
+    <!-- Outer Wing Aura / Energy Halo -->
+    <path
+        android:fillColor="#38BDF8"
+        android:fillAlpha="0.25"
+        android:pathData="M250,220 L160,110 L40,160 L70,270 L110,380 L180,440 L250,330 L320,440 L390,380 L430,270 L460,160 L340,110 Z" />
+
+    <!-- Left Wing Primary Feather Spans -->
+    <path
+        android:fillColor="#F59E0B"
+        android:pathData="M245,225 L165,125 L55,175 L80,275 L120,375 L180,430 L235,320 Z" />
+    <path
+        android:fillColor="#FBBF24"
+        android:pathData="M240,228 L170,135 L75,185 L98,278 L135,368 L185,420 L230,315 Z" />
+    <path
+        android:fillColor="#FDE047"
+        android:pathData="M235,232 L175,148 L95,198 L115,282 L150,360 L195,410 L225,310 Z" />
+    <path
+        android:fillColor="#FEF08A"
+        android:pathData="M230,236 L180,160 L115,210 L130,285 L165,350 L205,395 L220,305 Z" />
+
+    <!-- Right Wing Primary Feather Spans -->
+    <path
+        android:fillColor="#F59E0B"
+        android:pathData="M255,225 L335,125 L445,175 L420,275 L380,375 L320,430 L265,320 Z" />
+    <path
+        android:fillColor="#FBBF24"
+        android:pathData="M260,228 L330,135 L425,185 L402,278 L365,368 L315,420 L270,315 Z" />
+    <path
+        android:fillColor="#FDE047"
+        android:pathData="M265,232 L325,148 L405,198 L385,282 L350,360 L305,410 L275,310 Z" />
+    <path
+        android:fillColor="#FEF08A"
+        android:pathData="M270,236 L320,160 L385,210 L370,285 L335,350 L295,395 L280,305 Z" />
+
+    <!-- Radiant Cyan Energy Ribs / Astral Core -->
+    <path
+        android:strokeColor="#67E8F9"
+        android:strokeWidth="3.5"
+        android:strokeLineCap="round"
+        android:pathData="M245,230 L165,128 L60,178 M240,240 L130,285 L85,275 M235,250 L170,355 L125,375 M255,230 L335,128 L440,178 M260,240 L370,285 L415,275 M265,250 L330,355 L375,375" />
+
+    <!-- Center Wing Anchor Crest -->
+    <path
+        android:fillColor="#E11D48"
+        android:pathData="M242,225 L258,225 L250,245 Z" />
+</vector>

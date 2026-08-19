@@ -1,0 +1,48 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="500dp"
+    android:height="600dp"
+    android:viewportWidth="500"
+    android:viewportHeight="600">
+
+    <!-- Tier 2: Apprentice Robes (Neckline dipped to Y=268 to leave chin and neck completely clear) -->
+    <!-- Lower Robe Skirt (Flowing over legs) -->
+    <path
+        android:fillColor="#1E3A8A"
+        android:pathData="M185,350 L315,350 L335,490 L165,490 Z" />
+
+    <!-- Robe Upper Torso & Shoulders with deep scooped neckline -->
+    <path
+        android:fillColor="#2563EB"
+        android:pathData="M166,242 L212,240 Q250,268 288,240 L334,242 L338,355 L162,355 Z" />
+
+    <!-- Robe Bell Sleeves / Shoulder Drapes -->
+    <path
+        android:fillColor="#1D4ED8"
+        android:pathData="M146,242 L176,240 L168,285 L136,275 Z M354,242 L324,240 L332,285 L364,275 Z" />
+
+    <!-- Golden Embroidered Stole (Starts below deep neckline at Y=266) -->
+    <path
+        android:fillColor="#F59E0B"
+        android:pathData="M236,266 L264,266 L268,490 L232,490 Z" />
+    <path
+        android:fillColor="#1E3A8A"
+        android:pathData="M242,270 L258,270 L262,484 L238,484 Z" />
+
+    <!-- Golden Rune Symbols on Stole -->
+    <path
+        android:strokeColor="#FBBF24"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M246,290 L254,290 M250,286 L250,298 M246,335 L254,335 M250,331 L250,343 M246,390 L254,390 M250,386 L250,398 M246,445 L254,445 M250,441 L250,453" />
+
+    <!-- Leather Sash Belt with Sapphire Ring -->
+    <path
+        android:fillColor="#78350F"
+        android:pathData="M182,348 L318,348 L316,364 L184,364 Z" />
+    <path
+        android:fillColor="#0284C7"
+        android:pathData="M250,356 m-5,0 a5,5 0 1,0 10,0 a5,5 0 1,0 -10,0" />
+    <path
+        android:fillColor="#F59E0B"
+        android:pathData="M250,356 m-2.5,0 a2.5,2.5 0 1,0 5,0 a2.5,2.5 0 1,0 -5,0" />
+</vector>

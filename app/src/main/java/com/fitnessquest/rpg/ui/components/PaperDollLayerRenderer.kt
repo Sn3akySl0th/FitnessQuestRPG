@@ -1,7 +1,13 @@
 package com.fitnessquest.rpg.ui.components
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
@@ -9,7 +15,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -18,10 +26,12 @@ import com.fitnessquest.rpg.data.db.ItemEntity
 import com.fitnessquest.rpg.data.db.ItemSlot
 import com.fitnessquest.rpg.domain.CharacterClass
 import com.fitnessquest.rpg.domain.GearRarity
+import com.fitnessquest.rpg.domain.visuals.EquipmentDye
 import com.fitnessquest.rpg.domain.visuals.EquipmentVisualRegistry
 import com.fitnessquest.rpg.domain.visuals.EquipmentVisualSpec
 import com.fitnessquest.rpg.domain.visuals.PaperDollLayerOrder
 import com.fitnessquest.rpg.domain.visuals.PaperDollVisualSlot
+import com.fitnessquest.rpg.ui.effects.rememberDeviceTilt
 
 /**
  * Encapsulates a resolved layer for rendering in the 5:6 paper doll stack.
@@ -31,17 +41,35 @@ data class ResolvedPaperDollLayer(
     val visualSlot: PaperDollVisualSlot?,
     val spec: EquipmentVisualSpec?,
     val drawableResId: Int?,
+    val item: ItemEntity? = null,
     val isEquipped: Boolean = true,
-    val rarity: GearRarity = GearRarity.COMMON
+    val rarity: GearRarity = GearRarity.COMMON,
+    val dye: EquipmentDye = EquipmentDye.NATURAL
 )
 
 /**
- * Compositor that renders avatar and gear layers in the standardized 14-layer Z-order stack.
- *
- * Master Canvas Rules:
- * - 5:6 master canvas ratio (500 x 600 px logical bounds at xhdpi).
- * - Proportional uniform scaling.
- * - Automatic fallback to [CharacterAvatar] canvas rendering when 2D PNG/XML layers are not present.
+ * Calculates 3D depth displacement multiplier for holographic card parallax.
+ */
+fun PaperDollLayerOrder.parallaxDepth(): Float = when (this) {
+    PaperDollLayerOrder.BG_PEDESTAL -> 0.2f
+    PaperDollLayerOrder.FX_AURA_BACK -> 0.3f
+    PaperDollLayerOrder.GEAR_BACK -> 0.45f
+    PaperDollLayerOrder.BODY_BASE -> 0.7f
+    PaperDollLayerOrder.BODY_HAIR_BACK -> 0.65f
+    PaperDollLayerOrder.GEAR_LEGS -> 0.8f
+    PaperDollLayerOrder.GEAR_TORSO -> 0.9f
+    PaperDollLayerOrder.GEAR_FEET -> 0.85f
+    PaperDollLayerOrder.GEAR_HANDS -> 1.05f
+    PaperDollLayerOrder.BODY_HAIR_FRONT -> 1.0f
+    PaperDollLayerOrder.GEAR_HEAD -> 1.15f
+    PaperDollLayerOrder.GEAR_WEAPON -> 1.35f
+    PaperDollLayerOrder.GEAR_TRINKET -> 1.2f
+    PaperDollLayerOrder.FX_AURA_FRONT -> 1.5f
+}
+
+/**
+ * Compositor that renders avatar and gear layers in the standardized 14-layer Z-order stack
+ * with 3D gyroscopic parallax depth, procedural dyes, and organic cape flutter physics.
  */
 @Composable
 fun PaperDollLayerRenderer(
@@ -51,23 +79,39 @@ fun PaperDollLayerRenderer(
     modifier: Modifier = Modifier,
     animation: HeroAnimation = HeroAnimation.IDLE,
     expression: AvatarExpression = AvatarExpression.CALM,
-    equipAnimationState: EquipAnimationState? = null
+    equipAnimationState: EquipAnimationState? = null,
+    customDyes: Map<ItemSlot, EquipmentDye> = emptyMap()
 ) {
     val context = LocalContext.current
+    val tilt by rememberDeviceTilt()
+
+    val infiniteTransition = rememberInfiniteTransition(label = "paperDollPhysics")
+    val capeFlutter by infiniteTransition.animateFloat(
+        initialValue = -1.5f,
+        targetValue = 1.5f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1800, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "capeFlutter"
+    )
 
     // Resolve visual layers for all equipped items
-    val activeLayers = remember(gear) {
+    val activeLayers = remember(gear, customDyes) {
         val layers = mutableListOf<ResolvedPaperDollLayer>()
         gear.forEach { (slot, item) ->
             val spec = EquipmentVisualRegistry.resolveSpec(item)
             val resId = EquipmentVisualRegistry.findDrawableId(context, spec.layerResName)
+            val resolvedDye = customDyes[slot] ?: EquipmentDye.fromItem(item)
             layers.add(
                 ResolvedPaperDollLayer(
                     order = spec.layerOrder,
                     visualSlot = spec.visualSlot,
                     spec = spec,
                     drawableResId = resId,
-                    isEquipped = true
+                    item = item,
+                    isEquipped = true,
+                    dye = resolvedDye
                 )
             )
         }
@@ -97,19 +141,34 @@ fun PaperDollLayerRenderer(
             )
         } else {
             // 2D Layer Compositor (rendered strictly in z-index order 00 to 13)
-            Box(modifier = Modifier.fillMaxSize()) {
-                // Render base canvas avatar behind 2D wear layers if partial 2D coverage
-                CharacterAvatar(
-                    clazz = clazz,
-                    gear = emptyMap(), // Clean base body
-                    appearance = appearance,
-                    modifier = Modifier.fillMaxSize(),
-                    animation = animation,
-                    expression = expression,
-                    detail = AvatarDetail.FULL
-                )
+            val unhandledCanvasGear = remember(gear, activeLayers) {
+                val handledSlots = activeLayers.filter { it.drawableResId != null }.mapNotNull { it.spec?.domainSlot }.toSet()
+                gear.filterKeys { it !in handledSlots }
+            }
 
-                // Render each resolved 2D layer
+            Box(modifier = Modifier.fillMaxSize()) {
+                // Base canvas avatar (body, face, hair) with body depth parallax
+                val bodyDepth = PaperDollLayerOrder.BODY_BASE.parallaxDepth()
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            translationX = tilt.x * bodyDepth * 14f * density
+                            translationY = tilt.y * bodyDepth * 14f * density
+                        }
+                ) {
+                    CharacterAvatar(
+                        clazz = clazz,
+                        gear = unhandledCanvasGear,
+                        appearance = appearance,
+                        modifier = Modifier.fillMaxSize(),
+                        animation = animation,
+                        expression = expression,
+                        detail = AvatarDetail.FULL
+                    )
+                }
+
+                // Render each resolved 2D layer with independent 3D parallax depth and dyes
                 activeLayers.forEach { layer ->
                     layer.drawableResId?.let { resId ->
                         val isEquipTarget = equipAnimationState?.equippedSlot?.let {
@@ -122,14 +181,25 @@ fun PaperDollLayerRenderer(
                             label = "layerAlpha_${layer.order.name}"
                         )
 
+                        val depth = layer.order.parallaxDepth()
+                        val isCapeOrWings = layer.order == PaperDollLayerOrder.GEAR_BACK
+                        val colorFilter = layer.dye.tintColor?.let { tint ->
+                            ColorFilter.tint(tint, BlendMode.SrcAtop)
+                        }
+
                         Image(
                             painter = painterResource(id = resId),
                             contentDescription = null,
                             contentScale = ContentScale.Fit,
+                            colorFilter = colorFilter,
                             modifier = Modifier
                                 .fillMaxSize()
                                 .alpha(layerAlpha)
                                 .scale(if (isEquipTarget) 1.04f else 1f)
+                                .graphicsLayer {
+                                    translationX = (tilt.x * depth * 14f + if (isCapeOrWings) capeFlutter else 0f) * density
+                                    translationY = (tilt.y * depth * 14f) * density
+                                }
                         )
                     }
                 }

@@ -1,0 +1,48 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="500dp"
+    android:height="600dp"
+    android:viewportWidth="500"
+    android:viewportHeight="600">
+
+    <!-- Tier 3: Knight's Blade (Weapon layer: Hand=(357.5,390), Tip Y=170, Guard Y=355) -->
+    <!-- Blade Outer Silhouette -->
+    <path
+        android:fillColor="#94A3B8"
+        android:pathData="M346,200 L357.5,165 L369,200 L366,355 L349,355 Z" />
+
+    <!-- Polished Steel Bevel (Left / Light side) -->
+    <path
+        android:fillColor="#CBD5E1"
+        android:pathData="M348,200 L357.5,170 L357.5,355 L349,355 Z" />
+
+    <!-- Cyan Runic Fuller Glow in Center -->
+    <path
+        android:strokeColor="#06B6D4"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:pathData="M357.5,190 L357.5,345" />
+
+    <!-- Ornate Crossguard (Gilded / Brass) -->
+    <path
+        android:fillColor="#D97706"
+        android:pathData="M326,352 Q357.5,362 389,352 L391,362 Q357.5,370 324,362 Z" />
+
+    <!-- Guard Center Cyan Gem -->
+    <path
+        android:fillColor="#06B6D4"
+        android:pathData="M357.5,362 m-3.5,0 a3.5,3.5 0 1,0 7,0 a3.5,3.5 0 1,0 -7,0" />
+
+    <!-- Grip (Dark Leather with wire wrap) -->
+    <path
+        android:fillColor="#1E293B"
+        android:pathData="M352.5,364 L362.5,364 L362.5,415 L352.5,415 Z" />
+    <path
+        android:strokeColor="#94A3B8"
+        android:strokeWidth="1.5"
+        android:pathData="M352.5,372 L362.5,377 M352.5,382 L362.5,387 M352.5,392 L362.5,397 M352.5,402 L362.5,407 M352.5,412 L362.5,417" />
+
+    <!-- Gilded Crown Pommel -->
+    <path
+        android:fillColor="#F59E0B"
+        android:pathData="M349.5,415 L365.5,415 L362.5,432 L352.5,432 Z" />
+</vector>

@@ -1,0 +1,66 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="500dp"
+    android:height="600dp"
+    android:viewportWidth="500"
+    android:viewportHeight="600">
+
+    <!-- Tier 3: Veteran's Greaves (Legs layer Z: 05, Y=365 to 510) -->
+    <!-- Chainmail Underlay -->
+    <path
+        android:fillColor="#1E293B"
+        android:pathData="M182,366 L318,366 L316,420 L270,425 L250,405 L230,425 L184,420 Z M184,410 L234,415 L238,506 L188,506 Z M316,410 L266,415 L262,506 L312,506 Z" />
+
+    <!-- Thigh Cuisses (Steel Armor Plates) -->
+    <path
+        android:fillColor="#334155"
+        android:pathData="M184,410 L234,414 L232,448 L186,448 Z M316,410 L266,414 L268,448 L314,448 Z" />
+    <path
+        android:fillColor="#475569"
+        android:pathData="M188,414 L230,418 L228,444 L190,444 Z M312,414 L270,418 L272,444 L310,444 Z" />
+    <path
+        android:fillColor="#64748B"
+        android:pathData="M192,418 L226,420 L224,440 L194,440 Z M308,418 L274,420 L276,440 L306,440 Z" />
+
+    <!-- Articulated Steel Knee Poleyns (Bosses) -->
+    <path
+        android:fillColor="#1E293B"
+        android:pathData="M182,450 L236,450 L232,482 L186,482 Z M318,450 L264,450 L268,482 L314,482 Z" />
+    <path
+        android:fillColor="#475569"
+        android:pathData="M184,452 L234,452 L230,478 L188,478 Z M316,452 L266,452 L270,478 L312,478 Z" />
+    <path
+        android:fillColor="#94A3B8"
+        android:pathData="M190,456 L228,456 L224,474 L194,474 Z M310,456 L272,456 L276,474 L306,474 Z" />
+
+    <!-- Cyan Runic Energy Inlay on Knee Guards -->
+    <path
+        android:strokeColor="#06B6D4"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:pathData="M198,465 L209,472 L220,465 M302,465 L291,472 L280,465" />
+
+    <!-- Shin Greaves Steel Splints -->
+    <path
+        android:fillColor="#334155"
+        android:pathData="M186,484 L232,484 L236,508 L188,508 Z M314,484 L268,484 L264,508 L312,508 Z" />
+    <path
+        android:fillColor="#64748B"
+        android:pathData="M190,486 L228,486 L232,506 L192,506 Z M310,486 L272,486 L268,506 L308,506 Z" />
+    <!-- Center Shin Ridge -->
+    <path
+        android:strokeColor="#CBD5E1"
+        android:strokeWidth="2"
+        android:pathData="M209,486 L212,506 M291,486 L288,506" />
+
+    <!-- Heavy Plated Tassets & Belt -->
+    <path
+        android:fillColor="#0F172A"
+        android:pathData="M180,364 L320,364 L318,380 L182,380 Z" />
+    <!-- Tassets (hanging thigh armor plates) -->
+    <path
+        android:fillColor="#475569"
+        android:pathData="M186,378 L218,378 L214,410 L188,410 Z M314,378 L282,378 L286,410 L312,410 Z" />
+    <path
+        android:fillColor="#94A3B8"
+        android:pathData="M240,362 L260,362 L260,382 L240,382 Z" />
+</vector>

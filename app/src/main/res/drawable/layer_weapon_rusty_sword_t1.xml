@@ -1,0 +1,41 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="500dp"
+    android:height="600dp"
+    android:viewportWidth="500"
+    android:viewportHeight="600">
+
+    <!-- Tier 1: Rusty Sword (Weapon layer: Hand=(357.5,390), Blade Y=220-355, Guard Y=355-365, Grip Y=365-415) -->
+    <!-- Blade Tip & Edge -->
+    <path
+        android:fillColor="#64748B"
+        android:pathData="M348,245 L357.5,220 L367,245 L365,355 L350,355 Z" />
+
+    <!-- Rust Patches / Notches -->
+    <path
+        android:fillColor="#92400E"
+        android:pathData="M349,265 L355,270 L349,276 Z M365,295 L359,300 L365,306 Z M350,320 L355,325 L350,330 Z" />
+
+    <!-- Blade Fuller / Center Ridge -->
+    <path
+        android:fillColor="#475569"
+        android:pathData="M356.5,230 L358.5,230 L358.5,353 L356.5,353 Z" />
+
+    <!-- Crossguard (Iron) -->
+    <path
+        android:fillColor="#334155"
+        android:pathData="M332,355 L383,355 L381,366 L334,366 Z" />
+
+    <!-- Grip (Wrapped Leather under hand) -->
+    <path
+        android:fillColor="#78350F"
+        android:pathData="M352.5,366 L362.5,366 L362.5,415 L352.5,415 Z" />
+    <path
+        android:strokeColor="#D97706"
+        android:strokeWidth="2"
+        android:pathData="M352.5,375 L362.5,380 M352.5,388 L362.5,393 M352.5,401 L362.5,406" />
+
+    <!-- Pommel (Iron Ring) -->
+    <path
+        android:fillColor="#334155"
+        android:pathData="M357.5,422 m-6,0 a6,6 0 1,0 12,0 a6,6 0 1,0 -12,0" />
+</vector>

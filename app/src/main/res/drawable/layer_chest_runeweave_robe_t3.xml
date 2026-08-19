@@ -1,0 +1,46 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="500dp"
+    android:height="600dp"
+    android:viewportWidth="500"
+    android:viewportHeight="600">
+
+    <!-- Tier 3: Runeweave Robe (Deep violet & cyan glowing runes: Low neckline dipped to Y=265) -->
+    <!-- Violet Robe Skirt Flare -->
+    <path
+        android:fillColor="#311042"
+        android:pathData="M185,350 L315,350 L340,495 L160,495 Z" />
+
+    <!-- Robe Torso Body with deep scooped neckline to clearly reveal the neck -->
+    <path
+        android:fillColor="#581C87"
+        android:pathData="M164,242 L212,240 Q250,268 288,240 L336,242 L340,355 L160,355 Z" />
+
+    <!-- Mystic Pauldron Mantle (Kept below neck clearance at Y=238) -->
+    <path
+        android:fillColor="#7E22CE"
+        android:pathData="M140,238 L182,236 L174,282 L132,272 Z M360,238 L318,236 L326,282 L368,272 Z" />
+
+    <!-- Cyan Glowing Runic Inlay along Robe Hem & Chest -->
+    <path
+        android:strokeColor="#06B6D4"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:pathData="M188,270 L215,285 L235,275 M312,270 L285,285 L265,275 M175,475 Q250,490 325,475 M190,390 L200,430 L190,470 M310,390 L300,430 L310,470" />
+
+    <!-- Center Mystic Brocade with Crystal Gem (Starts below deep neckline at Y=268) -->
+    <path
+        android:fillColor="#1E1B4B"
+        android:pathData="M234,268 L266,268 L270,495 L230,495 Z" />
+    <path
+        android:strokeColor="#C084FC"
+        android:strokeWidth="2"
+        android:pathData="M238,280 L262,280 M238,320 L262,320 M238,360 L262,360 M238,410 L262,410 M238,470 L262,470" />
+
+    <!-- Luminescent Mana Crystal Brooch -->
+    <path
+        android:fillColor="#38BDF8"
+        android:pathData="M250,278 L258,270 L250,262 L242,270 Z" />
+    <path
+        android:fillColor="#E0F2FE"
+        android:pathData="M250,272 m-2,0 a2,2 0 1,0 4,0 a2,2 0 1,0 -4,0" />
+</vector>

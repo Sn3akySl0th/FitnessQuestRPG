@@ -1,0 +1,49 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="500dp"
+    android:height="600dp"
+    android:viewportWidth="500"
+    android:viewportHeight="600">
+
+    <!-- Tier 3: Veteran's Treads (Feet layer Z: 07, Y=488 to 555) -->
+    <!-- Steel Plated Greave Base & Sabaton Ankle -->
+    <path
+        android:fillColor="#1E293B"
+        android:pathData="M184,490 L236,490 L240,530 L180,530 Z M316,490 L264,490 L260,530 L320,530 Z" />
+
+    <!-- Articulated Steel Sabaton Lames (Segmented Instep Plates) -->
+    <path
+        android:fillColor="#334155"
+        android:pathData="M180,490 L240,490 L238,506 L182,506 Z M320,490 L260,490 L262,506 L318,506 Z" />
+    <path
+        android:fillColor="#475569"
+        android:pathData="M178,504 L242,504 L240,518 L180,518 Z M322,504 L258,504 L260,518 L320,518 Z" />
+    <path
+        android:fillColor="#64748B"
+        android:pathData="M176,516 L244,516 L242,530 L178,530 Z M324,516 L256,516 L258,530 L322,530 Z" />
+
+    <!-- Heavy Armored Toe Box & Sabaton Cap -->
+    <path
+        android:fillColor="#475569"
+        android:pathData="M174,528 L246,528 L246,548 L168,548 Z M326,528 L254,528 L254,548 L332,548 Z" />
+    <path
+        android:fillColor="#94A3B8"
+        android:pathData="M170,532 L206,532 L204,546 L168,546 Z M330,532 L294,532 L296,546 L332,546 Z" />
+
+    <!-- Solid Steel Tread & Heel Plate -->
+    <path
+        android:fillColor="#0F172A"
+        android:pathData="M166,546 L248,546 L248,555 L166,555 Z M334,546 L252,546 L252,555 L334,555 Z" />
+
+    <!-- Cyan Runic Energy Inlay on Instep -->
+    <path
+        android:strokeColor="#06B6D4"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:pathData="M198,510 L210,516 L222,510 M302,510 L290,516 L278,510" />
+
+    <!-- Polished Steel Edge Highlights -->
+    <path
+        android:strokeColor="#CBD5E1"
+        android:strokeWidth="1.5"
+        android:pathData="M168,546 L206,546 M332,546 L294,546" />
+</vector>

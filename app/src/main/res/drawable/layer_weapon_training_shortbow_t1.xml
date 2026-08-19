@@ -1,0 +1,50 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="500dp"
+    android:height="600dp"
+    android:viewportWidth="500"
+    android:viewportHeight="600">
+
+    <!-- Tier 1: Training Shortbow (Hand=(357.5, 390), Bow Stave Y=270-510, X=357.5 to 430) -->
+    <!-- Wooden Bow Stave Curve -->
+    <path
+        android:strokeColor="#78350F"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"
+        android:pathData="M365,270 Q435,390 365,510" />
+
+    <!-- Bow Stave Inner Highlight -->
+    <path
+        android:strokeColor="#B45309"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:pathData="M366,276 Q431,390 366,504" />
+
+    <!-- Bowstring -->
+    <path
+        android:strokeColor="#E2E8F0"
+        android:strokeWidth="1.5"
+        android:pathData="M365,270 L365,510" />
+
+    <!-- Leather Handle Grip at Hand -->
+    <path
+        android:fillColor="#1E293B"
+        android:pathData="M388,370 L402,370 L402,410 L388,410 Z" />
+    <path
+        android:strokeColor="#F59E0B"
+        android:strokeWidth="1.5"
+        android:pathData="M388,378 L402,382 M388,390 L402,394 M388,402 L402,406" />
+
+    <!-- Nocked Training Arrow -->
+    <path
+        android:strokeColor="#94A3B8"
+        android:strokeWidth="2"
+        android:pathData="M335,390 L395,390" />
+    <!-- Arrowhead -->
+    <path
+        android:fillColor="#64748B"
+        android:pathData="M335,390 L345,385 L345,395 Z" />
+    <!-- Arrow Fletching (Green feathers) -->
+    <path
+        android:fillColor="#10B981"
+        android:pathData="M388,390 L398,383 L398,390 Z M388,390 L398,397 L398,390 Z" />
+</vector>

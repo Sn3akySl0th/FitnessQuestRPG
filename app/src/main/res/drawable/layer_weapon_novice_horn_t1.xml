@@ -1,0 +1,39 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="500dp"
+    android:height="600dp"
+    android:viewportWidth="500"
+    android:viewportHeight="600">
+
+    <!-- Tier 1: Novice Horn (Held in right hand at (357.5, 390), flaring outward to the right) -->
+    <!-- Curved Spiraling Battle Horn (Arches outward to X=425) -->
+    <path
+        android:fillColor="#D97706"
+        android:pathData="M352,400 Q362,370 380,340 Q400,310 430,295 L436,310 Q410,325 392,352 Q372,380 362,402 Z" />
+
+    <!-- Horn Bell Flare (Pointing up and right) -->
+    <path
+        android:fillColor="#F59E0B"
+        android:pathData="M430,295 Q445,285 455,300 Q445,315 436,310 Z" />
+    <path
+        android:fillColor="#78350F"
+        android:pathData="M434,297 Q444,290 450,300 Q444,308 438,306 Z" />
+
+    <!-- Carved Spirit Runes along Outer Horn Curve -->
+    <path
+        android:strokeColor="#FEF08A"
+        android:strokeWidth="1.5"
+        android:pathData="M366,375 L376,378 M385,342 L396,346 M410,315 L422,320" />
+
+    <!-- Leather Lanyard Grip Strap around hand -->
+    <path
+        android:fillColor="#451A03"
+        android:pathData="M352,380 L364,380 L364,410 L352,410 Z" />
+
+    <!-- Ethereal Spirit Calling Note Spark (Hovering above the horn bell) -->
+    <path
+        android:fillColor="#3338BDF8"
+        android:pathData="M455,295 m-15,0 a15,15 0 1,0 30,0 a15,15 0 1,0 -30,0" />
+    <path
+        android:fillColor="#00F0FF"
+        android:pathData="M455,295 L460,288 L468,295 L460,302 Z" />
+</vector>

@@ -1,0 +1,47 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="500dp"
+    android:height="600dp"
+    android:viewportWidth="500"
+    android:viewportHeight="600">
+
+    <!-- Outer Pedestal Glow / Mana Ring -->
+    <path
+        android:fillColor="#1522C55E"
+        android:pathData="M250,510 m-160,0 a160,38 0 1,0 320,0 a160,38 0 1,0 -320,0" />
+
+    <path
+        android:fillColor="#3306B6D4"
+        android:pathData="M250,520 m-135,0 a135,32 0 1,0 270,0 a135,32 0 1,0 -270,0" />
+
+    <!-- Lower Stone Tier (Shadow/Bevel) -->
+    <path
+        android:fillColor="#1E293B"
+        android:pathData="M140,530 L150,555 Q250,580 350,555 L360,530 Q250,560 140,530 Z" />
+
+    <!-- Middle Stone Tier -->
+    <path
+        android:fillColor="#334155"
+        android:pathData="M145,520 L150,545 Q250,570 350,545 L355,520 Q250,550 145,520 Z" />
+
+    <!-- Top Platform Surface -->
+    <path
+        android:fillColor="#475569"
+        android:pathData="M250,520 m-110,0 a110,24 0 1,0 220,0 a110,24 0 1,0 -220,0" />
+
+    <!-- Platform Center Inlay -->
+    <path
+        android:fillColor="#1E293B"
+        android:pathData="M250,520 m-85,0 a85,18 0 1,0 170,0 a85,18 0 1,0 -170,0" />
+
+    <!-- Glowing Runic Accents on Pedestal Surface -->
+    <path
+        android:strokeColor="#38BDF8"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M185,520 Q250,532 315,520 M210,515 L250,524 L290,515 M250,510 L250,528" />
+
+    <!-- Small Mana Crystals / Rune Glyphs -->
+    <path
+        android:fillColor="#00F0FF"
+        android:pathData="M165,518 L168,515 L171,518 L168,521 Z M329,518 L332,515 L335,518 L332,521 Z" />
+</vector>

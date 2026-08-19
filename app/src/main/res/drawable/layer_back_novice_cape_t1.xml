@@ -1,0 +1,45 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="500dp"
+    android:height="600dp"
+    android:viewportWidth="500"
+    android:viewportHeight="600">
+
+    <!-- Tier 1: Novice Cape (Back layer Z: 02, Behind Body) -->
+    <!-- Deep Shadow Inner Lining -->
+    <path
+        android:fillColor="#4C0519"
+        android:pathData="M165,220 L335,220 L370,520 L320,530 L250,515 L180,530 L130,520 Z" />
+
+    <!-- Left & Right Flowing Outer Fabric Folds -->
+    <path
+        android:fillColor="#881337"
+        android:pathData="M165,220 L210,220 L195,522 L130,520 Z M335,220 L290,220 L305,522 L370,520 Z" />
+
+    <path
+        android:fillColor="#9F1239"
+        android:pathData="M175,220 L240,220 L230,518 L155,525 Z M325,220 L260,220 L270,518 L345,525 Z" />
+
+    <path
+        android:fillColor="#BE123C"
+        android:pathData="M190,222 L245,222 L240,516 L185,524 Z M310,222 L255,222 L260,516 L315,524 Z" />
+
+    <!-- Center Cape Highlight -->
+    <path
+        android:fillColor="#E11D48"
+        android:pathData="M235,222 L265,222 L258,515 L242,515 Z" />
+
+    <!-- Gold Embroidered Bottom Hem Trim -->
+    <path
+        android:strokeColor="#F59E0B"
+        android:strokeWidth="3.5"
+        android:strokeLineCap="round"
+        android:pathData="M130,520 L180,530 L250,515 L320,530 L370,520" />
+
+    <!-- Shoulder Clasp Fasteners (Visible at cape origin) -->
+    <path
+        android:fillColor="#D97706"
+        android:pathData="M160,215 A6,6 0 1 1 172,215 A6,6 0 1 1 160,215 Z M328,215 A6,6 0 1 1 340,215 A6,6 0 1 1 328,215 Z" />
+    <path
+        android:fillColor="#FEF08A"
+        android:pathData="M164,215 A2,2 0 1 1 168,215 A2,2 0 1 1 164,215 Z M332,215 A2,2 0 1 1 336,215 A2,2 0 1 1 332,215 Z" />
+</vector>

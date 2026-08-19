@@ -1,0 +1,35 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="500dp"
+    android:height="600dp"
+    android:viewportWidth="500"
+    android:viewportHeight="600">
+
+    <!-- Tier 1: Old Boots (Feet layer Z: 07, Y=488 to 555) -->
+    <!-- Boot Ankle Shaft & Wrinkles (Left & Right) -->
+    <path
+        android:fillColor="#3E2723"
+        android:pathData="M184,490 L236,490 L240,530 L180,530 Z M316,490 L264,490 L260,530 L320,530 Z" />
+
+    <!-- Boot Upper & Vamp -->
+    <path
+        android:fillColor="#4E342E"
+        android:pathData="M178,524 L242,524 L244,548 L172,548 Z M322,524 L258,524 L256,548 L328,548 Z" />
+
+    <path
+        android:fillColor="#5D4037"
+        android:pathData="M182,526 L238,526 L240,544 L176,544 Z M318,526 L262,526 L260,544 L324,544 Z" />
+
+    <!-- Rugged Rubber / Leather Soles -->
+    <path
+        android:fillColor="#1F2937"
+        android:pathData="M170,546 L246,546 L246,554 L170,554 Z M330,546 L254,546 L254,554 L330,554 Z" />
+
+    <!-- Rolled Leather Ankle Collar & Ties -->
+    <path
+        android:fillColor="#271105"
+        android:pathData="M182,488 L238,488 L236,498 L184,498 Z M318,488 L262,488 L264,498 L316,498 Z" />
+    <path
+        android:strokeColor="#A1887F"
+        android:strokeWidth="1.5"
+        android:pathData="M190,506 L230,510 M188,518 L232,522 M310,506 L270,510 M312,518 L268,522" />
+</vector>

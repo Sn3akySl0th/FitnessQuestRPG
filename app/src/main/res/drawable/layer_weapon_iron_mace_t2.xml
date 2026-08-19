@@ -1,0 +1,44 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="500dp"
+    android:height="600dp"
+    android:viewportWidth="500"
+    android:viewportHeight="600">
+
+    <!-- Tier 2: Iron Mace (Weapon layer: Hand=(357.5,390), Head Y=210, Shaft Y=210-425) -->
+    <!-- Haft / Shaft (Dark Iron Shaft) -->
+    <path
+        android:fillColor="#1E293B"
+        android:pathData="M353.5,230 L361.5,230 L361.5,425 L353.5,425 Z" />
+
+    <!-- Mace Head Core -->
+    <path
+        android:fillColor="#334155"
+        android:pathData="M342,185 L373,185 L370,235 L345,235 Z" />
+
+    <!-- Top Spike -->
+    <path
+        android:fillColor="#64748B"
+        android:pathData="M352.5,185 L357.5,150 L362.5,185 Z" />
+
+    <!-- Flanges (Left & Right Spikes) -->
+    <path
+        android:fillColor="#475569"
+        android:pathData="M342,195 L318,210 L342,225 Z M373,195 L397,210 L373,225 Z" />
+    <path
+        android:fillColor="#64748B"
+        android:pathData="M343,200 L325,210 L343,220 Z M372,200 L390,210 L372,220 Z" />
+
+    <!-- Grip Wrap around hand area -->
+    <path
+        android:fillColor="#047857"
+        android:pathData="M352.5,365 L362.5,365 L362.5,415 L352.5,415 Z" />
+    <path
+        android:strokeColor="#10B981"
+        android:strokeWidth="2"
+        android:pathData="M352.5,373 L362.5,378 M352.5,385 L362.5,390 M352.5,397 L362.5,402 M352.5,409 L362.5,414" />
+
+    <!-- Heavy Iron Base Pommel -->
+    <path
+        android:fillColor="#334155"
+        android:pathData="M349.5,425 L365.5,425 L361.5,438 L353.5,438 Z" />
+</vector>

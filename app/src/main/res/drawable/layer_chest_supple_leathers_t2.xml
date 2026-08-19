@@ -1,0 +1,46 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="500dp"
+    android:height="600dp"
+    android:viewportWidth="500"
+    android:viewportHeight="600">
+
+    <!-- Tier 2: Supple Leathers (Thief armor: Sleek midnight leather, diagonal utility strap, low neckline Y=265) -->
+    <!-- Base Dark Leather Body -->
+    <path
+        android:fillColor="#0F172A"
+        android:pathData="M166,242 L220,240 L238,265 Q250,268 262,265 L280,240 L334,242 L338,322 L315,375 L185,375 L162,322 Z" />
+
+    <!-- Charcoal Leather Panels -->
+    <path
+        android:fillColor="#1E293B"
+        android:pathData="M174,246 L218,244 L234,316 L168,310 Z M326,246 L282,244 L266,316 L332,310 Z" />
+
+    <!-- Diagonal Bandolier Utility Strap (from Left Shoulder to Right Hip) -->
+    <path
+        android:fillColor="#78350F"
+        android:pathData="M175,240 L195,240 L295,375 L275,375 Z" />
+    <path
+        android:strokeColor="#F59E0B"
+        android:strokeWidth="1.5"
+        android:pathData="M175,240 L275,375 M195,240 L295,375" />
+
+    <!-- Throwing Dagger Sheaths on Bandolier -->
+    <path
+        android:fillColor="#334155"
+        android:pathData="M210,275 L222,270 L228,282 L216,287 Z M235,315 L247,310 L253,322 L241,327 Z" />
+    <!-- Dagger Silver Pommels -->
+    <path
+        android:fillColor="#94A3B8"
+        android:pathData="M208,276 m-2,0 a2,2 0 1,0 4,0 a2,2 0 1,0 -4,0 M233,316 m-2,0 a2,2 0 1,0 4,0 a2,2 0 1,0 -4,0" />
+
+    <!-- Dual Dagger Belt with Silver Buckle -->
+    <path
+        android:fillColor="#0F172A"
+        android:pathData="M182,352 L318,352 L316,372 L184,372 Z" />
+    <path
+        android:fillColor="#94A3B8"
+        android:pathData="M242,350 L258,350 L258,374 L242,374 Z" />
+    <path
+        android:fillColor="#0F172A"
+        android:pathData="M245,354 L255,354 L255,370 L245,370 Z" />
+</vector>

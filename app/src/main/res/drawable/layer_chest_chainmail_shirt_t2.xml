@@ -1,0 +1,42 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="500dp"
+    android:height="600dp"
+    android:viewportWidth="500"
+    android:viewportHeight="600">
+
+    <!-- Tier 2: Chainmail Shirt (Torso layer: Y=240 to 375, Neckline scooped to Y=265) -->
+    <!-- Mail Hauberk Base Body -->
+    <path
+        android:fillColor="#334155"
+        android:pathData="M166,242 L218,240 Q250,266 282,240 L334,242 L338,322 L315,375 L185,375 L162,322 Z" />
+
+    <!-- Mail Texture Rows -->
+    <path
+        android:fillColor="#475569"
+        android:pathData="M174,270 L326,270 L322,290 L178,290 Z M180,298 L320,298 L316,320 L184,320 Z M186,328 L314,328 L310,350 L190,350 Z" />
+
+    <path
+        android:fillColor="#64748B"
+        android:pathData="M178,272 L322,272 L320,280 L180,280 Z M184,300 L316,300 L314,308 L186,308 Z M190,330 L310,330 L308,338 L192,338 Z" />
+
+    <!-- Left & Right Reinforced Leather Pauldrons (Over shoulders kept at Y=238) -->
+    <path
+        android:fillColor="#78350F"
+        android:pathData="M148,238 L188,236 L182,276 L142,270 Z M352,238 L312,236 L318,276 L358,270 Z" />
+    <path
+        android:fillColor="#92400E"
+        android:pathData="M152,240 L184,238 L180,266 L148,262 Z M348,240 L316,238 L320,266 L352,262 Z" />
+
+    <!-- Center Leather Belt Strap -->
+    <path
+        android:fillColor="#1E293B"
+        android:pathData="M182,352 L318,352 L316,372 L184,372 Z" />
+
+    <!-- Bronze Belt Buckle -->
+    <path
+        android:fillColor="#D97706"
+        android:pathData="M238,348 L262,348 L262,376 L238,376 Z" />
+    <path
+        android:fillColor="#1E293B"
+        android:pathData="M243,353 L257,353 L257,371 L243,371 Z" />
+</vector>

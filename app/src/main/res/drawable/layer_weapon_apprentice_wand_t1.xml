@@ -1,0 +1,34 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="500dp"
+    android:height="600dp"
+    android:viewportWidth="500"
+    android:viewportHeight="600">
+
+    <!-- Tier 1: Apprentice Wand (Hand=(357.5, 390), Wand Length Y=265-410) -->
+    <!-- Wood Shaft -->
+    <path
+        android:fillColor="#854D0E"
+        android:pathData="M354.5,280 L360.5,280 L360.5,410 L354.5,410 Z" />
+
+    <!-- Wand Grip Wrapping -->
+    <path
+        android:fillColor="#3B82F6"
+        android:pathData="M353.5,365 L361.5,365 L361.5,412 L353.5,412 Z" />
+    <path
+        android:strokeColor="#60A5FA"
+        android:strokeWidth="1.5"
+        android:pathData="M353.5,375 L361.5,380 M353.5,388 L361.5,393 M353.5,401 L361.5,406" />
+
+    <!-- Wand Tip Focusing Crystal & Mana Spark -->
+    <path
+        android:fillColor="#38BDF8"
+        android:pathData="M357.5,262 L363.5,274 L357.5,286 L351.5,274 Z" />
+    <path
+        android:fillColor="#E0F2FE"
+        android:pathData="M357.5,268 L361,274 L357.5,280 L354,274 Z" />
+
+    <!-- Mana Spark Glow Ring -->
+    <path
+        android:fillColor="#3300F0FF"
+        android:pathData="M357.5,274 m-12,0 a12,12 0 1,0 24,0 a12,12 0 1,0 -24,0" />
+</vector>

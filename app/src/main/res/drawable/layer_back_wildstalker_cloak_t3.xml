@@ -1,0 +1,38 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="500dp"
+    android:height="600dp"
+    android:viewportWidth="500"
+    android:viewportHeight="600">
+
+    <!-- Tier 3: Wildstalker Cloak (Back layer Z: 02, Behind Body) -->
+    <!-- Dark Forest Shadow Backing -->
+    <path
+        android:fillColor="#022C22"
+        android:pathData="M160,215 L340,215 L380,530 L330,545 L250,525 L170,545 L120,530 Z" />
+
+    <!-- Jagged Leaf & Feather Cloak Folds -->
+    <path
+        android:fillColor="#064E3B"
+        android:pathData="M165,218 L215,218 L195,535 L125,530 Z M335,218 L285,218 L305,535 L375,530 Z" />
+
+    <path
+        android:fillColor="#047857"
+        android:pathData="M175,220 L245,220 L235,530 L155,538 Z M325,220 L255,220 L265,530 L345,538 Z" />
+
+    <path
+        android:fillColor="#059669"
+        android:pathData="M190,222 L250,222 L245,528 L185,536 Z M310,222 L250,222 L255,528 L315,536 Z" />
+
+    <!-- Forest Hunter Foliage Trim / Serrated Hem -->
+    <path
+        android:fillColor="#10B981"
+        android:pathData="M120,530 L140,515 L160,540 L180,520 L210,545 L250,525 L290,545 L320,520 L340,540 L360,515 L380,530 L350,545 L250,550 L150,545 Z" />
+
+    <!-- Amber Leaf Fastening Pins at Shoulders -->
+    <path
+        android:fillColor="#D97706"
+        android:pathData="M155,210 L170,210 L162,225 Z M345,210 L330,210 L338,225 Z" />
+    <path
+        android:fillColor="#FBBF24"
+        android:pathData="M158,212 L168,212 L162,221 Z M342,212 L332,212 L338,221 Z" />
+</vector>

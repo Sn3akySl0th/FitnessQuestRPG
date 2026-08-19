@@ -19,6 +19,7 @@ The next major focus is boss-gated biome progression, followed by Movement Maste
 
 ### Fixed Recently
 
+- **Avatar V2 Overhaul (5-Piece Sets, Dyes, 3D Parallax & Flutter Physics)**: Full 5-piece head-to-toe gear visualization with custom high-definition vector layers for Legs and Boots across all tiers. Added Back slot cloaks, capes, and celestial wings with idle breathing flutter physics. Implemented 3D gyroscopic motion parallax (holographic card depth displacement) across the 14-layer Z-stack, procedural Diablo-style material dye engine (`IRON`, `GOLD`, `BLOOD_STEEL`, `GLACIAL`, `VOID`, `VERDANT`, `CELESTIAL`), and tactile spring squash-and-stretch tap recoil.
 - **Paper-Doll Avatar Showcase & 14-Layer Visual Compositor**: Centered hero paper doll character showcase with dynamic pedestal backdrop, equip animation burst effects, and seamless fallback to vector avatar rendering. Full 14-layer Z-order compositing pipeline ready for custom 2D gear assets with automatic rarity tinting and visual anchors.
 - **Mythic Gear Rarity Tier & High-Tier Auras**: Added Mythic tier (2.00× stats multiplier) with radiant crimson energy shimmers, glowing rune pedestals, animated gradient frames, and high-tier equipment effects.
 - **Gear Traits & Combat Affixes**: Procedural combat affixes (Vampiric, Berserk, Thorns, Executioner, Swiftness, Fortified) rolled on loot drops and active during battles.
