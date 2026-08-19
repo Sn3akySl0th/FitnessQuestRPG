@@ -60,7 +60,8 @@ data class ActiveExerciseEntity(
     val trackingType: String = "WEIGHT_REPS",
     val sortOrder: Int = 0,
     val notes: String = "",
-    val suggestionReason: String? = null
+    val suggestionReason: String? = null,
+    val supersetId: String? = null
 )
 
 /**

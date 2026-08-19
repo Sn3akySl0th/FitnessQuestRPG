@@ -216,7 +216,8 @@ data class WorkoutExerciseEntity(
     val targetSets: Int = 3,
     val targetReps: Int = 10,
     val targetWeightKg: Double? = null,
-    val sortOrder: Int = 0
+    val sortOrder: Int = 0,
+    val supersetId: String? = null
 )
 
 

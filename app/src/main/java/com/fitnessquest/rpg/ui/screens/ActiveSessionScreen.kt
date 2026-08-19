@@ -7,6 +7,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -49,6 +50,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -153,7 +155,8 @@ data class SessionExercise(
     val targetWeightKg: Double? = null,
     val trackingType: ExerciseTrackingType = ExerciseTracking.resolve(name, category),
     val loggedSets: List<SetLogEntity> = emptyList(),
-    val suggestionReason: String? = null
+    val suggestionReason: String? = null,
+    val supersetId: String? = null
 )
 
 data class SessionFinish(
@@ -372,6 +375,7 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
                     targetWeightKg = ex.targetWeightKg,
                     trackingType = trackingType,
                     suggestionReason = ex.suggestionReason,
+                    supersetId = ex.supersetId,
                     loggedSets = exWithSets.sets.map { s ->
                         SetLogEntity(
                             id = s.id,
@@ -472,8 +476,17 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
         viewModelScope.launch {
             val existing = container.repository.getActiveSessionWithDetails()
             if (existing != null) {
-                publishWearState()
-                return@launch
+                // Defensive check: if existing session doesn't match workoutId, it might be a race condition.
+                // We return if workoutId matches or if it's a freestyle session and existing is also freestyle.
+                val isFreestyle = workoutId < 0
+                val existingIsFreestyle = existing.session.workoutId == null
+                
+                if ((isFreestyle && existingIsFreestyle) || (existing.session.workoutId == workoutId)) {
+                    publishWearState()
+                    return@launch
+                }
+                // Otherwise, the existing session is stale/wrong; we should let the new one overwrite it
+                // (Repository.startActiveSession already does a wipe).
             }
             val title: String
             val exercises: List<SessionExercise>
@@ -492,7 +505,8 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
                         targetSets = e.targetSets,
                         targetReps = e.targetReps,
                         targetWeightKg = e.targetWeightKg,
-                        trackingType = tracking.second
+                        trackingType = tracking.second,
+                        supersetId = e.supersetId
                     )
                 }
             }
@@ -615,7 +629,7 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
             cardioProgram = cardioProgram.trim(),
             setType = setType
         )
-        val setXp = (GameMath.xpForSet(log) * multiplier).toInt()
+        val setXp = (GameMath.xpForSet(log, isSuperset = priorEx.supersetId != null) * multiplier).toInt()
 
         if (demoMode) {
             _uiState.update { s ->
@@ -761,6 +775,46 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
         publishWearState()
     }
 
+    fun linkSupersetWithNext(index: Int) {
+        val s = _uiState.value
+        val ex1 = s.exercises.getOrNull(index) ?: return
+        val ex2 = s.exercises.getOrNull(index + 1) ?: return
+        val existingGroups = s.exercises.mapNotNull { it.supersetId }.distinct()
+        val newGroupId = (1..26).map { "SS$it" }.firstOrNull { it !in existingGroups } ?: "SS1"
+
+        if (demoMode) {
+            _uiState.update { state ->
+                val updated = state.exercises.toMutableList()
+                updated[index] = ex1.copy(supersetId = newGroupId)
+                updated[index + 1] = ex2.copy(supersetId = newGroupId)
+                state.copy(exercises = updated)
+            }
+        } else {
+            viewModelScope.launch {
+                if (ex1.dbId > 0) container.repository.updateActiveExerciseSuperset(ex1.dbId, newGroupId)
+                if (ex2.dbId > 0) container.repository.updateActiveExerciseSuperset(ex2.dbId, newGroupId)
+            }
+        }
+        publishWearState()
+    }
+
+    fun unlinkSuperset(index: Int) {
+        val s = _uiState.value
+        val ex = s.exercises.getOrNull(index) ?: return
+        if (demoMode) {
+            _uiState.update { state ->
+                val updated = state.exercises.toMutableList()
+                updated[index] = ex.copy(supersetId = null)
+                state.copy(exercises = updated)
+            }
+        } else {
+            viewModelScope.launch {
+                if (ex.dbId > 0) container.repository.updateActiveExerciseSuperset(ex.dbId, null)
+            }
+        }
+        publishWearState()
+    }
+
     private fun publishWearState() {
         val s = _uiState.value
         val imperial = container.prefs.imperial.value
@@ -792,7 +846,8 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
                 lastReps = last?.reps ?: 0,
                 suggestedWeightDisplay = suggestedWeight?.takeIf { it > 0 }?.let { Units.toDisplay(it, imperial) },
                 suggestedReps = suggestedReps.takeIf { it > 0 },
-                suggestionReason = reason
+                suggestionReason = reason,
+                supersetId = ex.supersetId
             )
         }
         wearBridge.publishSession(
@@ -1199,15 +1254,13 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
         publishWearState()
     }
 
-    fun abandon() {
-        viewModelScope.launch {
-            if (!demoMode) {
-                container.repository.discardActiveSession()
-                container.party.clearActivePulse()
-            }
-            wearBridge.unbind()
-            workoutNotification.cancel()
+    suspend fun abandon() {
+        if (!demoMode) {
+            container.repository.discardActiveSession()
+            container.party.clearActivePulse()
         }
+        wearBridge.unbind()
+        workoutNotification.cancel()
     }
 
     fun finish() {
@@ -1369,6 +1422,8 @@ fun ActiveSessionScreen(
             onAddCustomCardioProgram = viewModel::addCustomCardioProgram,
             onUpdateLoggedSet = viewModel::updateLoggedSet,
             onDeleteLoggedSet = viewModel::deleteLoggedSet,
+            onLinkSuperset = viewModel::linkSupersetWithNext,
+            onUnlinkSuperset = viewModel::unlinkSuperset,
             getPreviousPerformance = viewModel::getPreviousPerformance,
             bodyWeightKgOrNull = viewModel::bodyWeightKgOrNull
         )
@@ -1389,10 +1444,12 @@ data class ActiveSessionActions(
     val onRemoveLastSet: (Int) -> Unit = {},
     val onUpdateLoggedSet: (Int, Int, SetLogEntity) -> Unit = { _, _, _ -> },
     val onDeleteLoggedSet: (Int, Int) -> Unit = { _, _ -> },
+    val onLinkSuperset: (Int) -> Unit = {},
+    val onUnlinkSuperset: (Int) -> Unit = {},
     val onSkipRest: () -> Unit = {},
     val onExtendRest: (Int) -> Unit = {},
     val onSetRestDuration: (Int) -> Unit = {},
-    val onAbandon: () -> Unit = {},
+    val onAbandon: suspend () -> Unit = {},
     val onFinish: () -> Unit = {},
     val onAskCoach: (Boolean, Boolean) -> Unit = { _, _ -> },
     val onApplyCoachChanges: () -> Unit = {},
@@ -1421,6 +1478,7 @@ fun ActiveSessionScreenContent(
     onFinished: () -> Unit,
     actions: ActiveSessionActions
 ) {
+    val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     var showPicker by remember { mutableStateOf(false) }
     var swapFor by remember { mutableStateOf<Int?>(null) }
@@ -1466,9 +1524,11 @@ fun ActiveSessionScreenContent(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        showDiscardConfirm = false
-                        actions.onAbandon()
-                        onDone()
+                        scope.launch {
+                            actions.onAbandon()
+                            showDiscardConfirm = false
+                            onDone()
+                        }
                     }
                 ) { Text("Discard", color = MaterialTheme.colorScheme.error) }
             },
@@ -1738,6 +1798,7 @@ fun ActiveSessionScreenContent(
                 }
 
                 itemsIndexed(state.exercises, key = { _, ex -> ex.name }) { index, exercise ->
+                    val canLink = index < state.exercises.lastIndex && exercise.supersetId == null && state.exercises[index + 1].supersetId == null
                     ExerciseLogCard(
                         exercise = exercise,
                         imperial = imperial,
@@ -1753,11 +1814,24 @@ fun ActiveSessionScreenContent(
                         canMoveUp = index > 0,
                         canMoveDown = index < state.exercises.lastIndex,
                         canRemove = state.exercises.size > 1,
+                        canLinkSuperset = canLink,
+                        onLinkSuperset = { actions.onLinkSuperset(index) },
+                        onUnlinkSuperset = { actions.onUnlinkSuperset(index) },
                         onMove = { d -> actions.onMoveExercise(index, d) },
                         onSwap = { swapFor = index },
                         onRemove = { actions.onRemoveExercise(index) },
                         onLogSet = { w, r, dur, dist, rir, speed, incline, program, st ->
                             actions.onLogSet(index, w, r, dur, dist, rir, null, null, speed, incline, program, st, false)
+                            // Auto-focus next exercise in the superset
+                            val groupId = exercise.supersetId
+                            if (groupId != null) {
+                                val matchIndices = state.exercises.mapIndexedNotNull { i, e -> if (e.supersetId == groupId) i else null }
+                                if (matchIndices.size > 1) {
+                                    val currPos = matchIndices.indexOf(index)
+                                    val nextPos = (currPos + 1) % matchIndices.size
+                                    expandedIndex = matchIndices[nextPos]
+                                }
+                            }
                         },
                         onUndo = { actions.onRemoveLastSet(index) },
                         onUpdateSet = { sIdx, updated -> actions.onUpdateLoggedSet(index, sIdx, updated) },
@@ -1979,6 +2053,8 @@ fun EditSetDialog(
     exercise: SessionExercise,
     imperial: Boolean,
     effortMethod: EffortMethod,
+    customPrograms: Set<String> = emptySet(),
+    onAddCustomProgram: (String) -> Unit = {},
     onDismiss: () -> Unit,
     onSave: (SetLogEntity) -> Unit,
     onDelete: () -> Unit
@@ -2007,14 +2083,24 @@ fun EditSetDialog(
         title = { Text("Edit Set • ${exercise.name}") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                // Set Type Selector
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Type:", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                // Set Type Selector Dropdown
+                DropdownField(
+                    label = "Type",
+                    value = "${setType.shortLabel} (${setType.label})",
+                    modifier = Modifier.fillMaxWidth()
+                ) { onDismiss ->
                     SetType.entries.forEach { type ->
-                        FilterChip(
-                            selected = setType == type,
-                            onClick = { setType = type },
-                            label = { Text(type.shortLabel) }
+                        DropdownMenuItem(
+                            text = {
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Text(type.shortLabel, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                    Text(type.label)
+                                }
+                            },
+                            onClick = {
+                                setType = type
+                                onDismiss()
+                            }
                         )
                     }
                 }
@@ -2043,14 +2129,22 @@ fun EditSetDialog(
                             singleLine = true
                         )
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(
-                            value = incline,
-                            onValueChange = { incline = it },
-                            label = { Text("Incline %") },
-                            modifier = Modifier.weight(1f),
-                            singleLine = true
-                        )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        DropdownField(
+                            label = "Incline %",
+                            value = if (incline.isNotBlank()) "$incline%" else "0%",
+                            modifier = Modifier.weight(1f)
+                        ) { onDismiss ->
+                            listOf("0", "0.5", "1.0", "1.5", "2.0", "3.0", "4.0", "5.0", "6.0", "7.5", "10.0", "12.0", "15.0").forEach { v ->
+                                DropdownMenuItem(
+                                    text = { Text("$v%") },
+                                    onClick = {
+                                        incline = v
+                                        onDismiss()
+                                    }
+                                )
+                            }
+                        }
                         OutlinedTextField(
                             value = speed,
                             onValueChange = { speed = it },
@@ -2059,13 +2153,58 @@ fun EditSetDialog(
                             singleLine = true
                         )
                     }
-                    OutlinedTextField(
-                        value = program,
-                        onValueChange = { program = it },
-                        label = { Text("Program (e.g. Hill, Intervals)") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
+                    var showAddProgramInEdit by remember { mutableStateOf(false) }
+                    if (showAddProgramInEdit) {
+                        var newProgName by remember { mutableStateOf("") }
+                        AlertDialog(
+                            onDismissRequest = { showAddProgramInEdit = false },
+                            title = { Text("Add Custom Program") },
+                            text = {
+                                OutlinedTextField(
+                                    value = newProgName,
+                                    onValueChange = { newProgName = it },
+                                    label = { Text("Program Name") },
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            },
+                            confirmButton = {
+                                TextButton(onClick = {
+                                    if (newProgName.isNotBlank()) {
+                                        onAddCustomProgram(newProgName)
+                                        program = newProgName
+                                    }
+                                    showAddProgramInEdit = false
+                                }) { Text("Add") }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { showAddProgramInEdit = false }) { Text("Cancel") }
+                            }
+                        )
+                    }
+                    DropdownField(
+                        label = "Program",
+                        value = program.ifEmpty { "Manual" },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { onDismiss ->
+                        val allPrograms = (listOf("Manual") + customPrograms.toList()).distinct()
+                        allPrograms.forEach { p ->
+                            DropdownMenuItem(
+                                text = { Text(p) },
+                                onClick = {
+                                    program = if (p == "Manual") "" else p
+                                    onDismiss()
+                                }
+                            )
+                        }
+                        DropdownMenuItem(
+                            text = { Text("+ Add Custom...") },
+                            onClick = {
+                                showAddProgramInEdit = true
+                                onDismiss()
+                            }
+                        )
+                    }
                 } else {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedTextField(
@@ -2083,20 +2222,26 @@ fun EditSetDialog(
                             singleLine = true
                         )
                     }
-                    // Effort (RIR / RPE)
+                    // Effort (RIR / RPE) Dropdown
                     if (effortMethod != EffortMethod.OFF) {
-                        Column {
-                            Text("${effortMethod.label}:", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
-                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                val ops = if (effortMethod == EffortMethod.RPE) listOf(null to "—", 4 to "6", 3 to "7", 2 to "8", 1 to "9", 0 to "10")
-                                else listOf(null to "—", 0 to "0", 1 to "1", 2 to "2", 3 to "3", 4 to "4", 5 to "5+")
-                                ops.forEach { (v, label) ->
-                                    FilterChip(
-                                        selected = effort == v,
-                                        onClick = { effort = v },
-                                        label = { Text(label) }
-                                    )
-                                }
+                        DropdownField(
+                            label = effortMethod.label,
+                            value = effort?.let { effortMethod.display(it) } ?: "—",
+                            modifier = Modifier.fillMaxWidth()
+                        ) { onDismiss ->
+                            val ops = if (effortMethod == EffortMethod.RPE) {
+                                listOf(null to "—", 4 to "6", 3 to "7", 2 to "8", 1 to "9", 0 to "10")
+                            } else {
+                                listOf(null to "—", 0 to "0", 1 to "1", 2 to "2", 3 to "3", 4 to "4", 5 to "5+")
+                            }
+                            ops.forEach { (v, label) ->
+                                DropdownMenuItem(
+                                    text = { Text(label) },
+                                    onClick = {
+                                        effort = v
+                                        onDismiss()
+                                    }
+                                )
                             }
                         }
                     }
@@ -2136,6 +2281,58 @@ fun EditSetDialog(
 }
 
 @Composable
+private fun DropdownField(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.(onDismiss: () -> Unit) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Column(modifier) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 2.dp)
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), RoundedCornerShape(4.dp))
+                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f), RoundedCornerShape(4.dp))
+                .clickable { expanded = true }
+                .padding(vertical = 10.dp, horizontal = 10.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = value,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Icon(
+                    Icons.Default.ArrowDropDown,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+            DropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false }
+            ) {
+                content { expanded = false }
+            }
+        }
+    }
+}
+
+@Composable
 private fun ExerciseLogCard(
     exercise: SessionExercise,
     imperial: Boolean,
@@ -2149,6 +2346,9 @@ private fun ExerciseLogCard(
     canMoveUp: Boolean,
     canMoveDown: Boolean,
     canRemove: Boolean = true,
+    canLinkSuperset: Boolean = false,
+    onLinkSuperset: () -> Unit = {},
+    onUnlinkSuperset: () -> Unit = {},
     onMove: (delta: Int) -> Unit,
     onSwap: () -> Unit,
     onRemove: () -> Unit = {},
@@ -2170,6 +2370,8 @@ private fun ExerciseLogCard(
                 exercise = exercise,
                 imperial = imperial,
                 effortMethod = effortMethod,
+                customPrograms = customPrograms,
+                onAddCustomProgram = onAddCustomProgram,
                 onDismiss = { editingSetIndex = null },
                 onSave = { updated ->
                     onUpdateSet(sIdx, updated)
@@ -2314,7 +2516,24 @@ private fun ExerciseLogCard(
                             .weight(1f)
                             .clickable { if (minimized) onHeaderClick() else showDetail = true }
                     ) {
-                        Text(exercise.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(exercise.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            if (exercise.supersetId != null) {
+                                Surface(
+                                    color = Gold.copy(alpha = 0.2f),
+                                    shape = RoundedCornerShape(4.dp),
+                                    border = BorderStroke(1.dp, Gold.copy(alpha = 0.6f))
+                                ) {
+                                    Text(
+                                        text = "⚡ ${exercise.supersetId}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Black,
+                                        color = Gold,
+                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                    )
+                                }
+                            }
+                        }
                         Text(
                             text = "${exercise.category.label} \u2022 ${targetSummary(exercise)} \u2022 ${exercise.category.statLabel}",
                             style = MaterialTheme.typography.labelSmall,
@@ -2334,6 +2553,15 @@ private fun ExerciseLogCard(
                         }
                         IconButton(onClick = { onMove(1) }, enabled = canMoveDown, modifier = Modifier.size(32.dp)) { 
                             Icon(Icons.Default.KeyboardArrowDown, "Move Down", modifier = Modifier.size(20.dp)) 
+                        }
+                    }
+                    if (exercise.supersetId != null) {
+                        IconButton(onClick = onUnlinkSuperset, modifier = Modifier.size(32.dp)) {
+                            Icon(Icons.Default.LinkOff, "Unlink Superset", modifier = Modifier.size(18.dp), tint = Gold)
+                        }
+                    } else if (canLinkSuperset) {
+                        IconButton(onClick = onLinkSuperset, modifier = Modifier.size(32.dp)) {
+                            Icon(Icons.Default.Link, "Link with below into Superset", modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
                         }
                     }
                     if (isTimed) {

@@ -166,8 +166,8 @@ object GameMath {
 
     fun xpToNextLevel(level: Int): Int = (100.0 * level.toDouble().pow(1.3)).roundToInt()
 
-    /** XP awarded for a single logged set. Volume-based: heavier and longer earn more. */
-    fun xpForSet(log: SetLogEntity): Int {
+    /** XP awarded for a single logged set. Volume-based: heavier and longer earn more. Includes bonus for supersets and set types. */
+    fun xpForSet(log: SetLogEntity, isSuperset: Boolean = false): Int {
         val base = when (log.category) {
             ExerciseCategory.STRENGTH -> (log.weightKg * log.reps / 10.0).roundToInt()
             ExerciseCategory.CARDIO -> {
@@ -187,7 +187,8 @@ object GameMath {
             }
             ExerciseCategory.FLEXIBILITY -> (log.durationMin * 2).roundToInt()
         }
-        return max(1, (base * log.setType.xpMultiplier).roundToInt())
+        val supersetMult = if (isSuperset) 1.15f else 1.0f
+        return max(1, (base * log.setType.xpMultiplier * supersetMult).roundToInt())
     }
 
 

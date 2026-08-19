@@ -378,6 +378,19 @@ private fun SessionScreen(
                     modifier = Modifier.fillMaxWidth()
                 )
 
+                if (ex.supersetId != null) {
+                    Spacer(Modifier.height(1.dp))
+                    Text(
+                        text = "⚡ SUPERSET ${ex.supersetId}",
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Black,
+                        color = Color(0xFFFFD700),
+                        modifier = Modifier
+                            .background(Color(0xFFFFD700).copy(alpha = 0.15f), RoundedCornerShape(3.dp))
+                            .padding(horizontal = 4.dp, vertical = 0.5.dp)
+                    )
+                }
+
                 Spacer(Modifier.height(1.dp))
 
                 // Subtitle: "Set 1/4 • ❤️ 102 • 🔥 24 kcal" (or "✓ Done (4) • ❤️ 102")

@@ -596,7 +596,8 @@ class GameRepository(
                     targetReps = ex.targetReps,
                     targetWeightKg = ex.targetWeightKg,
                     trackingType = ex.trackingType.name,
-                    sortOrder = idx
+                    sortOrder = idx,
+                    supersetId = ex.supersetId
                 )
             }
             db.activeSessionDao().insertActiveExercises(exerciseEntities)
@@ -755,6 +756,12 @@ class GameRepository(
                 suggestionReason = reason
             )
         )
+    }
+
+    suspend fun updateActiveExerciseSuperset(exerciseId: Long, supersetId: String?) {
+        val all = db.activeSessionDao().getActiveExercises()
+        val match = all.find { it.id == exerciseId } ?: return
+        db.activeSessionDao().updateActiveExercise(match.copy(supersetId = supersetId))
     }
 
     suspend fun reorderActiveExercises(orderedExerciseIds: List<Long>) {

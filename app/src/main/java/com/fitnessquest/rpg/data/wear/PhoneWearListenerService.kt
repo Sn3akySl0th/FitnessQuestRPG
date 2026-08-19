@@ -208,7 +208,8 @@ class PhoneWearListenerService : WearableListenerService() {
                     lastWeightDisplay = prevWeightDisp,
                     lastReps = ex.targetReps,
                     suggestedWeightDisplay = if (prevWeightDisp > 0) prevWeightDisp else null,
-                    suggestedReps = ex.targetReps
+                    suggestedReps = ex.targetReps,
+                    supersetId = ex.supersetId
                 )
             }
 

@@ -68,7 +68,8 @@ data class WearExerciseState(
     val lastReps: Int = 0,
     val suggestedWeightDisplay: Double? = null,
     val suggestedReps: Int? = null,
-    val suggestionReason: String? = null
+    val suggestionReason: String? = null,
+    val supersetId: String? = null
 )
 
 data class WearSessionState(
@@ -117,6 +118,9 @@ data class WearSessionState(
                         put("trackingType", ex.trackingType)
                         put("lastWeightDisplay", ex.lastWeightDisplay)
                         put("lastReps", ex.lastReps)
+                        if (ex.supersetId != null) {
+                            put("supersetId", ex.supersetId)
+                        }
                     }
                 )
             }
@@ -139,7 +143,8 @@ data class WearSessionState(
                             loggedSets = e.getInt("loggedSets"),
                             trackingType = e.optString("trackingType"),
                             lastWeightDisplay = e.optDouble("lastWeightDisplay", 0.0),
-                            lastReps = e.optInt("lastReps", 0)
+                            lastReps = e.optInt("lastReps", 0),
+                            supersetId = if (e.has("supersetId") && !e.isNull("supersetId")) e.optString("supersetId").takeIf { it.isNotBlank() } else null
                         )
                     )
                 }

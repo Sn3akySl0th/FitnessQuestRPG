@@ -1,5 +1,6 @@
 package com.fitnessquest.rpg.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -7,13 +8,17 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.LinkOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -21,7 +26,9 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import com.fitnessquest.rpg.ui.theme.Gold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -53,19 +60,22 @@ data class DraftExercise(
     val sets: Int = 3,
     val reps: Int = 10,
     val weightKg: Double? = null,
+    val supersetId: String? = null
 )
 
 class WorkoutEditorViewModel(private val container: AppContainer) : ViewModel() {
     fun save(name: String, drafts: List<DraftExercise>, workoutId: Long, onSaved: () -> Unit) {
         viewModelScope.launch {
-            val exercises = drafts.map {
+            val exercises = drafts.mapIndexed { idx, it ->
                 WorkoutExerciseEntity(
                     workoutId = 0,
                     exerciseName = it.name,
                     category = it.category,
                     targetSets = it.sets,
                     targetReps = it.reps,
-                    targetWeightKg = it.weightKg
+                    targetWeightKg = it.weightKg,
+                    sortOrder = idx,
+                    supersetId = it.supersetId
                 )
             }
 
@@ -88,7 +98,8 @@ class WorkoutEditorViewModel(private val container: AppContainer) : ViewModel() 
                 category = it.category,
                 sets = it.targetSets,
                 reps = it.targetReps,
-                weightKg = it.targetWeightKg
+                weightKg = it.targetWeightKg,
+                supersetId = it.supersetId
             )
         }
     }
@@ -184,12 +195,44 @@ fun WorkoutEditorScreen(
                             .weight(1f)
                             .clickable { showDetail = true }
                     ) {
-                        Text(draft.name, style = MaterialTheme.typography.titleMedium)
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(draft.name, style = MaterialTheme.typography.titleMedium)
+                            if (draft.supersetId != null) {
+                                Surface(
+                                    color = Gold.copy(alpha = 0.2f),
+                                    shape = RoundedCornerShape(4.dp),
+                                    border = BorderStroke(1.dp, Gold.copy(alpha = 0.6f))
+                                ) {
+                                    Text(
+                                        text = "⚡ ${draft.supersetId}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = Gold,
+                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                    )
+                                }
+                            }
+                        }
                         Text(
                             "${draft.category.label} → ${draft.category.statLabel}",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                    }
+                    if (draft.supersetId != null) {
+                        IconButton(onClick = {
+                            drafts[index] = draft.copy(supersetId = null)
+                        }) {
+                            Icon(Icons.Default.LinkOff, contentDescription = "Unlink Superset", tint = Gold)
+                        }
+                    } else if (index < drafts.lastIndex && drafts[index + 1].supersetId == null) {
+                        IconButton(onClick = {
+                            val existingGroups = drafts.mapNotNull { it.supersetId }.distinct()
+                            val newGroupId = (1..26).map { "SS$it" }.firstOrNull { it !in existingGroups } ?: "SS1"
+                            drafts[index] = draft.copy(supersetId = newGroupId)
+                            drafts[index + 1] = drafts[index + 1].copy(supersetId = newGroupId)
+                        }) {
+                            Icon(Icons.Default.Link, contentDescription = "Link into Superset", tint = MaterialTheme.colorScheme.primary)
+                        }
                     }
                     IconButton(onClick = { drafts.removeAt(index) }) {
                         Icon(Icons.Filled.Close, contentDescription = "Remove")

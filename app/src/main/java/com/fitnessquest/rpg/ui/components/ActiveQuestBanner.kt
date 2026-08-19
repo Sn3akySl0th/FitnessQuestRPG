@@ -32,6 +32,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -39,6 +40,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.seconds
 
 @Composable
@@ -53,9 +55,10 @@ fun ActiveQuestBanner(
     provisionalDistanceKm: Double = 0.0,
     imperial: Boolean = false,
     onResume: () -> Unit,
-    onDiscard: () -> Unit,
+    onDiscard: suspend () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val scope = rememberCoroutineScope()
     var now by remember(startedAt, pausedAt) { mutableLongStateOf(System.currentTimeMillis()) }
 
     LaunchedEffect(startedAt, pausedAt) {
@@ -86,8 +89,10 @@ fun ActiveQuestBanner(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        showDiscardConfirm = false
-                        onDiscard()
+                        scope.launch {
+                            showDiscardConfirm = false
+                            onDiscard()
+                        }
                     },
                     colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
                 ) {

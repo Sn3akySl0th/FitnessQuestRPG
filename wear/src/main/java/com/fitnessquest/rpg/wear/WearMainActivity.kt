@@ -553,6 +553,19 @@ class WearSessionViewModel(private val app: Application) : ViewModel(),
             else -> "${fmt(s.weightDisplay)}${if (s.session.imperial) "lb" else "kg"} × ${s.reps}"
         }
         _uiState.update { it.copy(lastLogFlash = "Logged: $summary") }
+
+        // If current exercise is in a superset group, auto-advance to paired exercise
+        val supersetGroup = ex?.supersetId
+        if (supersetGroup != null) {
+            val matchIndices = s.session.exercises.mapIndexedNotNull { idx, e ->
+                if (e.supersetId == supersetGroup) idx else null
+            }
+            if (matchIndices.size > 1) {
+                val currPos = matchIndices.indexOf(s.selectedIndex)
+                val nextPos = (currPos + 1) % matchIndices.size
+                selectExercise(matchIndices[nextPos])
+            }
+        }
     }
 
     fun sendRest(action: WearRestAction, seconds: Int = 0) {

@@ -173,6 +173,15 @@ class ActiveSessionTest {
                     updateActiveFlow()
                     null
                 }
+                "updateActiveExercise" -> {
+                    val ex = args[0] as ActiveExerciseEntity
+                    val idx = exercises.indexOfFirst { it.id == ex.id }
+                    if (idx != -1) {
+                        exercises[idx] = ex
+                        updateActiveFlow()
+                    }
+                    null
+                }
                 "deleteActiveSession" -> {
                     val count = if (activeSessionEntity != null) 1 else 0
                     activeSessionEntity = null
@@ -202,6 +211,16 @@ class ActiveSessionTest {
                     null
                 }
                 "getSessionByCompletionToken" -> completedSessions[args[0] as String]
+                "updateExerciseSuperset" -> {
+                    val exerciseId = args[0] as Long
+                    val supersetId = args[1] as? String
+                    val idx = exercises.indexOfFirst { it.id == exerciseId }
+                    if (idx != -1) {
+                        exercises[idx] = exercises[idx].copy(supersetId = supersetId)
+                        updateActiveFlow()
+                    }
+                    null
+                }
                 else -> null
             }
         } as ActiveSessionDao
@@ -625,5 +644,81 @@ class ActiveSessionTest {
         repository.completeSession("Test Quest", System.currentTimeMillis() - 1000, logs, 1.0f, "token_123", "user_1")
         val savedLog = db.savedSetLogs.first()
         assertEquals("Set ID must be reset to 0 for history insertion", 0L, savedLog.id)
+    }
+
+    @Test
+    fun testSupersetPreservationAndLinking() = runBlocking {
+        val exercises = listOf(
+            SessionExercise(name = "Bicep Curl", category = ExerciseCategory.STRENGTH, supersetId = "SS1"),
+            SessionExercise(name = "Tricep Pushdown", category = ExerciseCategory.STRENGTH, supersetId = "SS1"),
+            SessionExercise(name = "Lat Pulldown", category = ExerciseCategory.STRENGTH, supersetId = null)
+        )
+        repository.startActiveSession("Arm Blast", null, exercises)
+        val active = repository.activeSession.first()!!
+        assertEquals(3, active.sortedExercises.size)
+        assertEquals("SS1", active.sortedExercises[0].exercise.supersetId)
+        assertEquals("SS1", active.sortedExercises[1].exercise.supersetId)
+        assertNull(active.sortedExercises[2].exercise.supersetId)
+
+        // Update superset grouping dynamically
+        val thirdExId = active.sortedExercises[2].exercise.id
+        repository.updateActiveExerciseSuperset(thirdExId, "SS2")
+        val updated = repository.activeSession.first()!!
+        assertEquals("SS2", updated.sortedExercises[2].exercise.supersetId)
+    }
+
+    @Test
+    fun testSupersetXpBonus() {
+        val normalSet = SetLogEntity(
+            sessionId = 0,
+            exerciseName = "Bench Press",
+            category = ExerciseCategory.STRENGTH,
+            weightKg = 100.0,
+            reps = 10,
+            setType = SetType.NORMAL
+        )
+        val regularXp = com.fitnessquest.rpg.domain.GameMath.xpForSet(normalSet, isSuperset = false)
+        val supersetXp = com.fitnessquest.rpg.domain.GameMath.xpForSet(normalSet, isSuperset = true)
+
+        assertEquals(100, regularXp)
+        assertEquals(115, supersetXp) // 1.15x density bonus
+    }
+
+    @Test
+    fun testWearProtocolSupersetSerialization() {
+        val sessionState = com.fitnessquest.shared.wear.WearSessionState(
+            active = true,
+            title = "Chest & Back Super Quest",
+            imperial = true,
+            heatStreak = 2,
+            totalSets = 4,
+            totalXp = 150,
+            restEndsAt = null,
+            restDurationSec = 60,
+            currentIndex = 0,
+            exercises = listOf(
+                com.fitnessquest.shared.wear.WearExerciseState(
+                    name = "Incline Press",
+                    category = "STRENGTH",
+                    targetSets = 3,
+                    targetReps = 10,
+                    loggedSets = 1,
+                    supersetId = "SS1"
+                ),
+                com.fitnessquest.shared.wear.WearExerciseState(
+                    name = "Chest Supported Row",
+                    category = "STRENGTH",
+                    targetSets = 3,
+                    targetReps = 10,
+                    loggedSets = 1,
+                    supersetId = "SS1"
+                )
+            )
+        )
+        val json = sessionState.toJson()
+        val restored = com.fitnessquest.shared.wear.WearSessionState.fromJson(json)
+
+        assertEquals("SS1", restored.exercises[0].supersetId)
+        assertEquals("SS1", restored.exercises[1].supersetId)
     }
 }

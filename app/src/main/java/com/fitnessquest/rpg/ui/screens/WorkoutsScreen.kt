@@ -292,7 +292,7 @@ data class WorkoutsActions(
     val onImportWorkouts: (List<ImportedWorkout>, (ImportPersistResult, RewardBatch?) -> Unit) -> Unit = { _, _ -> },
     val onRenameWithAi: (Long) -> Unit = {},
     val onRenameAllWithAi: () -> Unit = {},
-    val onDiscardActiveSession: () -> Unit = {}
+    val onDiscardActiveSession: suspend () -> Unit = {}
 )
 
 @Composable
@@ -302,6 +302,7 @@ fun WorkoutsScreenContent(
     actions: WorkoutsActions
 ) {
     val workouts = state.workouts
+    val scope = rememberCoroutineScope()
     var showPlates by remember { mutableStateOf(false) }
     var showImportDialog by remember { mutableStateOf(false) }
     var showSorenessDialog by remember { mutableStateOf(false) }
@@ -341,10 +342,12 @@ fun WorkoutsScreenContent(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     TextButton(
                         onClick = {
-                            showActiveSessionPrompt = false
                             val nextId = pendingStartWorkoutId ?: -1L
-                            actions.onDiscardActiveSession()
-                            actions.onStartWorkout(nextId)
+                            scope.launch {
+                                showActiveSessionPrompt = false
+                                actions.onDiscardActiveSession()
+                                actions.onStartWorkout(nextId)
+                            }
                         },
                         colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
                     ) {

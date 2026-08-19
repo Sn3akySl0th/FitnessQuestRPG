@@ -26,7 +26,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.foundation.layout.Column
-import androidx.compose.runtime.rememberCoroutineScope
 import com.fitnessquest.rpg.data.db.ActiveSessionWithDetails
 import kotlinx.coroutines.launch
 
@@ -352,7 +351,6 @@ fun FitQuestNav() {
             }
 
             val activeSessionDetails by container.repository.activeSession.collectAsState(initial = null)
-            val scope = androidx.compose.runtime.rememberCoroutineScope()
 
             val updateStatus by container.inAppUpdate.updateStatus.collectAsState()
 
@@ -389,7 +387,7 @@ fun FitQuestNav() {
                                 navController.navigate(Routes.session(details.session.workoutId ?: -1L))
                             },
                             onDiscard = {
-                                scope.launch { container.repository.discardActiveSession() }
+                                container.repository.discardActiveSession()
                             }
                         )
                     }
