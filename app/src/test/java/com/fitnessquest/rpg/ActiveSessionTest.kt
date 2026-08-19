@@ -190,6 +190,42 @@ class ActiveSessionTest {
                     updateActiveFlow()
                     count
                 }
+                "deleteActiveSetLogs" -> {
+                    val count = setLogs.size
+                    setLogs.clear()
+                    updateActiveFlow()
+                    count
+                }
+                "deleteActiveExercises" -> {
+                    val count = exercises.size
+                    exercises.clear()
+                    updateActiveFlow()
+                    count
+                }
+                "deleteSetLog" -> {
+                    val id = args[0] as Long
+                    val removed = setLogs.removeAll { it.id == id }
+                    updateActiveFlow()
+                    if (removed) 1 else 0
+                }
+                "deleteLastSetLogForExercise" -> {
+                    val exerciseId = args[0] as Long
+                    val last = setLogs.findLast { it.exerciseId == exerciseId }
+                    if (last != null) {
+                        setLogs.remove(last)
+                        updateActiveFlow()
+                    }
+                    null
+                }
+                "updateActiveSetLog" -> {
+                    val log = args[0] as ActiveSetLogEntity
+                    val idx = setLogs.indexOfFirst { it.id == log.id }
+                    if (idx != -1) {
+                        setLogs[idx] = log
+                        updateActiveFlow()
+                    }
+                    null
+                }
                 "insertOutboxEvent" -> {
                     outboxEvents.add(args[0] as PendingSyncEntity)
                     null
@@ -720,5 +756,309 @@ class ActiveSessionTest {
 
         assertEquals("SS1", restored.exercises[0].supersetId)
         assertEquals("SS1", restored.exercises[1].supersetId)
+    }
+
+    /**
+     * Test 1: Completion-Token Idempotency (Sequential Duplicate Verification)
+     *
+     * Note on Concurrency Limitation:
+     * This test executes sequentially against FakeAppDatabase. True OS-level SQLite WAL lock contention
+     * cannot be modeled here; this verifies authoritative repository/receipt behavior when an identical
+     * completion token is submitted multiple times (e.g. rapid double tap, retry, or replayed request).
+     */
+    @Test
+    fun testCompletionTokenIdempotency_sequentialDuplicate_appliesOnceAndRestoresReceipt() = runBlocking {
+        val initialChar = db.characterDao().get()!!
+        db.characterDao().upsert(initialChar.copy(partyId = "party_alpha", guildId = "guild_beta"))
+
+        val exercises = listOf(
+            SessionExercise(name = "Bench Press", category = ExerciseCategory.STRENGTH),
+            SessionExercise(name = "Treadmill Run", category = ExerciseCategory.CARDIO)
+        )
+        val activeDetails = repository.startActiveSession("Hybrid Power Session", 101L, exercises)
+        val token = "idempotent_token_test_abc123"
+
+        val benchExId = activeDetails.sortedExercises[0].exercise.id
+        val runExId = activeDetails.sortedExercises[1].exercise.id
+
+        repository.logActiveSet(
+            exerciseId = benchExId,
+            exerciseName = "Bench Press",
+            category = ExerciseCategory.STRENGTH,
+            weightKg = 100.0,
+            reps = 10,
+            durationMin = 0.0,
+            distanceKm = 0.0,
+            xp = 100,
+            rir = 2,
+            avgHr = null,
+            maxHr = null,
+            speedKmh = 0.0,
+            inclinePercent = 0.0,
+            cardioProgram = "",
+            setType = SetType.NORMAL,
+            heatStreak = 1,
+            restDurationSec = 60
+        )
+
+        repository.logActiveSet(
+            exerciseId = runExId,
+            exerciseName = "Treadmill Run",
+            category = ExerciseCategory.CARDIO,
+            weightKg = 0.0,
+            reps = 0,
+            durationMin = 20.0,
+            distanceKm = 3.0,
+            xp = 80,
+            rir = null,
+            avgHr = 145,
+            maxHr = 160,
+            speedKmh = 9.0,
+            inclinePercent = 1.0,
+            cardioProgram = "Warmup",
+            setType = SetType.NORMAL,
+            heatStreak = 2,
+            restDurationSec = 30
+        )
+
+        val setLogs = listOf(
+            SetLogEntity(
+                sessionId = 0,
+                exerciseName = "Bench Press",
+                category = ExerciseCategory.STRENGTH,
+                weightKg = 100.0,
+                reps = 10,
+                xp = 100
+            ),
+            SetLogEntity(
+                sessionId = 0,
+                exerciseName = "Treadmill Run",
+                category = ExerciseCategory.CARDIO,
+                durationMin = 20.0,
+                distanceKm = 3.0,
+                xp = 80
+            )
+        )
+        val startedAt = System.currentTimeMillis() - 1800000L // 30 mins ago
+
+        // First completion invocation
+        val firstResult = repository.completeSession(
+            name = "Hybrid Power Session",
+            startedAt = startedAt,
+            logs = setLogs,
+            strengthXpMultiplier = 1.0f,
+            completionToken = token,
+            userId = "user_abc_789"
+        )
+        val charAfterFirst = db.characterDao().get()!!
+
+        // Explicit assertions on first completion
+        assertEquals(1, db.savedSessions.size)
+        assertEquals(2, db.savedSetLogs.size)
+        assertNotNull(firstResult.rewardBatch)
+        assertTrue("XP earned must be positive", firstResult.xp > 0)
+        assertNotNull("Character must be persisted", charAfterFirst)
+        assertNull("Active session entity must be wiped after completion", db.activeSessionEntity)
+
+        val outboxEventsFirst = db.activeSessionDao().getPendingOutboxEvents()
+        val masteryCountFirst = db.movementMasteryDao().getAll().size
+
+        // Second completion invocation with the EXACT same token (idempotent duplicate/retry)
+        val secondResult = repository.completeSession(
+            name = "Hybrid Power Session",
+            startedAt = startedAt,
+            logs = setLogs,
+            strengthXpMultiplier = 1.0f,
+            completionToken = token,
+            userId = "user_abc_789"
+        )
+        val charAfterSecond = db.characterDao().get()!!
+
+        // 1. Assert exactly one completed session record exists (no second row inserted)
+        assertEquals("Exactly one session record must exist", 1, db.savedSessions.size)
+        assertEquals("Set logs must not be inserted a second time", 2, db.savedSetLogs.size)
+
+        // 2. Assert character state was not mutated a second time
+        assertEquals("Character XP must not increase on duplicate completion", charAfterFirst.xp, charAfterSecond.xp)
+        assertEquals("Character gold must not increase on duplicate completion", charAfterFirst.gold, charAfterSecond.gold)
+        assertEquals("Character energy must not increase on duplicate completion", charAfterFirst.energy, charAfterSecond.energy)
+        assertEquals("Character streak must remain identical", charAfterFirst.streak, charAfterSecond.streak)
+
+        // 3. Assert outbox events and movement mastery were not duplicated
+        assertEquals("Outbox events count must remain identical", outboxEventsFirst.size, db.activeSessionDao().getPendingOutboxEvents().size)
+        assertEquals("Movement mastery records count must remain identical", masteryCountFirst, db.movementMasteryDao().getAll().size)
+
+        // 4. Assert authoritative receipt fields match between first and duplicate calls
+        assertEquals(firstResult.xp, secondResult.xp)
+        assertEquals(firstResult.gold, secondResult.gold)
+        assertEquals(firstResult.energy, secondResult.energy)
+        assertEquals(firstResult.volumeKg, secondResult.volumeKg, 0.001)
+        assertEquals(firstResult.durationMs, secondResult.durationMs)
+        assertEquals(firstResult.statGains, secondResult.statGains)
+        assertEquals(firstResult.prs.size, secondResult.prs.size)
+        assertEquals(firstResult.lootLabels, secondResult.lootLabels)
+        assertEquals(firstResult.rewardBatch?.rewards?.size, secondResult.rewardBatch?.rewards?.size)
+    }
+
+    /**
+     * Test 2: Cardio Set Persistence, Speed/Pace, Edit, and Delete
+     *
+     * Verifies that cardio sets persist duration, distance, speed, and program fields,
+     * support in-place editing, and can be deleted without corrupting concurrent strength logs.
+     */
+    @Test
+    fun testCardioSetPersistence_speedPace_editingAndDeletion() = runBlocking {
+        val exercises = listOf(
+            SessionExercise(name = "Overhead Press", category = ExerciseCategory.STRENGTH),
+            SessionExercise(name = "Outdoor Cycling", category = ExerciseCategory.CARDIO)
+        )
+        val active = repository.startActiveSession("Endurance & Shoulders", null, exercises)
+        val pressExId = active.sortedExercises[0].exercise.id
+        val cycleExId = active.sortedExercises[1].exercise.id
+
+        // 1. Log one strength set first
+        repository.logActiveSet(
+            exerciseId = pressExId,
+            exerciseName = "Overhead Press",
+            category = ExerciseCategory.STRENGTH,
+            weightKg = 60.0,
+            reps = 8,
+            durationMin = 0.0,
+            distanceKm = 0.0,
+            xp = 60,
+            rir = 1,
+            avgHr = null,
+            maxHr = null,
+            speedKmh = 0.0,
+            inclinePercent = 0.0,
+            cardioProgram = "",
+            setType = SetType.NORMAL,
+            heatStreak = 1,
+            restDurationSec = 90
+        )
+
+        // 2. Log one cardio set: 30 minutes, 10.0 km (derived speed = 20.0 km/h)
+        val duration = 30.0
+        val distance = 10.0
+        val expectedSpeed = distance / (duration / 60.0) // 20.0 km/h
+
+        repository.logActiveSet(
+            exerciseId = cycleExId,
+            exerciseName = "Outdoor Cycling",
+            category = ExerciseCategory.CARDIO,
+            weightKg = 0.0,
+            reps = 0,
+            durationMin = duration,
+            distanceKm = distance,
+            xp = 120,
+            rir = null,
+            avgHr = 150,
+            maxHr = 168,
+            speedKmh = expectedSpeed,
+            inclinePercent = 3.0,
+            cardioProgram = "Intervals",
+            setType = SetType.NORMAL,
+            heatStreak = 2,
+            restDurationSec = 60
+        )
+
+        val activeLogs = db.setLogs.toList()
+        assertEquals(2, activeLogs.size)
+
+        val cardioLog = activeLogs.find { it.category == ExerciseCategory.CARDIO }
+        assertNotNull("Cardio set log must exist", cardioLog)
+        assertEquals("Outdoor Cycling", cardioLog!!.exerciseName)
+        assertEquals(ExerciseCategory.CARDIO, cardioLog.category)
+        assertEquals(30.0, cardioLog.durationMin, 0.001)
+        assertEquals(10.0, cardioLog.distanceKm, 0.001)
+        assertEquals(20.0, cardioLog.speedKmh, 0.001)
+        assertEquals(3.0, cardioLog.inclinePercent, 0.001)
+        assertEquals("Intervals", cardioLog.cardioProgram)
+
+        // 3. Edit the cardio set: update duration to 35.0 mins and distance to 12.0 km
+        val updatedCardioLog = cardioLog.copy(
+            durationMin = 35.0,
+            distanceKm = 12.0,
+            speedKmh = 12.0 / (35.0 / 60.0)
+        )
+        repository.updateActiveSetLog(updatedCardioLog)
+
+        val logsAfterEdit = db.setLogs.toList()
+        val editedLog = logsAfterEdit.find { it.id == cardioLog.id }!!
+        assertEquals(35.0, editedLog.durationMin, 0.001)
+        assertEquals(12.0, editedLog.distanceKm, 0.001)
+
+        // 4. Delete the cardio set log
+        repository.deleteActiveSetLog(cardioLog.id)
+
+        val logsAfterDelete = db.setLogs.toList()
+        assertEquals("Only one log should remain after deleting cardio", 1, logsAfterDelete.size)
+
+        // 5. Assert the remaining strength set was not corrupted or modified
+        val remainingStrengthLog = logsAfterDelete.first()
+        assertEquals("Overhead Press", remainingStrengthLog.exerciseName)
+        assertEquals(ExerciseCategory.STRENGTH, remainingStrengthLog.category)
+        assertEquals(60.0, remainingStrengthLog.weightKg, 0.001)
+        assertEquals(8, remainingStrengthLog.reps)
+    }
+
+    /**
+     * Test 3: Draft-Session Restore
+     *
+     * Verifies that observing or restoring an active draft session rehydrates all exercises,
+     * sets, and metadata without duplicating rows or marking the workout completed.
+     */
+    @Test
+    fun testDraftSessionRestore_rehydratesSetsAndMetadataWithoutDuplication() = runBlocking {
+        val exercises = listOf(
+            SessionExercise(name = "Barbell Squat", category = ExerciseCategory.STRENGTH, targetSets = 3, targetReps = 8, targetWeightKg = 120.0),
+            SessionExercise(name = "Rowing", category = ExerciseCategory.CARDIO, targetSets = 1, targetReps = 20)
+        )
+        val initialSession = repository.startActiveSession("Legs & Rowing Quest", 202L, exercises)
+        val squatExId = initialSession.sortedExercises[0].exercise.id
+        val rowExId = initialSession.sortedExercises[1].exercise.id
+
+        // Log 2 strength sets
+        repository.logActiveSet(squatExId, "Barbell Squat", ExerciseCategory.STRENGTH, 120.0, 8, 0.0, 0.0, 80, 2, null, null, 0.0, 0.0, "", SetType.NORMAL, 1, 90)
+        repository.logActiveSet(squatExId, "Barbell Squat", ExerciseCategory.STRENGTH, 125.0, 6, 0.0, 0.0, 90, 1, null, null, 0.0, 0.0, "", SetType.NORMAL, 2, 90)
+
+        // Log 1 cardio set
+        repository.logActiveSet(rowExId, "Rowing", ExerciseCategory.CARDIO, 0.0, 0, 15.0, 3.0, 70, null, 140, 155, 12.0, 0.0, "500m Splits", SetType.NORMAL, 3, 60)
+
+        assertEquals(3, db.setLogs.size)
+
+        // Simulate app restart / ViewModel rehydration via getActiveSessionWithDetails and activeSession Flow
+        val restoredDetails = repository.getActiveSessionWithDetails()
+        val flowDetails = repository.activeSession.first()
+
+        assertNotNull("Restored session details must not be null", restoredDetails)
+        assertNotNull("Flow session details must not be null", flowDetails)
+
+        assertEquals("Legs & Rowing Quest", restoredDetails!!.session.title)
+        assertEquals(202L, restoredDetails.session.workoutId)
+        assertEquals("ACTIVE", restoredDetails.session.status)
+
+        val restoredExercises = restoredDetails.sortedExercises
+        assertEquals(2, restoredExercises.size)
+
+        val squatEx = restoredExercises[0]
+        assertEquals("Barbell Squat", squatEx.exercise.exerciseName)
+        assertEquals(2, squatEx.sets.size)
+        assertEquals(120.0, squatEx.sets[0].weightKg, 0.001)
+        assertEquals(8, squatEx.sets[0].reps)
+        assertEquals(125.0, squatEx.sets[1].weightKg, 0.001)
+        assertEquals(6, squatEx.sets[1].reps)
+
+        val rowEx = restoredExercises[1]
+        assertEquals("Rowing", rowEx.exercise.exerciseName)
+        assertEquals(1, rowEx.sets.size)
+        assertEquals(15.0, rowEx.sets[0].durationMin, 0.001)
+        assertEquals(3.0, rowEx.sets[0].distanceKm, 0.001)
+        assertEquals("500m Splits", rowEx.sets[0].cardioProgram)
+
+        // Assert repeated observation does not create duplicate rows
+        val secondRead = repository.getActiveSessionWithDetails()
+        assertEquals(3, secondRead?.exercises?.flatMap { it.sets }?.size)
+        assertEquals("No saved completed sessions should exist yet", 0, db.savedSessions.size)
     }
 }
