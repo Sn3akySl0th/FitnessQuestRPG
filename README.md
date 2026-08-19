@@ -37,6 +37,9 @@ and let Google Gemini forge workouts and narrate your victories.
   (cooldown), Defend, or Flee. Victories award gold and XP, with a 20% chance of an
   equipment drop.
 - The **Shop** sells 89 pieces of gear across all seven slots, filterable by class.
+- **Gear Reforging & Combat Traits**: Reroll procedural traits (e.g. Vampiric, Berserk, Thorns, Executioner) on Rare+ items using gold and materials. Tier 2+ gear supports socketing power runes for custom combat enhancements.
+- **Glamour System**: Customize your hero's paper-doll appearance independently of your equipped stat gear from the Hero screen.
+- **Hero Objective Tracker**: Context-aware next-objective card directs heroes to unallocated stat points, workout milestones, or boss battles.
 
 ## AI features (Cloud Gemini & On-Device Local AI)
 
@@ -87,7 +90,7 @@ plugged-in phone with USB debugging enabled: `.\gradlew.bat :app:installDebug`.
 ## Tech stack
 
 - Kotlin + Jetpack Compose (Material 3, dark fantasy theme), single-activity, Compose Navigation
-- Room database (offline-first, no account or server needed)
+- Room database (Schema v30, offline-first, no account or server needed)
 - Gemini REST API (`gemini-2.5-flash`) via OkHttp
 - AGP 9.2 with built-in Kotlin, Gradle 9.4.1
 

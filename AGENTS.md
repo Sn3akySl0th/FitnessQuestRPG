@@ -1,167 +1,160 @@
-# FitnessQuestRPG Workspace Guidelines
+# Git Branch and Release Governance
 
-FitnessQuestRPG is a Kotlin Android fitness RPG. It turns real-world workouts into character progression, quests, loot, battles, and long-term player goals.
+## Source of truth
 
-## Project Modules
-
-- `app/` — Main Android phone application
-- `wear/` — Wear OS companion application
-- `shared/` — Shared models, domain logic, utilities, and cross-platform code
-- `local_ai_model/` — Local AI/model-related assets or integrations
-- `docs/` — Product, technical, and design documentation
-- `scripts/` — Development and release automation
-- `play-store-assets/` — Store listing and publishing assets
-- `version.properties` — Source of truth for versioning
-
-## Core Development Principles
-
-- Prefer small, focused changes that solve the requested problem without unrelated refactors.
-- Preserve existing architecture, naming patterns, and module boundaries before introducing a new pattern.
-- Put reusable business logic, models, and validation in `shared/` when both phone and Wear OS can use it.
-- Keep Android UI, platform APIs, and Android-specific resources inside their respective application modules.
-- Do not duplicate domain logic between `app/` and `wear/`.
-- Favor explicit, testable Kotlin over clever abstractions.
-- Avoid breaking changes to persisted user data, Firebase documents, preferences, or serialized models unless a migration is included.
-
-## Kotlin Standards
-
-- Use Kotlin idioms: immutable `val` by default, data classes for value models, sealed interfaces/classes for finite UI or domain states, and extension functions only when they improve discoverability.
-- Avoid `!!`. Handle nullable values explicitly.
-- Use coroutines for asynchronous work. Do not block the main thread.
-- Keep `ViewModel`s free of `Activity`, `Fragment`, `Context`, and composable references.
-- Expose UI state as a single immutable state model when practical.
-- Model loading, success, empty, and failure states deliberately; do not leave the UI in an ambiguous state.
-- Do not swallow exceptions. Log useful context and surface recoverable errors through UI state or domain results.
-- Prefer constructor injection over service locators or hidden global dependencies.
-
-## Jetpack Compose Standards
-
-- Keep composables focused on rendering and user events.
-- Hoist state when a child composable does not exclusively own it.
-- Pass state and event callbacks into reusable composables rather than passing `ViewModel`s deeply through the UI tree.
-- Use stable keys for dynamic lists.
-- Avoid expensive calculations, database reads, network calls, and mutation directly in composable bodies.
-- Use `remember`, `derivedStateOf`, `LaunchedEffect`, and `DisposableEffect` only when their lifecycle behavior is intentional.
-- Preserve accessibility: meaningful content descriptions, readable text scaling, adequate touch targets, and non-color-only status indicators.
-- Reuse the app’s established theme, typography, colors, spacing, and component patterns before creating new UI primitives.
-
-## Fitness RPG Domain Rules
-
-- Treat workout history, XP, levels, streaks, inventory, quests, achievements, and battle outcomes as player data that must not be silently lost or reset.
-- Make progression calculations deterministic and testable.
-- Centralize XP, leveling, rewards, stat calculations, cooldowns, and quest-completion rules. Do not reimplement formulas in UI code.
-- Prevent duplicate rewards from repeated taps, recomposition, retries, app restarts, or offline synchronization.
-- Validate user-entered workout values, dates, durations, weights, reps, and exercise data.
-- When changing a progression formula, identify whether existing player data needs a migration, recalculation, or versioned compatibility behavior.
-- Prefer clear user-facing language over game mechanics that obscure the fitness action being recorded.
-
-## Firebase and Data Safety
-
-- Never commit API keys, service-account JSON, tokens, keystores, passwords, or local configuration files.
-- Follow the repository’s Firebase configuration and Firestore security rules. Do not weaken rules merely to make a feature work.
-- Ensure Firebase reads and writes handle loading, offline, permission-denied, and network-failure states.
-- Use stable document identifiers and idempotent write patterns where duplicate processing could grant duplicate rewards.
-- Before changing Firestore schemas, search for every reader and writer of the affected fields.
-- Preserve backward compatibility for existing documents whenever possible. If not possible, add a migration strategy and document it.
-
-## Wear OS Rules
-
-- Keep Wear experiences concise, glanceable, and useful during workouts.
-- Design for small screens, quick interactions, and intermittent connectivity.
-- Reuse shared models and domain logic from `shared/`; keep Wear-specific navigation and presentation in `wear/`.
-- Verify that changes affecting shared fitness data do not break phone–watch synchronization or create duplicate activity/reward events.
-
-## Testing and Verification
-
-Before marking work complete:
-
-1. Build the module(s) changed.
-2. Run relevant unit tests and instrumented/UI tests when available.
-3. Verify the affected user flow manually when UI, persistence, Firebase, or reward behavior changes.
-4. Confirm compilation after changes to shared APIs, Gradle configuration, dependencies, serialization, or resources.
-5. Check for regressions in both `app` and `wear` when modifying `shared/`.
-
-Use the smallest appropriate command first:
+Before any Git operation, inspect the current repository state rather than relying on prior chat context:
 
 ```powershell
-.\gradlew.bat :app:assembleDebug
-.\gradlew.bat :wear:assembleDebug
-.\gradlew.bat test
+git status --short
+git branch --show-current
+git log --graph --decorate --oneline --all -n 30
+git fetch origin --prune
+git status -sb
 ```
 
-For a broad pre-merge verification, use:
+Never claim the working tree is clean if `git status --short` has output.
+
+Never commit, merge, rebase, push, tag, delete a branch, or create a release unless the user explicitly asks for that action in the current conversation.
+
+## Branch purposes
+
+| Branch or ref | Purpose | Rules |
+|---|---|---|
+| `main` | Integration branch and remote-backed source for internal testing | Keep stable. Merge approved work here only after validation. Do not force-push. Do not make speculative changes directly on `main`. |
+| `feature/*` | Isolated feature development | One focused change set per branch. Keep the branch intact after merge unless the user explicitly authorizes deletion. Merge into `main` only after review and validation. |
+| `release/*` | Stabilization branch for a named testing or release phase | Do not add new features without explicit approval. Allow only targeted bug fixes, release configuration, validation, and documentation changes. |
+| `pre-internal-progression-merge` | Rollback point immediately before the progression/schema v30 merge | Treat as immutable. Never move, delete, retag, or overwrite it. |
+| `pre-release-freeze` | Historical rollback/freeze point before release hardening | Treat as immutable. Never move, delete, retag, or overwrite it. |
+| `pre-closed-beta-freeze` | Historical rollback/freeze point before closed-beta stabilization | Treat as immutable. Never move, delete, retag, or overwrite it. |
+| `feature/progression-schema-v30` | Preserved source branch for the progression/schema v30 implementation | Treat as preserved. Do not delete, force-push, or repurpose it without explicit authorization. |
+
+## Current protected history
+
+As of the progression integration:
+
+- `main` / `origin/main`: merge commit `7e7ffc2` — `merge: progression schema v30 for internal testing`
+- `feature/progression-schema-v30`: `3342ff2` — `feat(progression): gear reforge, procedural combat traits & Room schema v30`
+- `pre-internal-progression-merge`: `ad5d1f0` — `merge: closed-beta stabilization and UX safeguards`
+- `pre-release-freeze`: `e186ea7`
+- `pre-closed-beta-freeze`: `e885d8c`
+
+These SHAs are historical reference points, not permission to rewrite history.
+
+## Required preflight for changes
+
+Before editing code:
+
+1. Run `git status --short` and report any existing modifications or untracked files.
+2. Confirm the current branch and its relation to `origin`.
+3. Do not mix unrelated changes into an existing merge, feature branch, or release branch.
+4. Do not stage generated files, local configuration, credentials, screenshots, logs, APKs, or scratch files unless explicitly requested.
+5. If a merge is in progress, do not commit until:
+   - all conflicts are resolved,
+   - `git diff --staged --check` is clean,
+   - staged-file scope has been reviewed,
+   - the user explicitly approves the merge commit.
+
+## Required preflight for commits
+
+Before proposing a commit:
 
 ```powershell
-.\gradlew.bat build
+git status
+git diff --check
+git diff --cached --check
+git diff --staged --name-status
+git diff --staged --stat
 ```
 
-Do not claim tests, builds, device verification, Firebase verification, or Play upload succeeded unless they were actually run and their result is known.
+Report:
 
-## Change Workflow
+- Modified, added, deleted, and untracked files.
+- Whether any merge or rebase is in progress.
+- Whether whitespace checks are clean.
+- The exact commit message proposed.
+- Whether the commit includes only the requested scope.
 
-1. Inspect the relevant files and existing patterns before editing.
-2. State the intended approach briefly when the change affects multiple files, architecture, persistence, progression, or Firebase.
-3. Implement the smallest coherent change.
-4. Add or update tests for business rules, regressions, and bug fixes when practical.
-5. Run relevant verification commands.
-6. Report:
-    - What changed
-    - Which files/modules changed
-    - Verification performed and results
-    - Known limitations, follow-ups, or unverified areas
+Wait for explicit approval before running `git commit`.
 
-## Dependency and Gradle Rules
+## Merge protocol
 
-- Do not add a dependency when AndroidX, Kotlin, Compose, Firebase, or an existing dependency already provides the capability.
-- Keep dependency versions centralized according to the existing Gradle setup.
-- Avoid alpha, beta, RC, or snapshot dependencies unless explicitly requested.
-- Do not alter signing configuration, release configuration, application IDs, package names, ProGuard/R8 behavior, or versioning logic without explicit user approval.
-- When changing Gradle files, run a relevant Gradle build before completion.
+For merges into `main`:
 
-## Play Store & Play Testing Release Build Rule
+1. Fetch remote state first: `git fetch origin --prune`.
+2. Confirm `main` is clean and synchronized or explain the divergence.
+3. Create a rollback tag only if explicitly requested.
+4. Merge without rewriting published history.
+5. Resolve conflicts minimally; preserve both independently required behaviors.
+6. Re-run staged checks and relevant tests.
+7. Ask for explicit approval before creating the merge commit.
+8. After committing, verify:
+   - merge commit SHA,
+   - `git status --short`,
+   - graph history,
+   - feature branch preservation,
+   - rollback-tag integrity.
 
-Whenever preparing or building a bundle for Google Play Store upload, Play Testing, internal testing, closed testing, open testing, production, or any release upload, ALWAYS execute:
+Never use `git reset --hard`, `git push --force`, `git rebase` on published branches, or branch/tag deletion without explicit approval.
+
+## Push protocol
+
+A push is a separate approval step from a commit.
+
+Before requesting push approval, run:
 
 ```powershell
-.\gradlew.bat bumpReleaseVersion :app:bundleRelease :wear:bundleRelease collectReleases
+git log --oneline origin/main..main
+git merge-base --is-ancestor origin/main main
+git status --short
 ```
 
-This command MUST be used whenever the user requests:
+Report every commit that will be published, oldest to newest.
 
-- “Build for Play Store”
-- “Build for Play Testing”
-- “Build for Google Play”
-- “Release build”
-- “Production build”
-- “Internal testing build”
-- Any variation of preparing a signed upload bundle
+Push only after explicit approval. Use normal fast-forward push only:
 
-This command:
+```powershell
+git push origin main
+```
 
-1. Automatically increments the release version code in `version.properties`
-2. Builds signed Android App Bundles for phone and Wear OS:
-    - `:app:bundleRelease`
-    - `:wear:bundleRelease`
-3. Collects `.aab` artifacts in a timestamped directory: `releases/release-yyyyMMdd-HHmm/`
-4. Always output the copy-pasteable `<en-US>` release notes block (max 500 characters) directly in the chat response to the user so they can immediately paste it into the Google Play Console.
+Never use `--force`, `--force-with-lease`, or tag pushes unless explicitly authorized.
 
-Do not substitute debug APKs, individual bundle tasks, or manually edited version codes for this release workflow.
+After pushing, verify:
 
-## Publishing for Testing
+```powershell
+git status -sb
+git ls-remote --heads origin main
+```
 
-After the mandatory release command succeeds, Android Studio may be used to upload the generated bundle through **Generate Signed App Bundle** → **Publish for Testing**.
+## Build and release protocol
 
-Before any publishing action:
+Building, signing, version changes, tag creation, and publishing are separate actions. Do not treat a successful merge or push as authorization to release.
 
-- Confirm which Play Console track is intended: internal, closed, open, or production.
-- Confirm the selected bundle is from the newly created timestamped `releases/` directory.
-- Verify the generated version code is higher than the version currently active on the target track.
-- Review release notes, tester targeting, and rollout settings.
-- Treat uploading, rollout changes, and production publishing as explicit user-approved external actions.
+Before any release build:
 
-## Git and Safety
+1. Confirm the requested variant and target platform.
+2. Confirm version name and version code.
+3. Confirm the exact tests/build tasks to run.
+4. Confirm the workspace is clean.
+5. Ask for explicit approval before creating tags, signing artifacts, or publishing.
 
-- Never force-push, rewrite shared history, delete branches, delete releases, or discard uncommitted work unless explicitly instructed.
-- Do not commit generated build outputs, keystores, local properties, secrets, or machine-specific files.
-- Keep commits narrowly scoped and describe the user-visible or technical purpose.
-- Before changing files outside the requested feature area, explain why the change is necessary.
+Do not create release tags, GitHub releases, Play artifacts, APKs, AABs, or changelog entries without explicit authorization.
+
+## Handling accidental files
+
+If an unexpected untracked file appears:
+
+1. Do not stage it.
+2. Identify its exact path and inspect its contents safely.
+3. Report what it contains.
+4. Ask before deleting, moving, or adding it to `.gitignore`.
+5. After approved cleanup, verify `git status --short` is empty.
+
+## Reporting standard
+
+For every Git operation, report only facts verified by command output. Include:
+
+- Current branch and HEAD SHA.
+- Clean/dirty status, including untracked files.
+- Exact commands run.
+- Commit, merge, push, tag, or release SHA/identifier when applicable.
+- What was deliberately not done, such as “no push,” “no force push,” or “no release artifacts created.”
