@@ -854,18 +854,43 @@ private fun HeroHeaderBanner(
                 }
 
                 // Form / Stance Controls
-                if (cls.name == "DRUID" || cls.name == "SUMMONER" || cls.name == "DRAGOON") {
+                if (cls.name == "DRUID" || cls.name == "SUMMONER" || cls.name == "DRAGOON" || cls.name == "RANGER") {
                     Spacer(Modifier.height(8.dp))
                     Row(
                         modifier = Modifier.horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        FilterChip(
-                            selected = character.druidForm == "HUMAN",
-                            onClick = { onDruidFormChange("HUMAN") },
-                            label = { Text("👤", fontSize = 12.sp) },
-                            modifier = Modifier.height(32.dp)
-                        )
+                        if (cls.name == "RANGER") {
+                            FilterChip(
+                                selected = character.druidForm == "WOLF" || character.druidForm == "HUMAN" || character.druidForm.isEmpty(),
+                                onClick = { onDruidFormChange("WOLF") },
+                                label = { Text("🐺 Wolf", fontSize = 12.sp) },
+                                modifier = Modifier.height(32.dp)
+                            )
+                            val canFalcon = character.level >= 5
+                            FilterChip(
+                                selected = character.druidForm == "FALCON",
+                                onClick = { if (canFalcon) onDruidFormChange("FALCON") },
+                                enabled = canFalcon,
+                                label = { Text("🦅 Falcon", fontSize = 12.sp) },
+                                modifier = Modifier.height(32.dp)
+                            )
+                            val canBear = character.level >= 10
+                            FilterChip(
+                                selected = character.druidForm == "BEAR",
+                                onClick = { if (canBear) onDruidFormChange("BEAR") },
+                                enabled = canBear,
+                                label = { Text("🐻 Bear", fontSize = 12.sp) },
+                                modifier = Modifier.height(32.dp)
+                            )
+                        } else {
+                            FilterChip(
+                                selected = character.druidForm == "HUMAN",
+                                onClick = { onDruidFormChange("HUMAN") },
+                                label = { Text("👤", fontSize = 12.sp) },
+                                modifier = Modifier.height(32.dp)
+                            )
+                        }
                         
                         if (cls.name == "DRUID") {
                             val canBear = character.level >= 1
@@ -873,7 +898,7 @@ private fun HeroHeaderBanner(
                                 selected = character.druidForm == "BEAR",
                                 onClick = { if (canBear) onDruidFormChange("BEAR") },
                                 enabled = canBear,
-                                label = { Text("🐻", fontSize = 12.sp) },
+                                label = { Text("🐻 Bear", fontSize = 12.sp) },
                                 modifier = Modifier.height(32.dp)
                             )
                             val canPanther = character.level >= 5
@@ -881,7 +906,31 @@ private fun HeroHeaderBanner(
                                 selected = character.druidForm == "PANTHER",
                                 onClick = { if (canPanther) onDruidFormChange("PANTHER") },
                                 enabled = canPanther,
-                                label = { Text("🐆", fontSize = 12.sp) },
+                                label = { Text(if (canPanther) "🐆 Panther" else "🔒 Lv 5", fontSize = 12.sp) },
+                                modifier = Modifier.height(32.dp)
+                            )
+                            val canTreant = character.level >= 20
+                            FilterChip(
+                                selected = character.druidForm == "TREANT",
+                                onClick = { if (canTreant) onDruidFormChange("TREANT") },
+                                enabled = canTreant,
+                                label = { Text(if (canTreant) "🌲 Treant" else "🔒 Lv 20", fontSize = 12.sp) },
+                                modifier = Modifier.height(32.dp)
+                            )
+                            val canMoonkin = character.level >= 35
+                            FilterChip(
+                                selected = character.druidForm == "MOONKIN",
+                                onClick = { if (canMoonkin) onDruidFormChange("MOONKIN") },
+                                enabled = canMoonkin,
+                                label = { Text(if (canMoonkin) "🦉 Moonkin" else "🔒 Lv 35", fontSize = 12.sp) },
+                                modifier = Modifier.height(32.dp)
+                            )
+                            val canAvatar = character.level >= 50
+                            FilterChip(
+                                selected = character.druidForm == "AVATAR",
+                                onClick = { if (canAvatar) onDruidFormChange("AVATAR") },
+                                enabled = canAvatar,
+                                label = { Text(if (canAvatar) "🦅 Avatar" else "🔒 Lv 50", fontSize = 12.sp) },
                                 modifier = Modifier.height(32.dp)
                             )
                         } else if (cls.name == "SUMMONER") {
@@ -1088,15 +1137,37 @@ private fun statsTabContent(
 
     listScope.item {
         FantasyCard {
-            Text("Class Skills", style = MaterialTheme.typography.titleMedium, color = Gold)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Class Progression (Lv 1–50)", style = MaterialTheme.typography.titleMedium, color = Gold)
+                Text("Level ${character.level}", style = MaterialTheme.typography.labelMedium, color = Color.White.copy(alpha = 0.7f))
+            }
+            Spacer(Modifier.height(4.dp))
             cls.skills.forEach { skill ->
                 val unlocked = character.level >= skill.unlockLevel
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
                     Text(if (unlocked) skill.emoji else "🔒", fontSize = 24.sp)
                     Spacer(Modifier.width(12.dp))
-                    Column {
-                        Text(skill.name, fontWeight = FontWeight.Bold, color = if (unlocked) Color.White else Color.Gray)
-                        Text(skill.blurb, style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.6f))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(skill.name, fontWeight = FontWeight.Bold, color = if (unlocked) Color.White else Color.Gray)
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = if (unlocked) Gold.copy(alpha = 0.2f) else Color.White.copy(alpha = 0.08f)
+                            ) {
+                                Text(
+                                    "Lv ${skill.unlockLevel}",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (unlocked) Gold else Color.Gray,
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                )
+                            }
+                        }
+                        Text(skill.blurb, style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = if (unlocked) 0.8f else 0.4f))
                     }
                 }
             }

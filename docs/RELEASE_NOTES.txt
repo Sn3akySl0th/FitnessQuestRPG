@@ -1,3 +1,9 @@
+0.12.0
+- Hunter Beastmaster Companions: Loyal companions (Dire Wolf, Hunting Falcon, Forest Bear) with animated avatars and active combat turn assists.
+- Level 50 Lifelong Progression Expansion: 6 skill tiers across all 12 classes with Level 50 Capstone Awakenings.
+- Druid Wild Shape & Morphing Overhaul: 5 procedural wild shape avatars (Dire Bear, Shadow Panther, Ancient Treant, Celestial Moonkin, Apex Primal Avatar) with mid-battle skill shifting and turn passives.
+- Dynamic Battle Skills UI: Responsive, multi-tier skill grid supporting unlocked active skills up to Level 50.
+
 0.11.0
 - Avatar V2 Overhaul: 5-piece head-to-toe gear visualization with high-definition vector layers for Legs and Boots across all tiers.
 - Back Slot Gear & Wings: Added cloaks, capes, and celestial wings with idle breathing flutter physics.

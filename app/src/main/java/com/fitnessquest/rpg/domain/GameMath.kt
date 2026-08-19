@@ -426,11 +426,14 @@ object GameMath {
                 (character.strength * 1.6 + character.agility * 0.8).roundToInt()
         }
         
-        // Form modifiers (Druid/Summoner/Dragoon)
+        // Form modifiers (Druid/Summoner/Dragoon/Ranger)
         if (cls == CharacterClass.DRUID) {
             when (character.druidForm) {
                 "BEAR" -> atk = (atk * 0.5).roundToInt()
                 "PANTHER" -> atk = (atk * 1.1).roundToInt()
+                "TREANT" -> atk = (atk * 0.85).roundToInt()
+                "MOONKIN" -> atk = (atk * 1.4).roundToInt()
+                "AVATAR" -> atk = (atk * 1.3).roundToInt()
             }
         } else if (cls == CharacterClass.SUMMONER) {
             when (character.druidForm) {
@@ -442,17 +445,27 @@ object GameMath {
         var maxHp = when (cls) {
             CharacterClass.WARRIOR -> (baseHp * 1.1).roundToInt()
             CharacterClass.PALADIN -> (baseHp * 1.08).roundToInt()
+            CharacterClass.RANGER -> if (character.druidForm == "BEAR") (baseHp * 1.15).roundToInt() else baseHp
             CharacterClass.DRUID -> when (character.druidForm) {
                 "BEAR" -> (baseHp * 2.0).roundToInt()
                 "PANTHER" -> (baseHp * 0.7).roundToInt() // Panther penalty
+                "TREANT" -> (baseHp * 1.3).roundToInt()
+                "AVATAR" -> (baseHp * 1.5).roundToInt()
                 else -> baseHp
             }
             else -> baseHp
         }
         var def = 2 + character.agility + equipped.sumOf { it.def } 
-        if (cls == CharacterClass.DRUID && character.druidForm == "BEAR") def += 10
+        if (cls == CharacterClass.DRUID) {
+            when (character.druidForm) {
+                "BEAR" -> def += 10
+                "TREANT" -> def += 15
+                "AVATAR" -> def += 15
+            }
+        }
         if (cls == CharacterClass.SUMMONER && character.druidForm == "IFRIT") def = (def * 0.8).roundToInt()
         if (cls == CharacterClass.DRAGOON && character.druidForm == "WYVERN") def += 15
+        if (cls == CharacterClass.RANGER && character.druidForm == "BEAR") def += 15
 
         // Full class armor set: +10% ATK and HP, +3 DEF.
         if (hasFullSetBonus(character, equipped)) {
@@ -468,17 +481,42 @@ object GameMath {
 
         val baseCrit = when (cls) {
             CharacterClass.THIEF -> min(10 + character.agility, 50)
-            CharacterClass.DRUID -> if (character.druidForm == "PANTHER") min(35 + character.agility, 70) else min(5 + character.agility / 2, 35)
+            CharacterClass.DRUID -> when (character.druidForm) {
+                "PANTHER" -> min(35 + character.agility, 70)
+                "MOONKIN" -> min(20 + character.agility, 60)
+                "AVATAR" -> min(25 + character.agility, 65)
+                else -> min(5 + character.agility / 2, 35)
+            }
             CharacterClass.MONK -> min(15 + character.agility, 55)
             CharacterClass.SUMMONER -> if (character.druidForm == "SHIVA") min(25 + character.agility, 60) else min(5 + character.agility / 2, 35)
+            CharacterClass.RANGER -> when (character.druidForm) {
+                "FALCON" -> min(15 + character.agility, 55)
+                else -> min(10 + character.agility / 2, 45) // Wolf / default
+            }
             else -> min(5 + character.agility / 2, 35)
         }
+
+        val rangerSpdBonus = if (cls == CharacterClass.RANGER) {
+            when (character.druidForm) {
+                "FALCON" -> 30
+                "BEAR" -> 0
+                else -> 15 // Wolf
+            }
+        } else 0
+
+        val druidSpdBonus = if (cls == CharacterClass.DRUID) {
+            when (character.druidForm) {
+                "PANTHER" -> 20
+                "AVATAR" -> 20
+                else -> 0
+            }
+        } else 0
 
         return CombatStats(
             maxHp = maxHp,
             atk = atk,
             def = def,
-            spd = (character.agility * 2 + character.level + runeSpd + masteryBonus.flatSpd + (if (cls == CharacterClass.DRUID && character.druidForm == "PANTHER") 20 else 0) + (if (cls == CharacterClass.SUMMONER && character.druidForm == "SHIVA") 40 else 0)),
+            spd = (character.agility * 2 + character.level + runeSpd + masteryBonus.flatSpd + rangerSpdBonus + druidSpdBonus + (if (cls == CharacterClass.SUMMONER && character.druidForm == "SHIVA") 40 else 0)),
             critPercent = min(baseCrit + runeCrit + masteryBonus.flatCritPercent, 70),
             siphonHeal = if (masteryBonus.siphonBonusPercent > 0f) (siphonHeal * (1f + masteryBonus.siphonBonusPercent)).roundToInt() else siphonHeal,
             mitigationPercent = masteryBonus.mitigationPercent

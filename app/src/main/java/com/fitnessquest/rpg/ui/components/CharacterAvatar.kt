@@ -497,10 +497,20 @@ internal object AvatarPainter {
                     if (frame.cls == CharacterClass.DRAGOON && frame.appearance.druidForm != "NONE") {
                         drawWyvernCompanion(frame)
                     }
+                    if (frame.cls == CharacterClass.RANGER) {
+                        when (frame.appearance.druidForm) {
+                            "FALCON" -> drawHunterFalconCompanion(frame)
+                            "BEAR" -> drawHunterBearCompanion(frame)
+                            else -> drawHunterWolfCompanion(frame)
+                        }
+                    }
 
                     when (frame.appearance.druidForm) {
                         "BEAR" -> drawDireBearLayer(frame)
                         "PANTHER" -> drawDirePantherLayer(frame)
+                        "TREANT" -> drawAncientTreantLayer(frame)
+                        "MOONKIN" -> drawCelestialMoonkinLayer(frame)
+                        "AVATAR" -> drawPrimalAvatarLayer(frame)
                         else -> {
                             val build = raceBuild(frame.appearance.race)
                             // Scale from the feet so dwarves stay grounded and elves grow upward.
@@ -2116,6 +2126,229 @@ private fun DrawScope.drawDirePantherLayer(frame: AvatarFrame) {
     drawRoundRect(color = furDark, topLeft = Offset(72f * u, 72f * u), size = Size(16f * u, 30f * u), cornerRadius = CornerRadius(8f * u))
 }
 
+private fun DrawScope.drawAncientTreantLayer(frame: AvatarFrame) {
+    val u = frame.u
+    val barkDark = Color(0xFF2E1C0C)
+    val barkMain = Color(0xFF4A3525)
+    val barkLight = Color(0xFF6D4C41)
+    val leafDark = Color(0xFF1B5E20)
+    val leafMain = Color(0xFF2E7D32)
+    val leafBright = Color(0xFF4CAF50)
+    val sapGlow = Color(0xFF00E676)
+    val pulse = 0.7f + 0.3f * sin(frame.phase * 6.28f)
+
+    // Soft nature aura
+    drawCircle(Color(0xFF4CAF50).copy(alpha = 0.15f * pulse), center = Offset(60f * u, 55f * u), radius = 50f * u)
+
+    // Root Feet spreading onto pedestal
+    drawRoundRect(barkDark, topLeft = Offset(24f * u, 78f * u), size = Size(24f * u, 26f * u), cornerRadius = CornerRadius(8f * u))
+    drawRoundRect(barkDark, topLeft = Offset(72f * u, 78f * u), size = Size(24f * u, 26f * u), cornerRadius = CornerRadius(8f * u))
+    // Root toes
+    drawLine(barkDark, start = Offset(26f * u, 100f * u), end = Offset(18f * u, 104f * u), strokeWidth = 5f * u)
+    drawLine(barkDark, start = Offset(94f * u, 100f * u), end = Offset(102f * u, 104f * u), strokeWidth = 5f * u)
+
+    // Ironbark Trunk Body
+    drawRoundRect(barkDark, topLeft = Offset(38f * u, 42f * u), size = Size(44f * u, 45f * u), cornerRadius = CornerRadius(16f * u))
+    drawRoundRect(barkMain, topLeft = Offset(40f * u, 44f * u), size = Size(40f * u, 41f * u), cornerRadius = CornerRadius(14f * u))
+
+    // Wood Grain lines
+    drawLine(barkLight.copy(alpha = 0.6f), start = Offset(46f * u, 50f * u), end = Offset(48f * u, 75f * u), strokeWidth = 2f * u)
+    drawLine(barkLight.copy(alpha = 0.6f), start = Offset(74f * u, 52f * u), end = Offset(72f * u, 76f * u), strokeWidth = 2f * u)
+
+    // Glowing Heart of the Forest (chest core)
+    drawCircle(sapGlow.copy(alpha = 0.3f * pulse), center = Offset(60f * u, 62f * u), radius = 10f * u)
+    drawCircle(sapGlow, center = Offset(60f * u, 62f * u), radius = 4f * u)
+
+    // Ancient Head
+    drawCircle(barkDark, center = Offset(60f * u, 32f * u), radius = 18f * u)
+    drawCircle(barkMain, center = Offset(60f * u, 30f * u), radius = 16f * u)
+    // Leaf beard
+    drawCircle(leafDark, center = Offset(60f * u, 44f * u), radius = 10f * u)
+    drawCircle(leafMain, center = Offset(60f * u, 43f * u), radius = 8f * u)
+
+    // Branch Antlers / Horns
+    val leftBranch = Path().apply {
+        moveTo(48f * u, 24f * u)
+        quadraticTo(30f * u, 8f * u, 22f * u, 12f * u)
+        quadraticTo(34f * u, 18f * u, 44f * u, 26f * u)
+        close()
+    }
+    val rightBranch = Path().apply {
+        moveTo(72f * u, 24f * u)
+        quadraticTo(90f * u, 8f * u, 98f * u, 12f * u)
+        quadraticTo(86f * u, 18f * u, 76f * u, 26f * u)
+        close()
+    }
+    drawPath(leftBranch, barkDark)
+    drawPath(rightBranch, barkDark)
+
+    // Foliage Clusters on Branches
+    drawCircle(leafDark, center = Offset(24f * u, 10f * u), radius = 9f * u)
+    drawCircle(leafBright, center = Offset(22f * u, 8f * u), radius = 6f * u)
+    drawCircle(leafDark, center = Offset(96f * u, 10f * u), radius = 9f * u)
+    drawCircle(leafBright, center = Offset(98f * u, 8f * u), radius = 6f * u)
+
+    // Glowing Eyes
+    drawCircle(sapGlow, center = Offset(53f * u, 28f * u), radius = 3.5f * u)
+    drawCircle(sapGlow, center = Offset(67f * u, 28f * u), radius = 3.5f * u)
+
+    // Branch Arms
+    drawRoundRect(barkDark, topLeft = Offset(26f * u, 48f * u), size = Size(16f * u, 32f * u), cornerRadius = CornerRadius(8f * u))
+    drawRoundRect(barkDark, topLeft = Offset(78f * u, 48f * u), size = Size(16f * u, 32f * u), cornerRadius = CornerRadius(8f * u))
+    drawCircle(leafBright, center = Offset(28f * u, 72f * u), radius = 5f * u)
+    drawCircle(leafBright, center = Offset(92f * u, 72f * u), radius = 5f * u)
+}
+
+private fun DrawScope.drawCelestialMoonkinLayer(frame: AvatarFrame) {
+    val u = frame.u
+    val plumDark = Color(0xFF1A237E)
+    val plumMain = Color(0xFF283593)
+    val plumChest = Color(0xFFC5CAE9)
+    val beakColor = Color(0xFFFFB300)
+    val antlerColor = Color(0xFFECEFF1)
+    val starGlow = Color(0xFF80DEEA)
+    val pulse = 0.7f + 0.3f * sin(frame.phase * 6.28f)
+
+    // Arcane Star Halo
+    drawCircle(starGlow.copy(alpha = 0.2f * pulse), center = Offset(60f * u, 48f * u), radius = 48f * u)
+
+    // Moonkin Body
+    drawRoundRect(plumDark, topLeft = Offset(36f * u, 45f * u), size = Size(48f * u, 46f * u), cornerRadius = CornerRadius(20f * u))
+    drawRoundRect(plumMain, topLeft = Offset(38f * u, 47f * u), size = Size(44f * u, 42f * u), cornerRadius = CornerRadius(18f * u))
+    // Soft feathery chest
+    drawCircle(plumChest, center = Offset(60f * u, 65f * u), radius = 16f * u)
+
+    // Wing Arms (folded majestically)
+    val leftWing = Path().apply {
+        moveTo(38f * u, 48f * u)
+        quadraticTo(16f * u, 65f * u, 26f * u, 85f * u)
+        quadraticTo(36f * u, 75f * u, 42f * u, 60f * u)
+        close()
+    }
+    val rightWing = Path().apply {
+        moveTo(82f * u, 48f * u)
+        quadraticTo(104f * u, 65f * u, 94f * u, 85f * u)
+        quadraticTo(84f * u, 75f * u, 78f * u, 60f * u)
+        close()
+    }
+    drawPath(leftWing, plumDark)
+    drawPath(rightWing, plumDark)
+
+    // Feathered Feet / Talons
+    drawRoundRect(beakColor, topLeft = Offset(38f * u, 86f * u), size = Size(16f * u, 16f * u), cornerRadius = CornerRadius(6f * u))
+    drawRoundRect(beakColor, topLeft = Offset(66f * u, 86f * u), size = Size(16f * u, 16f * u), cornerRadius = CornerRadius(6f * u))
+
+    // Moonkin Head
+    drawCircle(plumDark, center = Offset(60f * u, 32f * u), radius = 18f * u)
+    drawCircle(plumMain, center = Offset(60f * u, 30f * u), radius = 16f * u)
+
+    // Curved Grand Antlers
+    val leftAntler = Path().apply {
+        moveTo(50f * u, 22f * u)
+        quadraticTo(28f * u, 14f * u, 32f * u, 2f * u)
+        quadraticTo(40f * u, 12f * u, 54f * u, 20f * u)
+        close()
+    }
+    val rightAntler = Path().apply {
+        moveTo(70f * u, 22f * u)
+        quadraticTo(92f * u, 14f * u, 88f * u, 2f * u)
+        quadraticTo(80f * u, 12f * u, 66f * u, 20f * u)
+        close()
+    }
+    drawPath(leftAntler, antlerColor)
+    drawPath(rightAntler, antlerColor)
+
+    // Beak
+    val beak = Path().apply {
+        moveTo(54f * u, 30f * u)
+        lineTo(66f * u, 30f * u)
+        lineTo(60f * u, 40f * u)
+        close()
+    }
+    drawPath(beak, beakColor)
+
+    // Celestial Star Eyes
+    drawCircle(starGlow.copy(alpha = 0.4f * pulse), center = Offset(50f * u, 25f * u), radius = 6f * u)
+    drawCircle(starGlow.copy(alpha = 0.4f * pulse), center = Offset(70f * u, 25f * u), radius = 6f * u)
+    drawCircle(Color.White, center = Offset(50f * u, 25f * u), radius = 3.5f * u)
+    drawCircle(Color.White, center = Offset(70f * u, 25f * u), radius = 3.5f * u)
+}
+
+private fun DrawScope.drawPrimalAvatarLayer(frame: AvatarFrame) {
+    val u = frame.u
+    val goldDark = Color(0xFFF57F17)
+    val goldMain = Color(0xFFFFD54F)
+    val emeraldGlow = Color(0xFF00E676)
+    val bodyDark = Color(0xFF1B5E20)
+    val bodyMain = Color(0xFF2E7D32)
+    val pulse = 0.6f + 0.4f * sin(frame.phase * 6.28f)
+
+    // Radiating Ascended Nature & Solar Aura
+    drawCircle(emeraldGlow.copy(alpha = 0.25f * pulse), center = Offset(60f * u, 50f * u), radius = 55f * u)
+    drawCircle(goldMain.copy(alpha = 0.15f * pulse), center = Offset(60f * u, 50f * u), radius = 45f * u)
+
+    // Astral Nature Wings
+    val leftWing = Path().apply {
+        moveTo(44f * u, 40f * u)
+        quadraticTo(8f * u, 12f * u, 4f * u, 36f * u)
+        quadraticTo(14f * u, 65f * u, 38f * u, 62f * u)
+        close()
+    }
+    val rightWing = Path().apply {
+        moveTo(76f * u, 40f * u)
+        quadraticTo(112f * u, 12f * u, 116f * u, 36f * u)
+        quadraticTo(106f * u, 65f * u, 82f * u, 62f * u)
+        close()
+    }
+    drawPath(leftWing, emeraldGlow.copy(alpha = 0.4f * pulse))
+    drawPath(rightWing, emeraldGlow.copy(alpha = 0.4f * pulse))
+
+    // Avatar Beast Body
+    drawRoundRect(bodyDark, topLeft = Offset(40f * u, 45f * u), size = Size(40f * u, 44f * u), cornerRadius = CornerRadius(18f * u))
+    drawRoundRect(bodyMain, topLeft = Offset(42f * u, 47f * u), size = Size(36f * u, 40f * u), cornerRadius = CornerRadius(16f * u))
+
+    // Glowing Primal Core
+    drawCircle(goldMain.copy(alpha = 0.5f * pulse), center = Offset(60f * u, 60f * u), radius = 12f * u)
+    drawCircle(Color.White, center = Offset(60f * u, 60f * u), radius = 5f * u)
+
+    // Avatar Claws / Paws
+    drawRoundRect(goldDark, topLeft = Offset(30f * u, 75f * u), size = Size(18f * u, 26f * u), cornerRadius = CornerRadius(8f * u))
+    drawRoundRect(goldDark, topLeft = Offset(72f * u, 75f * u), size = Size(18f * u, 26f * u), cornerRadius = CornerRadius(8f * u))
+
+    // Avatar Apex Head
+    drawCircle(bodyDark, center = Offset(60f * u, 32f * u), radius = 19f * u)
+    drawCircle(bodyMain, center = Offset(60f * u, 30f * u), radius = 17f * u)
+
+    // Crown of Primal Light
+    val leftCrown = Path().apply {
+        moveTo(48f * u, 20f * u)
+        lineTo(36f * u, 4f * u)
+        lineTo(54f * u, 14f * u)
+        close()
+    }
+    val rightCrown = Path().apply {
+        moveTo(72f * u, 20f * u)
+        lineTo(84f * u, 4f * u)
+        lineTo(66f * u, 14f * u)
+        close()
+    }
+    val centerCrown = Path().apply {
+        moveTo(56f * u, 16f * u)
+        lineTo(60f * u, 0f * u)
+        lineTo(64f * u, 16f * u)
+        close()
+    }
+    drawPath(leftCrown, goldMain)
+    drawPath(rightCrown, goldMain)
+    drawPath(centerCrown, goldDark)
+
+    // Piercing Luminous Eyes
+    drawCircle(Color.White, center = Offset(52f * u, 27f * u), radius = 4f * u)
+    drawCircle(Color.White, center = Offset(68f * u, 27f * u), radius = 4f * u)
+    drawCircle(emeraldGlow, center = Offset(52f * u, 27f * u), radius = 2f * u)
+    drawCircle(emeraldGlow, center = Offset(68f * u, 27f * u), radius = 2f * u)
+}
+
 private fun DrawScope.drawIfritCompanion(f: AvatarFrame) {
     val u = f.u
     val fire = Color(0xFFFF5722)
@@ -2428,4 +2661,178 @@ private fun DrawScope.drawUndeadArmyCompanion(f: AvatarFrame) {
     drawCircle(Color.White.copy(alpha = 0.8f), center = Offset(wisp1X, wisp1Y), radius = 1.5f * u)
     drawCircle(soulfire.copy(alpha = 0.5f), center = Offset(wisp2X, wisp2Y), radius = 3f * u)
     drawCircle(Color.White.copy(alpha = 0.8f), center = Offset(wisp2X, wisp2Y), radius = 1.2f * u)
+}
+
+private fun DrawScope.drawHunterWolfCompanion(f: AvatarFrame) {
+    val u = f.u
+    val fur = Color(0xFF475569)
+    val furDark = Color(0xFF1E293B)
+    val furLight = Color(0xFF94A3B8)
+    val eyeGold = Color(0xFFF59E0B)
+    val collar = Color(0xFF0F766E)
+    val collarGold = Color(0xFFFBBF24)
+
+    // Positioned on the left pedestal flank
+    val x = 16f * u
+    val y = 78f * u
+    val breath = sin(f.phase * 6.28f) * 1.2f * u
+    val tailWag = sin(f.phase * 6.28f) * 3f * u
+
+    // Bushy Tail
+    val tail = Path().apply {
+        moveTo(x - 6f * u, y + 8f * u)
+        quadraticTo(x - 14f * u + tailWag, y + 2f * u, x - 12f * u + tailWag, y - 6f * u)
+        quadraticTo(x - 8f * u + tailWag * 0.5f, y + 2f * u, x - 4f * u, y + 10f * u)
+        close()
+    }
+    drawPath(tail, furDark)
+    drawPath(tail, fur, style = Stroke(width = 1.2f * u))
+
+    // Body (Seated Wolf)
+    drawRoundRect(fur, topLeft = Offset(x - 7f * u, y - 2f * u + breath * 0.5f), size = Size(14f * u, 16f * u), cornerRadius = CornerRadius(5f * u))
+    // Fluff Chest
+    drawOval(furLight, topLeft = Offset(x - 3f * u, y + breath * 0.5f), size = Size(9f * u, 12f * u))
+
+    // Front Paws
+    drawRoundRect(furDark, topLeft = Offset(x - 1f * u, y + 10f * u), size = Size(4f * u, 6f * u), cornerRadius = CornerRadius(2f * u))
+    drawRoundRect(furDark, topLeft = Offset(x + 4f * u, y + 10f * u), size = Size(4f * u, 6f * u), cornerRadius = CornerRadius(2f * u))
+
+    // Armored Collar
+    drawRoundRect(collar, topLeft = Offset(x - 5f * u, y - 4f * u + breath), size = Size(11f * u, 3f * u), cornerRadius = CornerRadius(1.5f * u))
+    drawCircle(collarGold, center = Offset(x + 0.5f * u, y - 2.5f * u + breath), radius = 1.5f * u)
+
+    // Wolf Head
+    val headY = y - 9f * u + breath
+    drawOval(fur, topLeft = Offset(x - 5f * u, headY - 4f * u), size = Size(12f * u, 10f * u))
+
+    // Alert Pointed Ears
+    val earTwitch = sin(f.phase * 3.14f) * 1.5f * u
+    val leftEar = Path().apply {
+        moveTo(x - 4f * u, headY - 2f * u)
+        lineTo(x - 7f * u + earTwitch, headY - 11f * u)
+        lineTo(x - 1f * u, headY - 4f * u)
+        close()
+    }
+    val rightEar = Path().apply {
+        moveTo(x + 2f * u, headY - 4f * u)
+        lineTo(x + 5f * u + earTwitch, headY - 11f * u)
+        lineTo(x + 7f * u, headY - 2f * u)
+        close()
+    }
+    drawPath(leftEar, furDark)
+    drawPath(rightEar, furDark)
+    drawCircle(Color(0xFFCBD5E1), center = Offset(x - 4f * u, headY - 5f * u), radius = 1.5f * u)
+
+    // Muzzle & Snout
+    val muzzle = Path().apply {
+        moveTo(x + 3f * u, headY)
+        lineTo(x + 10f * u, headY + 1f * u)
+        lineTo(x + 4f * u, headY + 4f * u)
+        close()
+    }
+    drawPath(muzzle, furLight)
+    drawCircle(Color.Black, center = Offset(x + 9.5f * u, headY + 1f * u), radius = 1.2f * u) // Nose
+
+    // Fierce Glowing Amber Eye
+    drawCircle(Color.Black, center = Offset(x + 2f * u, headY - 0.5f * u), radius = 2f * u)
+    drawCircle(eyeGold, center = Offset(x + 2.5f * u, headY - 0.5f * u), radius = 1.3f * u)
+    drawCircle(Color.White, center = Offset(x + 3f * u, headY - 1f * u), radius = 0.5f * u)
+}
+
+private fun DrawScope.drawHunterFalconCompanion(f: AvatarFrame) {
+    val u = f.u
+    val brown = Color(0xFF78350F)
+    val brownLight = Color(0xFFD97706)
+    val cream = Color(0xFFFEF3C7)
+    val beakGold = Color(0xFFF59E0B)
+    val eyeCyan = Color(0xFF0284C7)
+
+    // Soaring gracefully over the left shoulder
+    val x = 18f * u
+    val y = (26f + 3.5f * sin(f.phase * 6.28f)) * u
+    val wingFlap = sin(f.phase * 6.28f) * 4.5f * u
+
+    // Falcon Wings
+    val leftWing = Path().apply {
+        moveTo(x - 2f * u, y)
+        lineTo(x - 16f * u, y - 9f * u + wingFlap)
+        lineTo(x - 12f * u, y + 3f * u + wingFlap * 0.4f)
+        lineTo(x - 4f * u, y + 2f * u)
+        close()
+    }
+    val rightWing = Path().apply {
+        moveTo(x + 2f * u, y)
+        lineTo(x + 15f * u, y - 9f * u + wingFlap)
+        lineTo(x + 11f * u, y + 3f * u + wingFlap * 0.4f)
+        lineTo(x + 4f * u, y + 2f * u)
+        close()
+    }
+    drawPath(leftWing, brown)
+    drawPath(rightWing, brown)
+    drawPath(leftWing, brownLight, style = Stroke(width = 1.2f * u))
+    drawPath(rightWing, brownLight, style = Stroke(width = 1.2f * u))
+
+    // Feathered Body & Cream Breast
+    drawRoundRect(brown, topLeft = Offset(x - 4.5f * u, y - 3f * u), size = Size(9f * u, 10f * u), cornerRadius = CornerRadius(3.5f * u))
+    drawOval(cream, topLeft = Offset(x - 2.5f * u, y - 1f * u), size = Size(5f * u, 7f * u))
+
+    // Falcon Tail Feathers
+    val tail = Path().apply {
+        moveTo(x - 2.5f * u, y + 6f * u)
+        lineTo(x, y + 13f * u)
+        lineTo(x + 2.5f * u, y + 6f * u)
+        close()
+    }
+    drawPath(tail, brownLight)
+
+    // Sleek Head & Hooked Golden Beak
+    drawCircle(brown, center = Offset(x + 2f * u, y - 4f * u), radius = 3.5f * u)
+    val beak = Path().apply {
+        moveTo(x + 4.5f * u, y - 5f * u)
+        lineTo(x + 8.5f * u, y - 3.5f * u)
+        lineTo(x + 4.5f * u, y - 2f * u)
+        close()
+    }
+    drawPath(beak, beakGold)
+
+    // Predator Eye
+    drawCircle(Color.Black, center = Offset(x + 3f * u, y - 4.5f * u), radius = 1.4f * u)
+    drawCircle(eyeCyan, center = Offset(x + 3.2f * u, y - 4.5f * u), radius = 0.9f * u)
+}
+
+private fun DrawScope.drawHunterBearCompanion(f: AvatarFrame) {
+    val u = f.u
+    val bearBrown = Color(0xFF5A3825)
+    val bearDark = Color(0xFF3B2314)
+    val snoutTan = Color(0xFF8D5B4C)
+    val eyeBlack = Color(0xFF1C1917)
+
+    // Seated firmly on right flank
+    val x = 80f * u
+    val y = 78f * u
+    val breath = sin(f.phase * 6.28f) * 1.2f * u
+
+    // Broad Body & Thick Shoulders
+    drawRoundRect(bearBrown, topLeft = Offset(x - 8f * u, y - 4f * u + breath * 0.5f), size = Size(16f * u, 18f * u), cornerRadius = CornerRadius(6f * u))
+    // Broad Paws
+    drawRoundRect(bearDark, topLeft = Offset(x - 6f * u, y + 10f * u), size = Size(5f * u, 5f * u), cornerRadius = CornerRadius(2.5f * u))
+    drawRoundRect(bearDark, topLeft = Offset(x + 1f * u, y + 10f * u), size = Size(5f * u, 5f * u), cornerRadius = CornerRadius(2.5f * u))
+
+    // Bear Head
+    val headY = y - 9f * u + breath
+    drawCircle(bearBrown, center = Offset(x - 1f * u, headY), radius = 6.5f * u)
+
+    // Rounded Bear Ears
+    drawCircle(bearDark, center = Offset(x - 6f * u, headY - 5.5f * u), radius = 2.5f * u)
+    drawCircle(bearDark, center = Offset(x + 4f * u, headY - 5.5f * u), radius = 2.5f * u)
+    drawCircle(snoutTan, center = Offset(x - 6f * u, headY - 5.5f * u), radius = 1.2f * u)
+    drawCircle(snoutTan, center = Offset(x + 4f * u, headY - 5.5f * u), radius = 1.2f * u)
+
+    // Stout Snout & Nose
+    drawOval(snoutTan, topLeft = Offset(x - 6f * u, headY - 1f * u), size = Size(7f * u, 5.5f * u))
+    drawCircle(eyeBlack, center = Offset(x - 4f * u, headY + 0.5f * u), radius = 1.5f * u)
+
+    // Alert Eyes
+    drawCircle(eyeBlack, center = Offset(x - 2f * u, headY - 2.5f * u), radius = 1.3f * u)
+    drawCircle(Color.White, center = Offset(x - 2.3f * u, headY - 2.8f * u), radius = 0.5f * u)
 }

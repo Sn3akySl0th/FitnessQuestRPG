@@ -500,12 +500,24 @@ private fun DrawScope.drawFx(fx: ArenaFx, p: Float) {
                 }
             }
             CharacterClass.RANGER -> when (fx.skillIndex) {
-                0 -> arrow(player, monster, p, w)
-                1 -> {
-                    arrow(player, monster, p, w, yOffset = -h * 0.03f)
-                    arrow(player, monster, (p - 0.18f).coerceAtLeast(0f), w, yOffset = h * 0.03f)
+                0 -> {
+                    arrow(player, monster, p, w)
+                    claw(monster, (p - 0.1f).coerceAtLeast(0f), w * 0.09f)
                 }
-                else -> volley(monster, p, w, h)
+                1 -> {
+                    rings(player, p, Color(0xFF34D399), w)
+                    claw(monster, p, w * 0.08f)
+                }
+                2 -> {
+                    slash(monster, p, Color(0xFFEF4444), w * 0.14f)
+                    claw(monster, (p + 0.15f).coerceAtMost(1f), w * 0.12f)
+                }
+                3 -> burst(player, p, Color(0xFF38BDF8), w * 0.16f)
+                4 -> rings(player, p, Color(0xFF4ADE80), w)
+                else -> {
+                    volley(monster, p, w, h)
+                    burst(monster, p, Color(0xFFFBBF24), w * 0.22f)
+                }
             }
             CharacterClass.PALADIN -> when (fx.skillIndex) {
                 0 -> slash(monster, p, Color(0xFFFFF59D), w * 0.12f)

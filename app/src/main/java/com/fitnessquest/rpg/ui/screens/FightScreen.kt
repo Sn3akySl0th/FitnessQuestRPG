@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -27,6 +28,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -56,7 +59,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -165,7 +167,12 @@ class FightViewModel(private val container: AppContainer) : ViewModel() {
         if (ui.resolving) return
         val current = ui.battle ?: return
         if (current.outcome != BattleOutcome.ONGOING) return
-        val next = BattleEngine.takeTurn(current, action, skillIndex, precisionMultiplier)
+        val next = BattleEngine.takeTurn(
+            state = current,
+            action = action,
+            skillIndex = skillIndex,
+            precisionMultiplier = precisionMultiplier
+        )
 
         if (action == BattleAction.FLEE) {
             _uiState.update { it.copy(battle = next) }
@@ -356,16 +363,30 @@ fun FightScreen(
             Text("⚔️ Attack", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center) 
         }
 
-        // Skills (3-skill row)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            SkillButton(battle, index = 0, enabled = fighting, modifier = Modifier.weight(1f)) {
-                viewModel.act(BattleAction.SKILL, 0)
-            }
-            SkillButton(battle, index = 1, enabled = fighting, modifier = Modifier.weight(1f)) {
-                viewModel.act(BattleAction.SKILL, 1)
-            }
-            SkillButton(battle, index = 2, enabled = fighting, modifier = Modifier.weight(1f)) {
-                viewModel.act(BattleAction.SKILL, 2)
+        // Skills (Chunked for all unlocked tiers)
+        val allSkills = battle.clazz.skills
+        val chunkedSkills = allSkills.chunked(3)
+        chunkedSkills.forEach { chunk ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                chunk.forEach { skill ->
+                    val index = allSkills.indexOf(skill)
+                    SkillButton(
+                        battle = battle,
+                        index = index,
+                        enabled = fighting,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        viewModel.act(BattleAction.SKILL, index)
+                    }
+                }
+                if (chunk.size < 3) {
+                    repeat(3 - chunk.size) {
+                        Spacer(Modifier.weight(1f))
+                    }
+                }
             }
         }
 
@@ -467,14 +488,15 @@ private fun VictoryOverlay(state: FightUiState, onDismiss: () -> Unit) {
                         )
                     }
                 }
+
                 when {
                     state.narration != null -> {
-                        Spacer(Modifier.height(12.dp))
+                        Spacer(Modifier.height(16.dp))
                         Text(
                             "“${state.narration}”",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center
+                            textAlign = TextAlign.Center,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                     state.narrationPending -> {
@@ -586,16 +608,19 @@ private fun SkillButton(
     Button(
         onClick = onClick,
         enabled = enabled && unlocked && cooldown == 0,
-        modifier = modifier
+        modifier = modifier.height(44.dp),
+        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
     ) {
         Text(
             when {
-                !unlocked -> "🔒 ${skill.name} · Lv ${skill.unlockLevel}"
-                cooldown > 0 -> "${skill.emoji} ${skill.name} ($cooldown)"
+                !unlocked -> "🔒 Lv ${skill.unlockLevel}"
+                cooldown > 0 -> "${skill.emoji} (${cooldown})"
                 else -> "${skill.emoji} ${skill.name}"
             },
             textAlign = TextAlign.Center,
-            style = MaterialTheme.typography.labelLarge
+            fontSize = 11.sp,
+            maxLines = 1,
+            fontWeight = FontWeight.SemiBold
         )
     }
 }
