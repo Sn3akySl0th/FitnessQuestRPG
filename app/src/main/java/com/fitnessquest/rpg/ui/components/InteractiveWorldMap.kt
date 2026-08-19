@@ -23,6 +23,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
+import kotlin.math.roundToInt
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
@@ -198,7 +199,9 @@ fun InteractiveWorldMap(
                 val needed = travelTarget.travelKm
                 val done = character.travelProgress
                 val frac = (done / needed.coerceAtLeast(0.1)).coerceIn(0.0, 1.0).toFloat()
-                val progressLabel = "${Units.formatDistance(done, imperial)} / ${Units.formatDistance(needed, imperial)}"
+                val doneSteps = (done * GameMath.STEPS_PER_KM).roundToInt()
+                val neededSteps = (needed * GameMath.STEPS_PER_KM).roundToInt()
+                val progressLabel = "$doneSteps / $neededSteps steps (${Units.formatDistance(done, imperial)} / ${Units.formatDistance(needed, imperial)})"
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()

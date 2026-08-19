@@ -303,12 +303,13 @@ Visual direction:
 - Clear empty states for no owned gear, no upgradeable gear, no chests, and locked tiers.
 
 Implementation tasks:
-- Add item filter/sort UI state.
-- Build reusable compact item grid/card components.
-- Build item detail sheet with contextual actions.
-- Add armory slot summary/paper-doll component.
-- Wire forge foundation methods into inventory/forge actions.
-- Keep chest opening on the current result path until Agent G4 reward reveal is implemented.
+- [x] Add item filter/sort UI state.
+- [x] Build reusable compact item grid/card components.
+- [x] Build item detail sheet with contextual actions.
+- [x] Add armory slot summary/paper-doll component (`HeroPaperDoll.kt`, `PaperDollLayerRenderer.kt`).
+- [x] Integrate Mythic rarity, Gear Traits, and merchant tier cap (Tier 1–3).
+- [x] Wire forge foundation methods into inventory/forge actions.
+- [x] Keep chest opening on the current result path until Agent G4 reward reveal is implemented.
 
 Dependencies:
 - Forge repository methods.

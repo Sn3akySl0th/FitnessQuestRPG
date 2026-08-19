@@ -19,6 +19,10 @@ The next major focus is boss-gated biome progression, followed by Movement Maste
 
 ### Fixed Recently
 
+- **Paper-Doll Avatar Showcase & 14-Layer Visual Compositor**: Centered hero paper doll character showcase with dynamic pedestal backdrop, equip animation burst effects, and seamless fallback to vector avatar rendering. Full 14-layer Z-order compositing pipeline ready for custom 2D gear assets with automatic rarity tinting and visual anchors.
+- **Mythic Gear Rarity Tier & High-Tier Auras**: Added Mythic tier (2.00× stats multiplier) with radiant crimson energy shimmers, glowing rune pedestals, animated gradient frames, and high-tier equipment effects.
+- **Gear Traits & Combat Affixes**: Procedural combat affixes (Vampiric, Berserk, Thorns, Executioner, Swiftness, Fortified) rolled on loot drops and active during battles.
+- **Merchant Shop Tier Capping**: Capped merchant store items to Tiers 1–3, ensuring Tier 4+ gear is exclusively earned through endgame boss encounters, raid caches, and forge crafting.
 - **Phone vs Watch Prefilled Weight Sync & Live Cardio Stopwatch**: Resolved historical performance weight prefill desync between phone and watch so watch immediately displays the correct previous workout weight (e.g. 115 lb). Added wrist live cardio stopwatch with interactive Start/Pause/Reset controls and auto-duration capture on log.
 - **Interactive Tap-to-Edit Logged Sets on Phone**: Any completed set (logged on watch or phone) can now be tapped on phone to open `EditSetDialog` and modify weight, reps, RIR/RPE, cardio distance/duration/incline/speed/program, or set type with automatic XP recalculation.
 - **Wear OS Zero-Scroll Compact UI**: Redesigned Wear OS quest screen into a single glanceable layout with top status pill (Heart rate, Zone, Streak, Calories), integrated exercise switcher with completion checkmark indicators (`✓ Done — N sets`), side-by-side steppers, and single-screen reachable `LOG SET` button.

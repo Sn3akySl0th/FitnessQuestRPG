@@ -130,6 +130,7 @@ class FightViewModel(private val container: AppContainer) : ViewModel() {
             val character = container.repository.getCharacter()
             val gear = container.repository.equippedGear(character)
             val stats = container.repository.combatStatsFor(character)
+            val traits = container.repository.equippedTraits(character)
             val baseStats = if (character.characterClass == CharacterClass.DRUID) {
                 container.repository.combatStatsFor(character.copy(druidForm = "HUMAN"))
             } else stats
@@ -149,6 +150,7 @@ class FightViewModel(private val container: AppContainer) : ViewModel() {
                         monster = monster,
                         druidForm = character.druidForm,
                         baseStats = baseStats,
+                        equippedTraits = traits,
                     ),
                     gear = gear
                 )

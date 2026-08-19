@@ -56,12 +56,14 @@ import kotlinx.coroutines.delay
 @Composable
 fun RewardRevealDialog(
     batch: RewardBatch,
+    onEquipGear: ((Reward.Gear) -> Unit)? = null,
     onDismiss: () -> Unit
 ) {
     val isChest = batch.source == RewardSource.CHEST_OPENING
     var chestUnlocked by remember(batch.timestamp, batch.source) { androidx.compose.runtime.mutableStateOf(!isChest) }
     var revealedIndex by remember(batch.timestamp, batch.source, batch.rewards.size) { mutableIntStateOf(if (isChest) -1 else 0) }
     val isFullyRevealed = chestUnlocked && revealedIndex >= batch.rewards.size - 1
+    var selectedGearReward by remember { androidx.compose.runtime.mutableStateOf<Reward.Gear?>(null) }
 
     // Chest shake animation
     val chestScale = remember { Animatable(0.8f) }
@@ -107,7 +109,7 @@ fun RewardRevealDialog(
         ) {
             Column(
                 modifier = Modifier
-                    .fillMaxWidth(0.92f)
+                    .fillMaxWidth(0.94f)
                     .padding(16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
@@ -119,7 +121,7 @@ fun RewardRevealDialog(
                     textAlign = TextAlign.Center
                 )
 
-                Spacer(Modifier.height(24.dp))
+                Spacer(Modifier.height(20.dp))
 
                 if (!chestUnlocked) {
                     // Animated Chest Container
@@ -152,27 +154,34 @@ fun RewardRevealDialog(
                     }
                 } else {
                     LazyVerticalGrid(
-                        columns = GridCells.Adaptive(minSize = 100.dp),
-                        contentPadding = PaddingValues(8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        columns = GridCells.Adaptive(minSize = 105.dp),
+                        contentPadding = PaddingValues(6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
                         modifier = Modifier.weight(1f, fill = false)
                     ) {
                         items(batch.rewards.take((revealedIndex + 1).coerceAtLeast(0))) { reward ->
-                            RewardItemCard(reward)
+                            RewardItemCard(
+                                reward = reward,
+                                onClick = {
+                                    if (reward is Reward.Gear) {
+                                        selectedGearReward = reward
+                                    }
+                                }
+                            )
                         }
                     }
                 }
 
-                Spacer(Modifier.height(32.dp))
+                Spacer(Modifier.height(24.dp))
 
                 if (isFullyRevealed) {
                     Button(
                         onClick = onDismiss,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(56.dp),
-                        shape = RoundedCornerShape(28.dp),
+                            .height(54.dp),
+                        shape = RoundedCornerShape(27.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = Gold)
                     ) {
                         Text(
@@ -193,6 +202,60 @@ fun RewardRevealDialog(
             }
         }
     }
+
+    // Detail dialog for gear reward
+    selectedGearReward?.let { gearReward ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { selectedGearReward = null },
+            title = {
+                Text(
+                    "[${gearReward.rarity.displayName}] ${gearReward.item.name}",
+                    color = gearReward.rarity.color,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(gearReward.item.description, style = MaterialTheme.typography.bodyMedium)
+                    val stats = buildList {
+                        if (gearReward.item.atk > 0) add("+${gearReward.item.atk} ATK")
+                        if (gearReward.item.def > 0) add("+${gearReward.item.def} DEF")
+                        if (gearReward.item.hp > 0) add("+${gearReward.item.hp} HP")
+                    }.joinToString("  •  ")
+                    if (stats.isNotBlank()) {
+                        Text(stats, fontWeight = FontWeight.Bold, color = Gold)
+                    }
+                    if (gearReward.traits.isNotEmpty()) {
+                        Text("Traits:", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
+                        gearReward.traits.forEach { trait ->
+                            Text("${trait.emoji} ${trait.displayName}: ${trait.description}", style = MaterialTheme.typography.bodySmall, color = Gold)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                if (onEquipGear != null) {
+                    androidx.compose.material3.Button(onClick = {
+                        onEquipGear(gearReward)
+                        selectedGearReward = null
+                    }) {
+                        Text("Equip Now")
+                    }
+                } else {
+                    androidx.compose.material3.TextButton(onClick = { selectedGearReward = null }) {
+                        Text("OK")
+                    }
+                }
+            },
+            dismissButton = {
+                if (onEquipGear != null) {
+                    androidx.compose.material3.TextButton(onClick = { selectedGearReward = null }) {
+                        Text("Keep in Bag")
+                    }
+                }
+            }
+        )
+    }
 }
 
 private fun rewardTitle(source: RewardSource): String = when (source) {
@@ -209,7 +272,10 @@ private fun rewardTitle(source: RewardSource): String = when (source) {
 }
 
 @Composable
-private fun RewardItemCard(reward: Reward) {
+private fun RewardItemCard(
+    reward: Reward,
+    onClick: () -> Unit = {}
+) {
     val scale = remember { Animatable(0f) }
     LaunchedEffect(reward) {
         scale.snapTo(0f)
@@ -220,27 +286,30 @@ private fun RewardItemCard(reward: Reward) {
     }
 
     val (badge, label, color) = rewardPresentation(reward)
+    val isHighRarity = (reward as? Reward.Gear)?.let { it.rarity.ordinal >= com.fitnessquest.rpg.domain.GearRarity.RARE.ordinal } == true
 
     Box(
         modifier = Modifier
             .scale(scale.value)
             .aspectRatio(1f)
             .clip(RoundedCornerShape(16.dp))
-            .background(Color.White.copy(alpha = 0.05f))
+            .background(if (isHighRarity) color.copy(alpha = 0.14f) else Color.White.copy(alpha = 0.05f))
             .border(
-                width = 1.dp,
-                color = color.copy(alpha = 0.3f),
+                width = if (isHighRarity) 2.dp else 1.dp,
+                color = if (isHighRarity) color else color.copy(alpha = 0.35f),
                 shape = RoundedCornerShape(16.dp)
-            ),
+            )
+            .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(8.dp)
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier.padding(6.dp)
         ) {
             Text(
                 text = badge,
-                fontSize = if (badge.length <= 2 || reward is Reward.Gear || reward is Reward.Stackable) 32.sp else 18.sp,
+                fontSize = if (badge.length <= 2 || reward is Reward.Gear || reward is Reward.Stackable) 30.sp else 16.sp,
                 fontWeight = FontWeight.Black,
                 color = color,
                 maxLines = 1
@@ -260,14 +329,14 @@ private fun RewardItemCard(reward: Reward) {
 }
 
 private fun rewardPresentation(reward: Reward): Triple<String, String, Color> = when (reward) {
-    is Reward.Gold -> Triple("\uD83D\uDCB0", "+${reward.amount}", Gold)
-    is Reward.Xp -> Triple("\u2B50", "+${reward.amount} XP", Color(0xFF9C7BE3))
-    is Reward.Energy -> Triple("\u26A1", "+${reward.amount}", Color(0xFF4ADE80))
-    is Reward.XpBoost -> Triple("\u2728", "+${reward.amount} XP Boost", Color(0xFF4A6FD8))
+    is Reward.Gold -> Triple("💰", "+${reward.amount}", Gold)
+    is Reward.Xp -> Triple("⭐", "+${reward.amount} XP", Color(0xFF9C7BE3))
+    is Reward.Energy -> Triple("⚡", "+${reward.amount}", Color(0xFF4ADE80))
+    is Reward.XpBoost -> Triple("✨", "+${reward.amount} XP Boost", Color(0xFF4A6FD8))
     is Reward.Gear -> Triple(
         reward.item.emoji,
         if (reward.rarity != com.fitnessquest.rpg.domain.GearRarity.COMMON) "[${reward.rarity.displayName}] ${reward.item.name}" else reward.item.name,
-        Color(reward.rarity.colorHex)
+        reward.rarity.color
     )
     is Reward.Stackable -> Triple(reward.item.emoji, "${reward.item.name} x${reward.quantity}", Color.White)
     is Reward.LevelUp -> Triple("LV", "Level ${reward.newLevel}!", Gold)

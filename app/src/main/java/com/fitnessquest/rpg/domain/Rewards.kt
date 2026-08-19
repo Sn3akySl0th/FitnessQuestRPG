@@ -7,7 +7,11 @@ sealed class Reward {
     data class Xp(val amount: Int) : Reward()
     data class Gold(val amount: Int) : Reward()
     data class Energy(val amount: Int) : Reward()
-    data class Gear(val item: ItemEntity, val rarity: GearRarity = GearRarity.COMMON) : Reward()
+    data class Gear(
+        val item: ItemEntity,
+        val rarity: GearRarity = GearRarity.COMMON,
+        val traits: List<GearTrait> = emptyList()
+    ) : Reward()
     data class Stackable(val item: ItemEntity, val quantity: Int = 1) : Reward()
     data class LevelUp(val newLevel: Int) : Reward()
     data class NewPr(val pr: SessionPr) : Reward()
@@ -19,7 +23,7 @@ sealed class Reward {
 
 /** Converts technical loot grants into player-facing rewards. */
 fun LootGrant.toReward(): Reward = when (this) {
-    is LootGrant.Gear -> Reward.Gear(this.catalog, this.rarity)
+    is LootGrant.Gear -> Reward.Gear(this.catalog, this.rarity, this.traits)
     is LootGrant.Stack -> Reward.Stackable(this.catalog, this.quantity)
     is LootGrant.Gold -> Reward.Gold(this.amount)
     is LootGrant.Energy -> Reward.Energy(this.amount)

@@ -11,7 +11,11 @@ enum class MomentTrigger { PERSONAL_RECORD, HEAVY_LIFT, MILESTONE }
 
 /** A single grant produced by a loot roll (before persistence). */
 sealed class LootGrant {
-    data class Gear(val catalog: ItemEntity, val rarity: GearRarity = GearRarity.COMMON) : LootGrant()
+    data class Gear(
+        val catalog: ItemEntity,
+        val rarity: GearRarity = GearRarity.COMMON,
+        val traits: List<GearTrait> = emptyList()
+    ) : LootGrant()
     data class Stack(val catalog: ItemEntity, val quantity: Int = 1) : LootGrant()
     data class Gold(val amount: Int) : LootGrant()
     data class Energy(val amount: Int) : LootGrant()
@@ -145,6 +149,7 @@ object LootTables {
                     else -> GearRarity.COMMON
                 }
             }
+            // TODO: MYTHIC gameplay rollout deferred until endgame balance, drop rates, and content sources are designed.
             LootSource.BOSS, LootSource.CAMPAIGN, LootSource.GUILD_RAID -> {
                 when {
                     characterLevel >= GearRarity.LEGENDARY.minLevelGate && roll < 60 -> GearRarity.LEGENDARY
@@ -187,7 +192,8 @@ object LootTables {
         when (rng.nextInt(100)) {
             in 0 until 18 -> pickGear(gearPool, monster.tier, rng)?.let {
                 val rarity = rollRarity(LootSource.BATTLE, monster.level, rng = rng)
-                grants += LootGrant.Gear(it, rarity)
+                val traits = GearTrait.rollTraitsForRarity(rarity, rng)
+                grants += LootGrant.Gear(it, rarity, traits)
             }
             in 18 until 35 -> pickStack(stackPool, ItemSlot.RUNE, monster.tier, rng)?.let {
                 grants += LootGrant.Stack(it)
@@ -255,7 +261,8 @@ object LootTables {
                     }
                     in 25 until 45 -> pickGear(gearPool, tier, rng)?.let {
                         val rarity = rollRarity(LootSource.MOMENT, level, prCount = 1, rng = rng)
-                        grants += LootGrant.Gear(it, rarity)
+                        val traits = GearTrait.rollTraitsForRarity(rarity, rng)
+                        grants += LootGrant.Gear(it, rarity, traits)
                     }
                     else -> pickStack(stackPool, ItemSlot.MATERIAL, tier, rng)?.let {
                         grants += LootGrant.Stack(it, 2)
@@ -338,7 +345,8 @@ object LootTables {
         val guaranteedGear = filteredGear.randomOrNull(rng) ?: pickGear(gearPool, targetTier, rng)
         if (guaranteedGear != null) {
             val rarity = rollRarity(LootSource.BOSS, character.level, rng = rng)
-            grants += LootGrant.Gear(guaranteedGear, rarity)
+            val traits = GearTrait.rollTraitsForRarity(rarity, rng)
+            grants += LootGrant.Gear(guaranteedGear, rarity, traits)
         }
 
         // 2. Guaranteed Biome Chest with contents
@@ -375,7 +383,8 @@ object LootTables {
             when (rng.nextInt(100)) {
                 in 0 until 12 -> pickGear(gearPool, tier, rng)?.let {
                     val rarity = rollRarity(LootSource.CHEST, characterLevel, rng = rng)
-                    LootGrant.Gear(it, rarity)
+                    val traits = GearTrait.rollTraitsForRarity(rarity, rng)
+                    LootGrant.Gear(it, rarity, traits)
                 } ?: LootGrant.Gold(8 + tier * 4)
                 in 12 until 30 -> pickStack(stackPool, ItemSlot.RUNE, tier, rng)?.let { LootGrant.Stack(it) }
                     ?: LootGrant.Gold(6 + tier * 3)

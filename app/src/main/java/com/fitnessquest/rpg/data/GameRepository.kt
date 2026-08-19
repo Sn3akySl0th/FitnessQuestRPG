@@ -1388,6 +1388,7 @@ class GameRepository(
     suspend fun buyItem(itemId: Long): Boolean = shopMutex.withLock {
         db.withTransaction {
             val item = db.itemDao().get(itemId) ?: return@withTransaction false
+            if (item.slot.isEquippable() && item.tier > 3) return@withTransaction false
             val character = getCharacter()
             if (character.gold < item.price) return@withTransaction false
             when {
@@ -1407,8 +1408,11 @@ class GameRepository(
     suspend fun createGearInstance(
         catalog: ItemEntity,
         originBiome: String? = null,
-        rarity: GearRarity = GearRarity.COMMON
+        rarity: GearRarity = GearRarity.COMMON,
+        traits: List<com.fitnessquest.rpg.domain.GearTrait> = emptyList()
     ): GearInstanceEntity {
+        val finalTraits = if (traits.isNotEmpty()) traits else com.fitnessquest.rpg.domain.GearTrait.rollTraitsForRarity(rarity)
+        val traitStr = finalTraits.joinToString(",") { it.id }
         val id = db.gearInstanceDao().insert(
             GearInstanceEntity(
                 catalogId = catalog.id,
@@ -1416,6 +1420,7 @@ class GameRepository(
                 def = rarity.scaleStat(catalog.def),
                 hp = rarity.scaleStat(catalog.hp),
                 rarity = rarity.name,
+                traitIds = traitStr,
                 originBiome = originBiome
             )
         )
@@ -1719,6 +1724,14 @@ class GameRepository(
             }
         }
         return GameMath.combatStats(character, equipped, runeSpd = spd, runeCrit = crit, siphonHeal = siphon)
+    }
+
+    suspend fun equippedTraits(character: CharacterEntity): List<com.fitnessquest.rpg.domain.GearTrait> {
+        return character.equippedIds().values.mapNotNull { id ->
+            if (id == null) return@mapNotNull null
+            val inst = db.gearInstanceDao().get(id) ?: return@mapNotNull null
+            com.fitnessquest.rpg.domain.GearTrait.parseTraits(inst.traitIds)
+        }.flatten()
     }
 
     suspend fun grantMomentLoot(trigger: MomentTrigger): LootResult {

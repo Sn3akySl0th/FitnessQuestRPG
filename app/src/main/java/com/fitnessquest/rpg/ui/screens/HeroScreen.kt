@@ -511,6 +511,15 @@ fun HeroScreenContent(
     val scope = rememberCoroutineScope()
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
 
+    val equipAnimState = rememberEquipAnimationState()
+    val highestEquippedRarity = remember(state.gear, state.ownedGear, state.character) {
+        val equippedIds = state.character.equippedIds().values.filterNotNull().toSet()
+        val rarities = state.ownedGear
+            .filter { it.instance.id in equippedIds }
+            .map { GearRarity.fromName(it.instance.rarity) }
+        rarities.maxOrNull() ?: GearRarity.COMMON
+    }
+
     EmbersOverlay(modifier = Modifier.fillMaxSize()) {
         if (isLandscape) {
             Row(Modifier.fillMaxSize()) {
@@ -524,6 +533,8 @@ fun HeroScreenContent(
                         character = character,
                         cls = cls,
                         gear = state.gear,
+                        highestRarity = highestEquippedRarity,
+                        equipAnimState = equipAnimState,
                         onAvatarClick = { showAvatarDialog = true },
                         onDruidFormChange = actions.onDruidFormChange,
                         onAllocateClick = { selectedTab = 0 }
@@ -575,7 +586,7 @@ fun HeroScreenContent(
                     ) {
                         when (selectedTab) {
                             0 -> statsTabContent(this, character, cls, state, isPremium, snackbar, scope, actions)
-                            1 -> gearTab(this, state, cls, onEquipClick = { pickerSlot = it })
+                            1 -> gearTab(this, state, cls, character, highestEquippedRarity, equipAnimState, onEquipClick = { pickerSlot = it })
                             2 -> sagaTabContent(this, character, bounties, bountyResetLabel, campaigns, campaignResetLabel, claimedTrophies, lifetimeCardioKm, imperial, actions, onLogWeight = { showWeightDialog = true })
                             3 -> masteryTab(this, state.movementMastery, imperial)
                         }
@@ -589,6 +600,8 @@ fun HeroScreenContent(
                     character = character,
                     cls = cls,
                     gear = state.gear,
+                    highestRarity = highestEquippedRarity,
+                    equipAnimState = equipAnimState,
                     onAvatarClick = { showAvatarDialog = true },
                     onDruidFormChange = actions.onDruidFormChange,
                     onAllocateClick = { selectedTab = 0 }
@@ -633,7 +646,7 @@ fun HeroScreenContent(
                 ) {
                     when (selectedTab) {
                         0 -> statsTabContent(this, character, cls, state, isPremium, snackbar, scope, actions)
-                        1 -> gearTab(this, state, cls, onEquipClick = { pickerSlot = it })
+                        1 -> gearTab(this, state, cls, character, highestEquippedRarity, equipAnimState, onEquipClick = { pickerSlot = it })
                         2 -> sagaTabContent(this, character, bounties, bountyResetLabel, campaigns, campaignResetLabel, claimedTrophies, lifetimeCardioKm, imperial, actions, onLogWeight = { showWeightDialog = true })
                         3 -> masteryTab(this, state.movementMastery, imperial)
                     }
@@ -651,7 +664,12 @@ fun HeroScreenContent(
             owned = state.ownedGear.filter { it.catalog.slot == slot },
             equippedId = state.gear[slot]?.id,
             runes = state.runes,
-            onEquip = actions.onEquipItem,
+            onEquip = { instanceId ->
+                val targetGear = state.ownedGear.find { it.instance.id == instanceId }
+                val targetRarity = targetGear?.instance?.rarity?.let { GearRarity.fromName(it) } ?: GearRarity.COMMON
+                actions.onEquipItem(instanceId)
+                equipAnimState.triggerEquip(slot, targetRarity)
+            },
             onSocketRune = actions.onSocketRune,
             onClearRune = actions.onClearRune,
             onDismiss = { pickerSlot = null }
@@ -664,6 +682,8 @@ private fun HeroHeaderBanner(
     character: CharacterEntity,
     cls: CharacterClass,
     gear: Map<ItemSlot, ItemEntity>,
+    highestRarity: GearRarity = GearRarity.COMMON,
+    equipAnimState: EquipAnimationState? = null,
     onAvatarClick: () -> Unit,
     onDruidFormChange: (String) -> Unit,
     onAllocateClick: () -> Unit = {}
@@ -698,17 +718,18 @@ private fun HeroHeaderBanner(
             Box(
                 modifier = Modifier
                     .weight(0.45f)
-                    .fillMaxHeight()
-                    .clickable { onAvatarClick() },
+                    .fillMaxHeight(),
                 contentAlignment = Alignment.Center
             ) {
-                CharacterAvatar(
+                HeroPaperDoll(
                     clazz = cls,
                     gear = gear,
                     appearance = character.toAppearance(),
+                    highestRarity = highestRarity,
+                    equipAnimationState = equipAnimState,
                     modifier = Modifier.fillMaxSize(),
-                    detail = AvatarDetail.FULL,
-                    expression = if (character.freeStatPoints > 0) AvatarExpression.VICTORIOUS else AvatarExpression.CALM
+                    expression = if (character.freeStatPoints > 0) AvatarExpression.VICTORIOUS else AvatarExpression.CALM,
+                    onAvatarClick = onAvatarClick
                 )
             }
             
@@ -1046,31 +1067,118 @@ private fun gearTab(
     scope: LazyListScope,
     state: HeroUiState,
     cls: CharacterClass,
+    character: CharacterEntity,
+    highestRarity: GearRarity,
+    equipAnimState: EquipAnimationState,
     onEquipClick: (ItemSlot) -> Unit
 ) {
     scope.item {
         FantasyCard {
-            Text("Equipment Grid", style = MaterialTheme.typography.titleMedium, color = Gold)
+            Text(
+                "Hero Loadout",
+                style = MaterialTheme.typography.titleMedium,
+                color = Gold,
+                fontWeight = FontWeight.Bold
+            )
+
+            Spacer(Modifier.height(4.dp))
+
+            // Centered Hero Showcase Area
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(280.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Color.Black.copy(alpha = 0.25f))
+                    .padding(8.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                HeroPaperDoll(
+                    clazz = cls,
+                    gear = state.gear,
+                    appearance = character.toAppearance(),
+                    highestRarity = highestRarity,
+                    equipAnimationState = equipAnimState,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            // Total Gear Stats Summary Banner
+            val totalGearAtk = state.gear.values.sumOf { it.atk }
+            val totalGearDef = state.gear.values.sumOf { it.def }
+            val totalGearHp = state.gear.values.sumOf { it.hp }
+
+            Surface(
+                color = Color.White.copy(alpha = 0.04f),
+                shape = RoundedCornerShape(10.dp),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceAround,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("Gear ATK", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.6f))
+                        Text("+$totalGearAtk", fontWeight = FontWeight.Bold, color = StatStr, style = MaterialTheme.typography.titleSmall)
+                    }
+                    VerticalDivider(modifier = Modifier.height(24.dp), color = Color.White.copy(alpha = 0.1f))
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("Gear DEF", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.6f))
+                        Text("+$totalGearDef", fontWeight = FontWeight.Bold, color = ArcaneBlue, style = MaterialTheme.typography.titleSmall)
+                    }
+                    VerticalDivider(modifier = Modifier.height(24.dp), color = Color.White.copy(alpha = 0.1f))
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("Gear HP", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.6f))
+                        Text("+$totalGearHp", fontWeight = FontWeight.Bold, color = StaminaGreen, style = MaterialTheme.typography.titleSmall)
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            // Equipped Gear Slots List
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 EquippableSlots.forEach { slot ->
-                    EquipmentRow(slot, state.gear[slot], onClick = { onEquipClick(slot) })
+                    val item = state.gear[slot]
+                    val instance = state.ownedGear.find { it.catalog.id == item?.id }?.instance
+                    val rarity = instance?.rarity?.let { GearRarity.fromName(it) } ?: GearRarity.COMMON
+                    EquipmentSlot(
+                        slot = slot,
+                        item = item,
+                        rarity = rarity,
+                        upgradeLevel = instance?.upgradeLevel ?: 0,
+                        isEquipped = item != null,
+                        onClick = { onEquipClick(slot) }
+                    )
                 }
             }
             
             val bonusActive = state.setPieces >= ArmorSlots.size
             Surface(
-                color = if (bonusActive) Gold.copy(alpha = 0.1f) else Color.White.copy(alpha = 0.05f),
+                color = if (bonusActive) Gold.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.05f),
                 shape = RoundedCornerShape(8.dp),
-                border = if (bonusActive) BorderStroke(1.dp, Gold) else null,
+                border = if (bonusActive) BorderStroke(1.dp, Gold) else BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
             ) {
-                Text(
-                    text = if (bonusActive) "✨ ${cls.label} bonus active: +10% ATK & HP!" else "Set bonus: ${state.setPieces}/5 pieces",
+                Row(
                     modifier = Modifier.padding(12.dp),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (bonusActive) Gold else Color.White.copy(alpha = 0.6f),
-                    textAlign = TextAlign.Center
-                )
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = if (bonusActive) "✨ ${cls.label} Set Bonus Active (+10% ATK & HP)" else "Armor Set: ${state.setPieces}/5 pieces equipped",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = if (bonusActive) FontWeight.Bold else FontWeight.Normal,
+                        color = if (bonusActive) Gold else Color.White.copy(alpha = 0.7f),
+                        textAlign = TextAlign.Center
+                    )
+                }
             }
         }
     }
@@ -1171,48 +1279,26 @@ private fun ReadinessCard(character: CharacterEntity) {
 
 private data class Readiness(val label: String, val reason: String, val color: Color)
 
-@Composable
-private fun EquipmentRow(slot: ItemSlot, item: ItemEntity?, onClick: () -> Unit) {
-    Surface(
-        onClick = onClick,
-        color = Color.White.copy(alpha = 0.05f),
-        shape = RoundedCornerShape(12.dp),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(
-            modifier = Modifier.padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(Color.White.copy(alpha = 0.05f)),
-                contentAlignment = Alignment.Center
-            ) {
-                if (item != null) {
-                    ItemIcon(item, modifier = Modifier.size(32.dp))
-                } else {
-                    Text(slot.label.take(1), fontWeight = FontWeight.Black, color = Color.White.copy(alpha = 0.2f))
-                }
-            }
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(slot.label, style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.5f))
-                Text(item?.name ?: "Empty Slot", fontWeight = FontWeight.Bold, color = if (item != null) Color.White else Color.White.copy(alpha = 0.3f))
-            }
-            if (item != null) {
-                Text(itemBonusText(item), style = MaterialTheme.typography.labelSmall, color = Gold)
-            }
-        }
-    }
-}
 
 fun itemBonusText(item: ItemEntity): String = buildList {
     if (item.atk > 0) add("+${item.atk} ATK")
     if (item.def > 0) add("+${item.def} DEF")
     if (item.hp > 0) add("+${item.hp} HP")
 }.joinToString(" ")
+
+private enum class SlotFilter(val label: String) {
+    ALL("All"),
+    COMPATIBLE("Equippable"),
+    UPGRADED("Upgraded"),
+    RARE_PLUS("Rare+"),
+}
+
+private enum class SlotSort(val label: String) {
+    POWER("Power"),
+    TIER("Tier"),
+    RARITY("Rarity"),
+    UPGRADE("Upgrade"),
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -1228,43 +1314,158 @@ fun SlotPickerSheet(
     onClearRune: (Long, Int) -> Unit,
     onDismiss: () -> Unit
 ) {
+    var filter by remember { mutableStateOf(SlotFilter.ALL) }
+    var sort by remember { mutableStateOf(SlotSort.POWER) }
+    var runeSocketTarget by remember { mutableStateOf<Pair<Long, Int>?>(null) }
+
+    val filtered = remember(owned, filter, sort, character) {
+        val list = owned.filter { row ->
+            when (filter) {
+                SlotFilter.ALL -> true
+                SlotFilter.COMPATIBLE -> row.catalog.classAffinity == null || row.catalog.classAffinity == character.characterClass
+                SlotFilter.UPGRADED -> row.instance.upgradeLevel > 0
+                SlotFilter.RARE_PLUS -> GearRarity.fromName(row.instance.rarity).ordinal >= GearRarity.RARE.ordinal
+            }
+        }
+        when (sort) {
+            SlotSort.POWER -> list.sortedByDescending { it.catalog.atk + it.catalog.def + it.catalog.hp / 4 + it.instance.upgradeLevel * 2 }
+            SlotSort.TIER -> list.sortedByDescending { it.catalog.tier }
+            SlotSort.RARITY -> list.sortedByDescending { GearRarity.fromName(it.instance.rarity).ordinal }
+            SlotSort.UPGRADE -> list.sortedByDescending { it.instance.upgradeLevel }
+        }
+    }
+
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
             Modifier
                 .fillMaxWidth()
-                .padding(16.dp)
+                .padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
-            Text(
-                "Select ${slot.label}",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(Modifier.height(16.dp))
-            if (owned.isEmpty()) {
-                Text("You don't own any items for this slot yet.", color = Color.Gray)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "Select ${slot.label}",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    "${filtered.size} items",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White.copy(alpha = 0.6f)
+                )
             }
-            LazyVerticalGrid(
-                columns = GridCells.Adaptive(minSize = 154.dp),
+
+            Spacer(Modifier.height(8.dp))
+
+            // Filter chips
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height((if (owned.size <= 2) 150 else 320).dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                items(owned, key = { it.instance.id }) { itemRow ->
-                    val isEquipped = itemRow.instance.id == equippedId
-                    val currentlyEquippedItem = gear[slot]
-                    SlotPickerGearCard(
-                        gear = itemRow,
-                        currentlyEquippedItem = currentlyEquippedItem,
-                        isEquipped = isEquipped,
-                        character = character,
-                        onClick = { onEquip(itemRow.instance.id) }
+                SlotFilter.entries.forEach { f ->
+                    FilterChip(
+                        selected = filter == f,
+                        onClick = { filter = f },
+                        label = { Text(f.label, style = MaterialTheme.typography.labelSmall) }
                     )
                 }
             }
-            Spacer(Modifier.height(24.dp))
+
+            Spacer(Modifier.height(8.dp))
+
+            if (filtered.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(140.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        if (owned.isEmpty()) "You don't own any items for this slot yet."
+                        else "No items match the selected filter.",
+                        color = Color.Gray,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            } else {
+                LazyVerticalGrid(
+                    columns = GridCells.Adaptive(minSize = 160.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 380.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    items(filtered, key = { it.instance.id }) { itemRow ->
+                        val isEquipped = itemRow.instance.id == equippedId
+                        val currentlyEquippedItem = gear[slot]
+                        SlotPickerGearCard(
+                            gear = itemRow,
+                            currentlyEquippedItem = currentlyEquippedItem,
+                            isEquipped = isEquipped,
+                            character = character,
+                            runesCatalog = runes,
+                            onClick = { onEquip(itemRow.instance.id) },
+                            onOpenSocket = { slotIdx -> runeSocketTarget = itemRow.instance.id to slotIdx },
+                            onClearSocket = { slotIdx -> onClearRune(itemRow.instance.id, slotIdx) }
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(20.dp))
         }
+    }
+
+    // Rune Picker Dialog
+    runeSocketTarget?.let { (instanceId, slotIdx) ->
+        val availableRunes = runes.filter { it.quantity > 0 }
+        AlertDialog(
+            onDismissRequest = { runeSocketTarget = null },
+            title = { Text("Socket Rune into Slot ${slotIdx + 1}") },
+            text = {
+                if (availableRunes.isEmpty()) {
+                    Text("You don't have any runes in your inventory. Defeat monsters or complete workouts to earn runes!")
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Choose a rune to socket:", style = MaterialTheme.typography.bodySmall)
+                        for (rune in availableRunes) {
+                            Surface(
+                                onClick = {
+                                    onSocketRune(instanceId, slotIdx, rune.id)
+                                    runeSocketTarget = null
+                                },
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Text(rune.emoji, fontSize = 20.sp)
+                                    Column(Modifier.weight(1f)) {
+                                        Text(rune.name, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                                        Text(rune.description, style = MaterialTheme.typography.labelSmall, color = Gold)
+                                    }
+                                    Text("x${rune.quantity}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { runeSocketTarget = null }) {
+                    Text("Close")
+                }
+            }
+        )
     }
 }
 
@@ -1274,41 +1475,55 @@ private fun SlotPickerGearCard(
     currentlyEquippedItem: ItemEntity?,
     isEquipped: Boolean,
     character: CharacterEntity,
-    onClick: () -> Unit
+    runesCatalog: List<ItemEntity>,
+    onClick: () -> Unit,
+    onOpenSocket: (Int) -> Unit = {},
+    onClearSocket: (Int) -> Unit = {}
 ) {
     val canEquip = gear.catalog.classAffinity == null || gear.catalog.classAffinity == character.characterClass
     val atkDiff = gear.catalog.atk - (currentlyEquippedItem?.atk ?: 0)
     val defDiff = gear.catalog.def - (currentlyEquippedItem?.def ?: 0)
     val hpDiff = gear.catalog.hp - (currentlyEquippedItem?.hp ?: 0)
+    val rarity = GearRarity.fromName(gear.instance.rarity)
+    val traits = GearTrait.parseTraits(gear.instance.traitIds)
+    val maxSockets = GearSockets.slotsForTier(gear.catalog.tier)
+
 
     Surface(
         onClick = onClick,
         enabled = canEquip,
         shape = RoundedCornerShape(12.dp),
-        color = if (isEquipped) Gold.copy(alpha = 0.24f) else Color.White.copy(alpha = 0.05f),
-        border = BorderStroke(1.dp, if (isEquipped) Gold else Color.White.copy(alpha = 0.12f)),
-        modifier = Modifier.height(150.dp)
+        color = if (isEquipped) Gold.copy(alpha = 0.14f) else RarityVisuals.backgroundGlow(rarity),
+        modifier = Modifier
+            .fillMaxWidth()
+            .rarityFrame(
+                rarity = rarity,
+                isSelected = isEquipped,
+                isEquipped = isEquipped,
+                cornerRadius = 12.dp
+            )
     ) {
         Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.SpaceBetween
+            modifier = Modifier.padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Box(
                     modifier = Modifier
                         .size(42.dp)
-                        .clip(RoundedCornerShape(10.dp))
+                        .clip(RoundedCornerShape(8.dp))
                         .background(Color.White.copy(alpha = 0.06f)),
                     contentAlignment = Alignment.Center
                 ) {
-                    ItemIcon(gear.catalog, modifier = Modifier.size(32.dp))
+                    ItemIcon(gear.catalog, modifier = Modifier.size(34.dp))
                 }
                 Column(Modifier.weight(1f)) {
                     Text(
                         gear.catalog.name,
-                        fontWeight = FontWeight.Black,
+                        fontWeight = FontWeight.Bold,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
+                        color = Color.White
                     )
                     Text(
                         itemBonusText(gear.catalog).ifBlank { "No direct stats" },
@@ -1319,20 +1534,71 @@ private fun SlotPickerGearCard(
                     )
                 }
                 if (isEquipped) {
-                    Icon(Icons.Default.Check, contentDescription = null, tint = Gold, modifier = Modifier.size(20.dp))
+                    Icon(Icons.Default.Check, contentDescription = "Equipped", tint = RarityVisuals.UncommonColor, modifier = Modifier.size(18.dp))
                 }
             }
+
             if (!isEquipped) {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     if (atkDiff != 0) HeroDeltaPill("ATK", atkDiff)
                     if (defDiff != 0) HeroDeltaPill("DEF", defDiff)
                     if (hpDiff != 0) HeroDeltaPill("HP", hpDiff)
                 }
             }
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                RarityBadge(rarity = rarity, compact = true)
                 HeroGearPill("T${gear.catalog.tier}")
-                HeroGearPill("+${gear.instance.upgradeLevel}")
-                HeroGearPill(gear.catalog.classAffinity?.label ?: "All classes")
+                if (gear.instance.upgradeLevel > 0) HeroGearPill("+${gear.instance.upgradeLevel}", color = Gold)
+                for (trait in traits) {
+                    HeroGearPill("${trait.emoji} ${trait.displayName}", color = Gold)
+                }
+            }
+
+            // Sockets row
+            if (maxSockets > 0) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Sockets:", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.5f))
+                    for (idx in 0 until maxSockets) {
+                        val runeId = if (idx == 0) gear.instance.rune1Id else gear.instance.rune2Id
+                        val rune = runesCatalog.find { it.id == runeId }
+                        if (rune != null) {
+                            Surface(
+                                onClick = { onClearSocket(idx) },
+                                color = MysticPurple.copy(alpha = 0.25f),
+                                shape = RoundedCornerShape(6.dp),
+                                border = BorderStroke(1.dp, MysticPurple)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text("${rune.emoji} ${rune.name.take(6)}", style = MaterialTheme.typography.labelSmall, color = Gold)
+                                    Spacer(Modifier.width(2.dp))
+                                    Text("✕", style = MaterialTheme.typography.labelSmall, color = Color.Red.copy(alpha = 0.8f))
+                                }
+                            }
+                        } else {
+                            Surface(
+                                onClick = { onOpenSocket(idx) },
+                                color = Color.White.copy(alpha = 0.08f),
+                                shape = RoundedCornerShape(6.dp),
+                                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.2f))
+                            ) {
+                                Text(
+                                    "+ Rune",
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Color.White.copy(alpha = 0.7f)
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -1360,16 +1626,18 @@ private fun HeroDeltaPill(label: String, delta: Int) {
 }
 
 @Composable
-private fun HeroGearPill(text: String) {
+private fun HeroGearPill(text: String, color: Color = Color.White.copy(alpha = 0.8f)) {
     Surface(
-        color = Color.White.copy(alpha = 0.08f),
-        shape = RoundedCornerShape(8.dp)
+        color = color.copy(alpha = 0.12f),
+        border = BorderStroke(0.5.dp, color.copy(alpha = 0.35f)),
+        shape = RoundedCornerShape(6.dp)
     ) {
         Text(
             text = text,
-            modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Bold,
+            color = color,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
@@ -1513,9 +1781,36 @@ private fun masteryTab(
     }
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFF12131F)
+@Preview(name = "Hero Screen (Mythic Loadout)", showBackground = true, backgroundColor = 0xFF12131F)
 @Composable
 fun HeroScreenPreview() {
+    val items = com.fitnessquest.rpg.domain.ItemCatalog.all
+    val warriorWeapon = items.firstOrNull { it.name == "Dragonfang Greatsword" }
+    val warriorChest = items.firstOrNull { it.name == "Aegis of the Titan" }
+    val warriorHead = items.firstOrNull { it.name == "Titanforged Helm" }
+    val warriorLegs = items.firstOrNull { it.name == "Titanforged Greaves" }
+    val warriorFeet = items.firstOrNull { it.name == "Titanforged Sabatons" }
+
+    val sampleGear = mutableMapOf<ItemSlot, ItemEntity>()
+    if (warriorWeapon != null) sampleGear[ItemSlot.WEAPON] = warriorWeapon
+    if (warriorChest != null) sampleGear[ItemSlot.CHEST] = warriorChest
+    if (warriorHead != null) sampleGear[ItemSlot.HEAD] = warriorHead
+    if (warriorLegs != null) sampleGear[ItemSlot.LEGS] = warriorLegs
+    if (warriorFeet != null) sampleGear[ItemSlot.FEET] = warriorFeet
+
+    val sampleOwned = sampleGear.values.map { catalog ->
+        OwnedGear(
+            instance = GearInstanceEntity(
+                id = catalog.id,
+                catalogId = catalog.id,
+                rarity = GearRarity.MYTHIC.name,
+                upgradeLevel = 5,
+                traitIds = "vampiric,berserk"
+            ),
+            catalog = catalog
+        )
+    }
+
     FitQuestTheme {
         CompositionLocalProvider(
             LocalSnackbarHostState provides remember { SnackbarHostState() }
@@ -1523,15 +1818,23 @@ fun HeroScreenPreview() {
             HeroScreenContent(
                 state = HeroUiState(
                     character = CharacterEntity(
-                        name = "Preview Hero",
-                        level = 10,
-                        currentBiome = Biome.MEADOWLANDS.name,
-                        gold = 1250,
-                        energy = 80,
-                        streak = 5,
-                        characterClass = CharacterClass.WARRIOR
+                        name = "Mythic Warlord",
+                        level = 20,
+                        currentBiome = Biome.EMBER_PEAKS.name,
+                        gold = 4850,
+                        energy = 100,
+                        streak = 14,
+                        characterClass = CharacterClass.WARRIOR,
+                        weaponId = warriorWeapon?.id,
+                        chestId = warriorChest?.id,
+                        headId = warriorHead?.id,
+                        legsId = warriorLegs?.id,
+                        feetId = warriorFeet?.id
                     ),
-                    combat = CombatStats(maxHp = 100, atk = 15, def = 12, spd = 8, critPercent = 5)
+                    gear = sampleGear,
+                    ownedGear = sampleOwned,
+                    combat = CombatStats(maxHp = 340, atk = 85, def = 72, spd = 24, critPercent = 15),
+                    setPieces = 5
                 ),
                 isPremium = true,
                 imperial = true,
@@ -1541,7 +1844,7 @@ fun HeroScreenPreview() {
                 campaigns = emptyList(),
                 campaignResetLabel = "5d 4h",
                 claimedTrophies = emptySet(),
-                lifetimeCardioKm = 0.0,
+                lifetimeCardioKm = 12.5,
                 wearLinked = true,
                 actions = HeroActions()
             )

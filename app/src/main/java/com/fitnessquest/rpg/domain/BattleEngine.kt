@@ -35,7 +35,8 @@ data class BattleState(
     val outcome: BattleOutcome = BattleOutcome.ONGOING,
     val droppedItemId: Long? = null,
     val druidForm: String = "HUMAN",
-    val baseStats: CombatStats? = null
+    val baseStats: CombatStats? = null,
+    val equippedTraits: List<GearTrait> = emptyList()
 ) {
     /** Skills the player has unlocked at their current level. */
     val unlockedSkills: List<ClassSkill> get() = clazz.skillsUnlockedAt(level)
@@ -67,6 +68,7 @@ object BattleEngine {
         monster: Monster,
         druidForm: String = "HUMAN",
         baseStats: CombatStats? = null,
+        equippedTraits: List<GearTrait> = emptyList(),
         rng: Random = Random.Default
     ): BattleState {
         var s = BattleState(
@@ -82,9 +84,13 @@ object BattleEngine {
             willpower = willpower,
             druidForm = druidForm,
             baseStats = baseStats,
+            equippedTraits = equippedTraits,
             log = buildList {
                 add("A wild ${monster.name} ${monster.emoji} appears!")
                 monster.trait?.let { add("${it.emoji} It is ${it.label.uppercase()}: ${it.blurb}") }
+                if (equippedTraits.isNotEmpty()) {
+                    add("✨ Active Gear Traits: " + equippedTraits.joinToString(", ") { "${it.emoji} ${it.displayName}" })
+                }
             }
         )
         // Speed decides who strikes first: slower heroes eat an opening hit.
@@ -174,11 +180,11 @@ object BattleEngine {
             }
         }
 
-        // Dragoon Wyvern Regen
+        // Dragoon Wyvern Regen (rebalanced to 2% max HP per turn)
         if (s.clazz == CharacterClass.DRAGOON && s.druidForm == "WYVERN") {
-            val heal = (s.playerStats.maxHp * 0.05).roundToInt()
+            val heal = max(2, (s.playerStats.maxHp * 0.02).roundToInt())
             s = s.copy(playerHp = min(s.playerStats.maxHp, s.playerHp + heal))
-            lines += "\uD83E\uDDBA Your Wyvern heals you for $heal HP."
+            lines += "\uD83D\uDC32 Your Wyvern heals you for $heal HP."
         }
 
         // Poison ticks at the end of the round; Willpower resists the worst of it.
@@ -233,6 +239,13 @@ object BattleEngine {
             crit -> "CRITICAL HIT! You strike the ${s.monster.name} for $dmg damage!"
             s.monster.trait == MonsterTrait.ARMORED -> "Your attack glances off the armor \u2014 $dmg damage."
             else -> "You attack the ${s.monster.name} for $dmg damage."
+        }
+
+        // Vampiric gear trait: leech health on strike
+        if (s.equippedTraits.contains(GearTrait.VAMPIRIC) && dmg > 0) {
+            val leech = max(1, (dmg * 0.12).roundToInt())
+            s = s.copy(playerHp = min(s.playerStats.maxHp, s.playerHp + leech))
+            lines += "🩸 Vampiric: You leeched $leech HP from the strike!"
         }
         return s
     }
@@ -524,6 +537,10 @@ object BattleEngine {
 
         val (raw, crit) = rollDamage(monsterAtk, s.playerStats.def.toDouble(), 10, rng)
         var dmg = if (s.playerDefending) max(1, (raw * 0.45).roundToInt()) else raw
+        // Warded trait: reduce critical damage
+        if (crit && s.equippedTraits.contains(GearTrait.WARDED)) {
+            dmg = max(1, (dmg * 0.75).roundToInt())
+        }
         if (s.playerStats.mitigationPercent > 0f) {
             dmg = max(1, (dmg * (1f - s.playerStats.mitigationPercent)).roundToInt())
         }
@@ -531,9 +548,17 @@ object BattleEngine {
         lines += when {
             s.playerDefending -> "The ${s.monster.name} attacks, but your guard absorbs it. $dmg damage."
             enraged -> "\uD83D\uDE21 The ${s.monster.name} attacks in a frenzy! $dmg damage!"
+            crit && s.equippedTraits.contains(GearTrait.WARDED) -> "🛡️ Warded! You blunted a critical blow to $dmg damage."
             crit -> "The ${s.monster.name} lands a brutal blow! $dmg damage!"
             s.monsterChillTurns > 0 -> "The chilled ${s.monster.name} strikes sluggishly for $dmg damage."
             else -> "The ${s.monster.name} hits you for $dmg damage."
+        }
+
+        // Thorns gear trait: reflect unblocked damage back
+        if (s.equippedTraits.contains(GearTrait.THORNS) && dmg > 0) {
+            val reflect = max(1, (dmg * 0.15).roundToInt())
+            s = s.copy(monsterHp = max(0, s.monsterHp - reflect))
+            lines += "🌵 Thorns: Reflected $reflect damage back to the ${s.monster.name}!"
         }
 
         // Venomous bites can poison; Willpower shortens the suffering.
@@ -547,7 +572,18 @@ object BattleEngine {
 
     // ---- Shared math ----
 
-    private fun buffMult(s: BattleState): Double = if (s.atkBuffTurns > 0) 1.4 else 1.0
+    private fun buffMult(s: BattleState): Double {
+        var mult = if (s.atkBuffTurns > 0) 1.4 else 1.0
+        // Berserk trait: +20% damage under 50% HP
+        if (s.equippedTraits.contains(GearTrait.BERSERK) && s.playerHp < (s.playerStats.maxHp * 0.5)) {
+            mult *= 1.2
+        }
+        // Executioner trait: +25% damage when monster is below 30% HP
+        if (s.equippedTraits.contains(GearTrait.EXECUTIONER) && s.monsterHp < (s.monster.hp * 0.3)) {
+            mult *= 1.25
+        }
+        return mult
+    }
 
     /** Chance for the monster to dodge your attacks: its speed edge, plus slipperiness if swift. */
     private fun monsterDodgeChance(s: BattleState): Int {
@@ -556,13 +592,15 @@ object BattleEngine {
         return base + swift
     }
 
-    /** Chance for you to dodge the monster: your speed edge over it. */
-    private fun playerDodgeChance(s: BattleState): Int =
-        ((s.playerStats.spd - s.monster.spd) * 1.5).roundToInt().coerceIn(0, 30)
+    /** Chance for you to dodge the monster: your speed edge over it, boosted by Swiftfoot trait. */
+    private fun playerDodgeChance(s: BattleState): Int {
+        val traitDodge = if (s.equippedTraits.contains(GearTrait.SWIFTFOOT)) 10 else 0
+        return (((s.playerStats.spd - s.monster.spd) * 1.5).roundToInt() + traitDodge).coerceIn(0, 45)
+    }
 
     /**
      * Soft mitigation: DEF reduces damage but never floors equal-level fights
-     * to chip damage. Roughly 40 DEF ≈ 50% reduction, capped at 75%.
+     * to chip damage. Roughly 50 DEF ≈ 50% reduction, capped at 70%.
      */
     private fun rollDamage(
         atk: Double,
@@ -576,7 +614,7 @@ object BattleEngine {
         val critMult = if (crit) 1.6 else 1.0
         val armorMult = if (armored) 0.7 else 1.0
         val softDef = def.coerceAtLeast(0.0)
-        val mitigation = (softDef / (softDef + 40.0)).coerceIn(0.0, 0.75)
+        val mitigation = (softDef / (softDef + 50.0)).coerceIn(0.0, 0.70)
         val dmg = max(1, (atk * (1.0 - mitigation) * variance * critMult * armorMult).roundToInt())
         return dmg to crit
     }

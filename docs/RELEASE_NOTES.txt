@@ -1,3 +1,11 @@
+1.0.10
+- Added Paper-Doll Avatar Showcase with layered equipment rendering, magical pedestal, and dynamic equip animations.
+- Introduced Mythic gear rarity tier with animated crimson auras, glowing frames, and visual shimmer effects.
+- Added Gear Traits & Affixes system (Vampiric, Berserk, Thorns, Swiftness, etc.) with active combat integration.
+- Enforced Merchant Shop Tier 1–3 cap so high-tier (Tier 4+) gear is earned exclusively through boss encounters, raid chests, and forge crafting.
+- Added interactive Compose previews for high-tier equipment, paper-doll avatars, and loadout showcases.
+- Enhanced step counter lifecycle handling and map travel navigation stability.
+
 1.0.9
 - Fixed Real-time "Ghost Damage" pulse monitoring to ensure damage strikes appear instantly.
 - Improved Raid Boss reliability with server-side idempotency and health clamping fixes.

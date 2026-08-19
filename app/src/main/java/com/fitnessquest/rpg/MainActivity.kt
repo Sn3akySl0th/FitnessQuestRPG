@@ -38,7 +38,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        (application as? FitQuestApp)?.container?.inAppUpdate?.onResume()
+        val container = (application as? FitQuestApp)?.container
+        container?.inAppUpdate?.onResume()
+        container?.steps?.start()
     }
 
     override fun onDestroy() {

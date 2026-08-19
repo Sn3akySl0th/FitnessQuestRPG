@@ -54,8 +54,8 @@ class StepTracker(
     fun start() {
         if (_tracking.value || !hasPermission()) return
         val sensor = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER) ?: return
-        sensorManager.registerListener(this, sensor, SensorManager.SENSOR_DELAY_UI)
-        _tracking.value = true
+        val registered = sensorManager.registerListener(this, sensor, SensorManager.SENSOR_DELAY_UI)
+        _tracking.value = registered
     }
 
     override fun onSensorChanged(event: SensorEvent) {
@@ -75,14 +75,14 @@ class StepTracker(
             }
         }
 
-        val steps = cumulative - base
+        val steps = (cumulative - base).coerceAtLeast(0)
         _stepsToday.value = steps
         prefs.edit { putInt(KEY_CACHE, steps) }
 
-        // Feed travel in ~0.1 km chunks to avoid hammering the database.
+        // Feed travel in responsive ~25 step chunks so players see travel progress immediately
         val credited = prefs.getInt(KEY_CREDITED, 0)
         val creditable = steps - credited
-        if (creditable >= (GameMath.STEPS_PER_KM / 10)) {
+        if (creditable >= 25) {
             prefs.edit { putInt(KEY_CREDITED, steps) }
             scope.launch {
                 repository.processIdleSteps(creditable)

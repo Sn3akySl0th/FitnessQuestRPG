@@ -41,6 +41,7 @@ class LootProgressionSimulationTest {
         assertEquals(25, GearRarity.RARE.scaleStat(baseAtk))
         assertEquals(29, GearRarity.EPIC.scaleStat(baseAtk))
         assertEquals(34, GearRarity.LEGENDARY.scaleStat(baseAtk))
+        assertEquals(40, GearRarity.MYTHIC.scaleStat(baseAtk))
 
         // Small base stats always get guaranteed minimum increment
         val smallBase = 2
@@ -48,6 +49,7 @@ class LootProgressionSimulationTest {
         assertTrue(GearRarity.RARE.scaleStat(smallBase) >= smallBase + 2)
         assertTrue(GearRarity.EPIC.scaleStat(smallBase) >= smallBase + 3)
         assertTrue(GearRarity.LEGENDARY.scaleStat(smallBase) >= smallBase + 5)
+        assertTrue(GearRarity.MYTHIC.scaleStat(smallBase) >= smallBase + 8)
     }
 
     @Test

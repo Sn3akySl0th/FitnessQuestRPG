@@ -2,10 +2,13 @@ package com.fitnessquest.rpg.ui.screens
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -19,6 +22,10 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
+import com.fitnessquest.rpg.domain.GearRarity
+import com.fitnessquest.rpg.domain.GearSockets
+import com.fitnessquest.rpg.domain.GearTrait
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Add
@@ -203,6 +210,14 @@ class ShopViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch { onResult(container.repository.salvageGearInstance(instanceId)) }
     }
 
+    fun socketRune(instanceId: Long, slotIndex: Int, runeId: Long) {
+        viewModelScope.launch { container.repository.socketRune(instanceId, slotIndex, runeId) }
+    }
+
+    fun clearRune(instanceId: Long, slotIndex: Int) {
+        viewModelScope.launch { container.repository.clearRune(instanceId, slotIndex) }
+    }
+
     fun upgradeGear(instanceId: Long, onResult: (Boolean) -> Unit) {
         viewModelScope.launch { onResult(container.repository.upgradeGearInstance(instanceId)) }
     }
@@ -260,6 +275,8 @@ fun ShopScreen(viewModel: ShopViewModel = viewModel(factory = ShopViewModel.Fact
                     onResult(msg)
                 }
             },
+            onSocketRune = viewModel::socketRune,
+            onClearRune = viewModel::clearRune,
             onNotify = ::notify
         )
     )
@@ -275,6 +292,8 @@ data class ShopActions(
     val onSalvageGear: (Long, (RewardBatch?) -> Unit) -> Unit = { _, _ -> },
     val onUpgradeGear: (Long, (Boolean) -> Unit) -> Unit = { _, _ -> },
     val onFuseGear: (List<Long>, (String?) -> Unit) -> Unit = { _, _ -> },
+    val onSocketRune: (Long, Int, Long) -> Unit = { _, _, _ -> },
+    val onClearRune: (Long, Int) -> Unit = { _, _ -> },
     val onNotify: (String) -> Unit = {}
 )
 
@@ -314,6 +333,7 @@ fun ShopScreenContent(
     }
     val shopRows = remember(state.items, character, myClassOnly, canAffordOnly) {
         state.items
+            .filter { it.tier <= 3 }
             .filter { (!myClassOnly || usable(it)) && (!canAffordOnly || character.gold >= it.price) }
             .map { DisplayItem(it) }
     }
@@ -424,6 +444,7 @@ fun ShopScreenContent(
     selectedItem?.let { row ->
         val equippedId = character.equippedIds()[row.item.slot]
         val equippedRow = if (equippedId != null) ownedRows.firstOrNull { it.instance?.id == equippedId } else null
+        val availableRunes = state.items.filter { it.slot == ItemSlot.RUNE && it.quantity > 0 }
         ModalBottomSheet(onDismissRequest = { selectedItem = null }) {
             ItemDetailSheet(
                 row = row,
@@ -431,6 +452,8 @@ fun ShopScreenContent(
                 character = character,
                 tab = tab,
                 usable = usable(row.item),
+                runesCatalog = state.items.filter { it.slot == ItemSlot.RUNE },
+                availableRunes = availableRunes,
                 onBuy = {
                     actions.onBuy(row.item.id) { ok ->
                         actions.onNotify(if (ok) "${row.item.name} added." else "Not enough gold.")
@@ -481,6 +504,18 @@ fun ShopScreenContent(
                         actions.onUpgradeGear(id) { ok -> actions.onNotify(if (ok) "Upgraded ${row.item.name}." else "Need more gold/materials or max level reached.") }
                     }
                     selectedItem = null
+                },
+                onSocketRune = { slotIdx, runeId ->
+                    row.instance?.id?.let { instId ->
+                        actions.onSocketRune(instId, slotIdx, runeId)
+                        actions.onNotify("Rune socketed!")
+                    }
+                },
+                onClearRune = { slotIdx ->
+                    row.instance?.id?.let { instId ->
+                        actions.onClearRune(instId, slotIdx)
+                        actions.onNotify("Rune removed.")
+                    }
                 }
             )
         }
@@ -630,34 +665,48 @@ private fun ItemGridCard(
     onClick: () -> Unit,
     onSelect: () -> Unit,
 ) {
+    val rarity = row.instance?.rarity?.let { GearRarity.fromName(it) } ?: GearRarity.COMMON
+    val traits = GearTrait.parseTraits(row.instance?.traitIds)
     val border = when {
         selected -> MaterialTheme.colorScheme.primary
+        rarity != GearRarity.COMMON -> rarity.color
         row.item.tier >= 4 -> Color(0xFFF0C040)
         row.item.tier == 3 -> MaterialTheme.colorScheme.tertiary
         else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
     }
     Surface(
         modifier = Modifier
-            .height(174.dp)
+            .height(180.dp)
             .clip(RoundedCornerShape(14.dp))
             .clickable(onClick = if (forgeMode && row.instance != null) onSelect else onClick),
         shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, border)
+        color = if (rarity != GearRarity.COMMON) rarity.color.copy(alpha = 0.05f) else MaterialTheme.colorScheme.surface,
+        border = BorderStroke(if (selected || rarity != GearRarity.COMMON) 1.5.dp else 1.dp, border)
     ) {
-        Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ItemBadge(row.item)
+                ItemBadge(row.item, rarity)
                 Column(Modifier.weight(1f)) {
-                    Text(row.item.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        row.item.name,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        color = if (rarity != GearRarity.COMMON) rarity.color else Color.White
+                    )
                     Text(row.item.slot.label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
                 }
             }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                TinyPill(rarity.displayName, color = rarity.color)
                 TinyPill("T${row.item.tier}")
-                if (row.instance != null) TinyPill("+${row.instance.upgradeLevel}")
-                if (row.equipped) TinyPill("Equipped")
+                if (row.instance != null && row.instance.upgradeLevel > 0) TinyPill("+${row.instance.upgradeLevel}")
+                if (row.equipped) TinyPill("Equipped", color = Gold)
                 if (row.item.quantity > 0) TinyPill("x${row.item.quantity}")
+                for (trait in traits) {
+                    TinyPill("${trait.emoji} ${trait.displayName}", color = Gold)
+                }
             }
             Text(
                 itemBonusText(row.item).ifBlank { row.item.description },
@@ -677,8 +726,13 @@ private fun ItemGridCard(
 }
 
 @Composable
-private fun ItemBadge(item: ItemEntity) {
-    Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.size(44.dp)) {
+private fun ItemBadge(item: ItemEntity, rarity: GearRarity = GearRarity.COMMON) {
+    Surface(
+        shape = CircleShape,
+        color = if (rarity != GearRarity.COMMON) rarity.color.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceVariant,
+        border = BorderStroke(1.dp, if (rarity != GearRarity.COMMON) rarity.color else Color.Transparent),
+        modifier = Modifier.size(44.dp)
+    ) {
         Box(contentAlignment = Alignment.Center) {
             if (item.slot.isStackable()) {
                 Text(item.emoji, style = MaterialTheme.typography.titleLarge)
@@ -690,13 +744,18 @@ private fun ItemBadge(item: ItemEntity) {
 }
 
 @Composable
-private fun TinyPill(text: String) {
-    Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
+private fun TinyPill(text: String, color: Color = MaterialTheme.colorScheme.onSurfaceVariant) {
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = color.copy(alpha = 0.12f),
+        border = BorderStroke(0.5.dp, color.copy(alpha = 0.35f))
+    ) {
         Text(
             text,
             modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Bold,
+            color = color,
             maxLines = 1
         )
     }
@@ -725,6 +784,8 @@ private fun ItemDetailSheet(
     character: CharacterEntity,
     tab: MarketTab,
     usable: Boolean,
+    runesCatalog: List<ItemEntity>,
+    availableRunes: List<ItemEntity>,
     onBuy: () -> Unit,
     onEquip: () -> Unit,
     onUse: () -> Unit,
@@ -733,19 +794,38 @@ private fun ItemDetailSheet(
     onSellGear: () -> Unit,
     onSalvage: () -> Unit,
     onUpgrade: () -> Unit,
+    onSocketRune: (Int, Long) -> Unit,
+    onClearRune: (Int) -> Unit,
 ) {
     val isClassLocked = row.item.classAffinity != null && row.item.classAffinity != character.characterClass
     val isTierLocked = !usable
+    val rarity = row.instance?.rarity?.let { GearRarity.fromName(it) } ?: GearRarity.COMMON
+    val traits = GearTrait.parseTraits(row.instance?.traitIds)
+    val maxSockets = row.instance?.let { GearSockets.slotsForTier(row.item.tier) } ?: 0
+    var socketTargetIdx by remember { mutableStateOf<Int?>(null) }
 
-    Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(
+        Modifier
+            .padding(horizontal = 20.dp, vertical = 8.dp)
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            ItemBadge(row.item)
+            ItemBadge(row.item, rarity)
             Column(Modifier.weight(1f)) {
-                Text(row.item.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(
+                    row.item.name,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    color = if (rarity != GearRarity.COMMON) rarity.color else Color.White
+                )
                 Text(itemMeta(row), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            TinyPill(rarity.displayName, color = rarity.color)
             TinyPill("Tier ${row.item.tier}")
             if (row.instance != null) TinyPill("${row.instance.rarity.lowercase().replaceFirstChar { it.uppercase() }} +${row.instance.upgradeLevel}")
             row.instance?.originBiome?.takeIf { it.isNotBlank() }?.let { TinyPill(it.replace('_', ' ').lowercase().replaceFirstChar { c -> c.uppercase() }) }
@@ -756,6 +836,61 @@ private fun ItemDetailSheet(
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+
+        // Traits display
+        if (traits.isNotEmpty()) {
+            SectionCard(title = "Gear Traits") {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    for (trait in traits) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(trait.emoji, fontSize = 20.sp)
+                            Column {
+                                Text(trait.displayName, fontWeight = FontWeight.Bold, color = Gold)
+                                Text(trait.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Rune sockets section
+        if (maxSockets > 0 && row.instance != null) {
+            SectionCard(title = "Rune Sockets ($maxSockets slots)") {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    for (idx in 0 until maxSockets) {
+                        val runeId = if (idx == 0) row.instance.rune1Id else row.instance.rune2Id
+                        val rune = runesCatalog.find { it.id == runeId }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text("Socket ${idx + 1}:", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                                if (rune != null) {
+                                    Text("${rune.emoji} ${rune.name}", color = Gold, fontWeight = FontWeight.Bold)
+                                } else {
+                                    Text("Empty", color = Color.Gray)
+                                }
+                            }
+                            if (rune != null) {
+                                OutlinedButton(onClick = { onClearRune(idx) }, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)) {
+                                    Text("Unsocket", style = MaterialTheme.typography.labelSmall)
+                                }
+                            } else {
+                                Button(
+                                    onClick = { socketTargetIdx = idx },
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                                ) {
+                                    Text("+ Socket", style = MaterialTheme.typography.labelSmall)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
         if (isClassLocked || isTierLocked) {
             SectionCard {
@@ -879,6 +1014,52 @@ private fun ItemDetailSheet(
             }
         }
         Spacer(Modifier.height(16.dp))
+    }
+
+    // Rune Picker Dialog
+    socketTargetIdx?.let { slotIdx ->
+        AlertDialog(
+            onDismissRequest = { socketTargetIdx = null },
+            title = { Text("Socket Rune into Slot ${slotIdx + 1}") },
+            text = {
+                if (availableRunes.isEmpty()) {
+                    Text("You don't have any runes in your inventory. Complete workouts or defeat monsters to earn runes!")
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Choose a rune to socket:", style = MaterialTheme.typography.bodySmall)
+                        for (rune in availableRunes) {
+                            Surface(
+                                onClick = {
+                                    onSocketRune(slotIdx, rune.id)
+                                    socketTargetIdx = null
+                                },
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Text(rune.emoji, fontSize = 20.sp)
+                                    Column(Modifier.weight(1f)) {
+                                        Text(rune.name, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                                        Text(rune.description, style = MaterialTheme.typography.labelSmall, color = Gold)
+                                    }
+                                    Text("x${rune.quantity}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { socketTargetIdx = null }) {
+                    Text("Close")
+                }
+            }
+        )
     }
 }
 
