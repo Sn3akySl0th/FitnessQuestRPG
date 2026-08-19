@@ -142,8 +142,8 @@ This command:
 2. Builds signed Android App Bundles for phone and Wear OS:
     - `:app:bundleRelease`
     - `:wear:bundleRelease`
-3. Collects `.aab` artifacts in a timestamped directory:
-    - `releases/yyyy-MM-dd_HH-mm/`
+3. Collects `.aab` artifacts in a timestamped directory: `releases/release-yyyyMMdd-HHmm/`
+4. Always output the copy-pasteable `<en-US>` release notes block (max 500 characters) directly in the chat response to the user so they can immediately paste it into the Google Play Console.
 
 Do not substitute debug APKs, individual bundle tasks, or manually edited version codes for this release workflow.
 
