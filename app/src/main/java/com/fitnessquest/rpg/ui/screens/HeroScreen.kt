@@ -167,7 +167,9 @@ class HeroViewModel(private val container: AppContainer) : ViewModel() {
                 rewardText = "40💰 +25🧪",
                 progressText = "${"%,d".format(steps)} / ${"%,d".format(3000)}",
                 isCompleted = steps >= 3000,
-                isClaimed = "b_steps" in claimed
+                isClaimed = "b_steps" in claimed,
+                canLogProgress = !("b_steps" in claimed),
+                logLabel = "Log Steps"
             ))
             add(Bounty(
                 id = "b_weight",
@@ -325,6 +327,12 @@ class HeroViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
+    fun recordManualSteps(totalSteps: Int) {
+        viewModelScope.launch {
+            container.steps.recordManualSteps(totalSteps)
+        }
+    }
+
     private fun weekStart(date: LocalDate): LocalDate =
         date.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
 
@@ -391,12 +399,14 @@ fun HeroScreen(viewModel: HeroViewModel = viewModel(factory = HeroViewModel.Fact
     val claimedTrophies by viewModel.claimedTrophies.collectAsState()
     val lifetimeCardioKm by viewModel.lifetimeCardioKm.collectAsState()
     val wear by viewModel.wearPresence.collectAsState()
+    val stepsToday by viewModel.stepsToday.collectAsState()
 
     HeroScreenContent(
         state = state,
         isPremium = isPremium,
         imperial = imperial,
         sagaReady = sagaReady,
+        stepsToday = stepsToday,
         bounties = bounties,
         bountyResetLabel = bountyResetLabel,
         campaigns = campaigns,
@@ -418,6 +428,7 @@ fun HeroScreen(viewModel: HeroViewModel = viewModel(factory = HeroViewModel.Fact
             onClaimBounty = viewModel::claimBounty,
             onLogBountyProgress = viewModel::logBountyProgress,
             onClaimCampaign = viewModel::claimCampaign,
+            onRecordManualSteps = viewModel::recordManualSteps,
             updateAppearance = viewModel::updateAppearance
         )
     )
@@ -429,6 +440,7 @@ data class HeroActions(
     val onDruidFormChange: (String) -> Unit = {},
     val onClaimIdleRewards: ((RewardBatch?) -> Unit) -> Unit = {},
     val onLogWeight: (Double) -> Unit = {},
+    val onRecordManualSteps: (Int) -> Unit = {},
     val onClaimTrophyReward: (Trophy) -> Unit = {},
     val onSwitchJob: (CharacterClass) -> Unit = {},
     val onAllocateStat: (String) -> Unit = {},
@@ -447,6 +459,7 @@ fun HeroScreenContent(
     isPremium: Boolean,
     imperial: Boolean,
     sagaReady: Boolean,
+    stepsToday: Int = 0,
     bounties: List<Bounty>,
     bountyResetLabel: String,
     campaigns: List<WeeklyCampaign>,
@@ -462,6 +475,8 @@ fun HeroScreenContent(
     var showAvatarDialog by remember { mutableStateOf(false) }
     var rewardReveal by remember { mutableStateOf<RewardBatch?>(null) }
     var showWeightDialog by remember { mutableStateOf(false) }
+    var showManualStepsDialog by remember { mutableStateOf(false) }
+    var showPedometerScanDialog by remember { mutableStateOf(false) }
 
     val cls = character.characterClass ?: return
 
@@ -484,6 +499,32 @@ fun HeroScreenContent(
             onSave = { weight: Double ->
                 actions.onLogWeight(weight)
                 showWeightDialog = false
+            }
+        )
+    }
+
+    if (showManualStepsDialog) {
+        ManualStepEntryDialog(
+            currentStepsToday = stepsToday,
+            onDismiss = { showManualStepsDialog = false },
+            onConfirm = { steps ->
+                actions.onRecordManualSteps(steps)
+                showManualStepsDialog = false
+            },
+            onLaunchScan = {
+                showManualStepsDialog = false
+                showPedometerScanDialog = true
+            }
+        )
+    }
+
+    if (showPedometerScanDialog) {
+        PedometerScanDialog(
+            currentStepsToday = stepsToday,
+            onDismiss = { showPedometerScanDialog = false },
+            onConfirm = { steps ->
+                actions.onRecordManualSteps(steps)
+                showPedometerScanDialog = false
             }
         )
     }
@@ -587,7 +628,7 @@ fun HeroScreenContent(
                         when (selectedTab) {
                             0 -> statsTabContent(this, character, cls, state, isPremium, snackbar, scope, actions)
                             1 -> gearTab(this, state, cls, character, highestEquippedRarity, equipAnimState, onEquipClick = { pickerSlot = it })
-                            2 -> sagaTabContent(this, character, bounties, bountyResetLabel, campaigns, campaignResetLabel, claimedTrophies, lifetimeCardioKm, imperial, actions, onLogWeight = { showWeightDialog = true })
+                            2 -> sagaTabContent(this, character, bounties, bountyResetLabel, campaigns, campaignResetLabel, claimedTrophies, lifetimeCardioKm, imperial, actions, onLogWeight = { showWeightDialog = true }, onLogSteps = { showManualStepsDialog = true })
                             3 -> masteryTab(this, state.movementMastery, imperial)
                         }
                         item { Spacer(Modifier.height(24.dp)) }
@@ -647,7 +688,7 @@ fun HeroScreenContent(
                     when (selectedTab) {
                         0 -> statsTabContent(this, character, cls, state, isPremium, snackbar, scope, actions)
                         1 -> gearTab(this, state, cls, character, highestEquippedRarity, equipAnimState, onEquipClick = { pickerSlot = it })
-                        2 -> sagaTabContent(this, character, bounties, bountyResetLabel, campaigns, campaignResetLabel, claimedTrophies, lifetimeCardioKm, imperial, actions, onLogWeight = { showWeightDialog = true })
+                        2 -> sagaTabContent(this, character, bounties, bountyResetLabel, campaigns, campaignResetLabel, claimedTrophies, lifetimeCardioKm, imperial, actions, onLogWeight = { showWeightDialog = true }, onLogSteps = { showManualStepsDialog = true })
                         3 -> masteryTab(this, state.movementMastery, imperial)
                     }
                     item { Spacer(Modifier.height(80.dp)) }
@@ -1195,7 +1236,8 @@ private fun sagaTabContent(
     lifetimeCardioKm: Double,
     imperial: Boolean,
     actions: HeroActions,
-    onLogWeight: () -> Unit
+    onLogWeight: () -> Unit,
+    onLogSteps: () -> Unit
 ) {
     listScope.item {
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -1207,6 +1249,8 @@ private fun sagaTabContent(
                     onLogProgress = { bounty ->
                         if (bounty.id == "b_weight") {
                             onLogWeight()
+                        } else if (bounty.id == "b_steps") {
+                            onLogSteps()
                         } else {
                             actions.onLogBountyProgress(bounty)
                         }

@@ -118,7 +118,7 @@ androidComponents {
         variant.outputs.forEach { output ->
             if (output is VariantOutput) {
                 output.versionCode.set(versionProps.map { it.getProperty("phoneVersionCode", "100").toInt() })
-                output.versionName.set(versionProps.map { it.getProperty("versionName", "1.0.3") })
+                output.versionName.set(versionProps.map { it.getProperty("versionName", "0.11.0") })
             }
         }
     }

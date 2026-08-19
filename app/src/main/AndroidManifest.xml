@@ -9,9 +9,11 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
 
-    <!-- Health Connect body profile -->
+    <!-- Health Connect body profile and step tracking -->
     <uses-permission android:name="android.permission.health.READ_HEIGHT" />
     <uses-permission android:name="android.permission.health.READ_WEIGHT" />
+    <uses-permission android:name="android.permission.health.WRITE_WEIGHT" />
+    <uses-permission android:name="android.permission.health.READ_STEPS" />
     <uses-permission android:name="android.permission.health.READ_HEALTH_DATA_HISTORY" />
 
     <uses-feature

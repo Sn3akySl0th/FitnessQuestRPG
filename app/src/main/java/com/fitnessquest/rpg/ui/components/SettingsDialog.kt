@@ -311,6 +311,11 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
             return
         }
         container.prefs.saveBodyProfileManual(weightKg, heightM, dobMilli, clearMissing = false)
+        if (weightKg != null) {
+            viewModelScope.launch {
+                container.healthConnect.writeWeight(weightKg)
+            }
+        }
         _bodySyncMessage.value = "Body metrics saved"
     }
 

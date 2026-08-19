@@ -24,6 +24,30 @@ object WearPaths {
     const val AVATAR_WATCH_FACE = "/fitnessrpg/avatar_watch_face"
     const val START_WORKOUT = "/fitnessrpg/start_workout"
     const val ROUTINES_LIST = "/fitnessrpg/routines_list"
+    const val DAILY_STEPS_SYNC = "/fitnessrpg/daily_steps"
+}
+
+data class WearDailyStepsSync(
+    val epochDay: Long,
+    val steps: Int
+) {
+    fun toJson(): ByteArray {
+        val o = JSONObject().apply {
+            put("epochDay", epochDay)
+            put("steps", steps)
+        }
+        return o.toString().toByteArray(Charsets.UTF_8)
+    }
+
+    companion object {
+        fun fromJson(bytes: ByteArray): WearDailyStepsSync? = runCatching {
+            val o = JSONObject(String(bytes, Charsets.UTF_8))
+            WearDailyStepsSync(
+                epochDay = o.getLong("epochDay"),
+                steps = o.getInt("steps")
+            )
+        }.getOrNull()
+    }
 }
 
 enum class WearRestAction { SKIP, EXTEND, SET_DURATION }

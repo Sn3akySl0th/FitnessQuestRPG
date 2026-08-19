@@ -59,6 +59,13 @@ class PhoneWearListenerService : WearableListenerService() {
                     startWorkoutFromWear(appContainer, messageEvent.sourceNodeId, messageEvent.data)
                 }
             }
+            WearPaths.DAILY_STEPS_SYNC -> {
+                scope.launch {
+                    com.fitnessquest.shared.wear.WearDailyStepsSync.fromJson(messageEvent.data)?.let { payload ->
+                        appContainer.steps.syncWearOsSteps(payload.epochDay, payload.steps)
+                    }
+                }
+            }
         }
         super.onMessageReceived(messageEvent)
     }

@@ -326,9 +326,13 @@ class UserPrefs(context: Context) {
     fun maxHr(): Int = HrZone.estimatedMaxHr(ageYears())
 
     fun saveBodyProfileFromHealthConnect(profile: BodyProfile) {
+        val lastManualEpoch = prefs.getLong("last_manual_weight_update", 0L)
+        val hcWeightTime = profile.weightRecordTimeEpoch ?: 0L
+        val shouldAcceptWeight = (profile.bodyWeightKg != null) && (hcWeightTime >= lastManualEpoch || lastManualEpoch == 0L)
+
         updateCharacter {
             it.copy(
-                bodyWeightKg = profile.bodyWeightKg ?: it.bodyWeightKg,
+                bodyWeightKg = if (shouldAcceptWeight) profile.bodyWeightKg else it.bodyWeightKg,
                 heightM = profile.heightM ?: it.heightM,
                 dateOfBirthEpoch = profile.dateOfBirthEpoch ?: it.dateOfBirthEpoch
             )
@@ -341,6 +345,9 @@ class UserPrefs(context: Context) {
         dateOfBirthEpoch: Long?,
         clearMissing: Boolean = false
     ) {
+        if (bodyWeightKg != null) {
+            prefs.edit().putLong("last_manual_weight_update", System.currentTimeMillis()).apply()
+        }
         updateCharacter {
             it.copy(
                 bodyWeightKg = bodyWeightKg ?: if (clearMissing) null else it.bodyWeightKg,

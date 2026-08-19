@@ -28,7 +28,7 @@ android {
         minSdk = 30
         targetSdk = 36
         versionCode = versionProps.get().getProperty("wearVersionCode", "21").toInt()
-        versionName = versionProps.get().getProperty("versionName", "1.0.3")
+        versionName = versionProps.get().getProperty("versionName", "0.11.0")
     }
 
     signingConfigs {
@@ -59,6 +59,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     lint {
         checkReleaseBuilds = false
@@ -70,7 +71,7 @@ androidComponents {
     onVariants { variant ->
         variant.outputs.forEach { output ->
             output.versionCode.set(versionProps.map { it.getProperty("wearVersionCode", "50").toInt() })
-            output.versionName.set(versionProps.map { it.getProperty("versionName", "1.0.3") })
+            output.versionName.set(versionProps.map { it.getProperty("versionName", "0.11.0") })
         }
     }
 }

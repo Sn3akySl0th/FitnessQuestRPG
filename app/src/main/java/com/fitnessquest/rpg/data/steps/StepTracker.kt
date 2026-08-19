@@ -11,7 +11,6 @@ import android.hardware.SensorManager
 import android.os.Build
 import androidx.core.content.edit
 import com.fitnessquest.rpg.data.GameRepository
-import com.fitnessquest.rpg.domain.GameMath
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -21,23 +20,22 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 
 /**
- * Daily step counting via the hardware step counter sensor.
+ * Daily step counting via hardware sensor and multi-source reconciliation.
  *
- * The sensor reports cumulative steps since boot, so we persist a per-day
- * baseline and count from there. Steps passively push biome travel forward
- * (STEPS_PER_KM steps = 1 km) whenever a journey is in progress.
+ * Steps passively push biome travel forward (STEPS_PER_KM steps = 1 km)
+ * and trigger idle monster battles for loot and gold.
  */
 class StepTracker(
     private val app: Application,
     private val repository: GameRepository,
+    val engine: StepReconciliationEngine = StepReconciliationEngine(app, repository)
 ) : SensorEventListener {
 
     private val sensorManager = app.getSystemService(Context.SENSOR_SERVICE) as SensorManager
     private val prefs = app.getSharedPreferences("fitquest_steps", Context.MODE_PRIVATE)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    private val _stepsToday = MutableStateFlow(cachedToday())
-    val stepsToday: StateFlow<Int> = _stepsToday
+    val stepsToday: StateFlow<Int> = engine.stepsToday
 
     private val _tracking = MutableStateFlow(value = false)
     val tracking: StateFlow<Boolean> = _tracking
@@ -52,11 +50,24 @@ class StepTracker(
 
     /** Idempotent; call at app start and again right after the permission is granted. */
     fun start() {
+        // Trigger initial Health Connect sync on startup if permissions are available
+        scope.launch {
+            engine.syncHealthConnect()
+        }
+
         if (_tracking.value || !hasPermission()) return
         val sensor = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER) ?: return
         val registered = sensorManager.registerListener(this, sensor, SensorManager.SENSOR_DELAY_UI)
         _tracking.value = registered
     }
+
+    suspend fun syncHealthConnect(): Int = engine.syncHealthConnect()
+
+    suspend fun recordManualSteps(steps: Int, isScan: Boolean = false): Int =
+        engine.recordManualSteps(LocalDate.now().toEpochDay(), steps, isScan)
+
+    suspend fun syncWearOsSteps(todayEpochDay: Long, steps: Int): Int =
+        engine.syncWearOsSteps(todayEpochDay, steps)
 
     override fun onSensorChanged(event: SensorEvent) {
         val cumulative = event.values.firstOrNull()?.toInt() ?: return
@@ -71,38 +82,19 @@ class StepTracker(
             prefs.edit {
                 putLong(KEY_DAY, day)
                 putInt(KEY_BASE, base)
-                putInt(KEY_CREDITED, 0)
             }
         }
 
-        val steps = (cumulative - base).coerceAtLeast(0)
-        _stepsToday.value = steps
-        prefs.edit { putInt(KEY_CACHE, steps) }
-
-        // Feed travel in responsive ~25 step chunks so players see travel progress immediately
-        val credited = prefs.getInt(KEY_CREDITED, 0)
-        val creditable = steps - credited
-        if (creditable >= 25) {
-            prefs.edit { putInt(KEY_CREDITED, steps) }
-            scope.launch {
-                repository.processIdleSteps(creditable)
-            }
+        val sensorSteps = (cumulative - base).coerceAtLeast(0)
+        scope.launch {
+            engine.recordStepsCandidate(today, sensorSteps, StepSource.PHONE_SENSOR)
         }
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
 
-    private fun cachedToday(): Int =
-        if (prefs.getLong(KEY_DAY, -1L) == LocalDate.now().toEpochDay()) {
-            prefs.getInt(KEY_CACHE, 0)
-        } else {
-            0
-        }
-
     private companion object {
-        const val KEY_DAY = "day"
-        const val KEY_BASE = "base"
-        const val KEY_CACHE = "cache"
-        const val KEY_CREDITED = "credited"
+        const val KEY_DAY = "sensor_day"
+        const val KEY_BASE = "sensor_base"
     }
 }

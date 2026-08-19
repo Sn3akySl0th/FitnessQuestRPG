@@ -14,6 +14,7 @@ import com.fitnessquest.rpg.data.guild.GuildService
 import com.fitnessquest.rpg.data.health.HealthConnectProfile
 import com.fitnessquest.rpg.data.media.MediaControllerManager
 import com.fitnessquest.rpg.data.party.PartyService
+import com.fitnessquest.rpg.data.steps.StepReconciliationEngine
 import com.fitnessquest.rpg.data.steps.StepTracker
 import com.fitnessquest.rpg.data.sync.SyncService
 import com.fitnessquest.rpg.data.update.InAppUpdateService
@@ -37,11 +38,12 @@ class AppContainer(val app: Application) {
     val auth: AuthService = AuthService(app)
     val usernames: UsernameService = UsernameService(database, auth, prefs)
     val sync: SyncService = SyncService(app, database, auth, prefs, usernames)
-    val steps: StepTracker = StepTracker(app, repository)
-    val party: PartyService = PartyService(app, repository, auth)
-    val guild: GuildService = GuildService(app, repository, auth)
     val wearPresence: WearPresence = WearPresence(app)
     val healthConnect: HealthConnectProfile = HealthConnectProfile(app)
+    val stepEngine: StepReconciliationEngine = StepReconciliationEngine(app, repository, healthConnect)
+    val steps: StepTracker = StepTracker(app, repository, stepEngine)
+    val party: PartyService = PartyService(app, repository, auth)
+    val guild: GuildService = GuildService(app, repository, auth)
     val localAiModel: LocalModelDownloader = LocalModelDownloader(app)
     val playAssetModel: PlayAssetModelProvider = PlayAssetModelProvider(app)
     val music: MediaControllerManager = MediaControllerManager(app)
