@@ -29,6 +29,7 @@ import com.fitnessquest.rpg.data.db.ItemEntity
 import com.fitnessquest.rpg.data.db.ItemSlot
 import com.fitnessquest.rpg.domain.CharacterClass
 import com.fitnessquest.rpg.domain.CharacterRace
+import com.fitnessquest.rpg.domain.build
 import com.fitnessquest.rpg.domain.ItemStyle
 import com.fitnessquest.rpg.ui.effects.rememberDeviceTilt
 import kotlin.math.cos
@@ -96,19 +97,7 @@ internal fun lookFor(cls: CharacterClass): ClassLook = when (cls) {
     CharacterClass.DRAGOON -> ClassLook(Color(0xFF2A2C39), Color(0xFF1A1B24), Color(0xFF5D101D), Color(0xFF3A3E59))
 }
 
-/** Body silhouette tweaks so races read at a glance, even from afar. */
-private data class RaceBuild(
-    val width: Float = 1f,
-    val height: Float = 1f
-)
 
-private fun raceBuild(race: CharacterRace): RaceBuild = when (race) {
-    CharacterRace.HUMAN -> RaceBuild()
-    CharacterRace.ELF -> RaceBuild(width = 0.84f, height = 1.12f)       // tall & slender
-    CharacterRace.ORC -> RaceBuild(width = 1.18f, height = 1.04f)       // broad & powerful
-    CharacterRace.UNDEAD -> RaceBuild(width = 0.86f, height = 1.08f)    // gaunt
-    CharacterRace.DWARF -> RaceBuild(width = 1.22f, height = 0.76f)     // short & stout
-}
 
 // ---------------------------------------------------------------------------
 // Gear visuals registry
@@ -512,7 +501,7 @@ internal object AvatarPainter {
                         "MOONKIN" -> drawCelestialMoonkinLayer(frame)
                         "AVATAR" -> drawPrimalAvatarLayer(frame)
                         else -> {
-                            val build = raceBuild(frame.appearance.race)
+                            val build = frame.appearance.race.build()
                             // Scale from the feet so dwarves stay grounded and elves grow upward.
                             withTransform({
                                 scale(

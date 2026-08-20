@@ -4,32 +4,32 @@
     android:viewportWidth="500"
     android:viewportHeight="600">
 
-    <!-- Tier 1: Padded Vest (Torso layer: Y=240 to 370, Neckline dipped to Y=268) -->
+    <!-- Tier 1: Padded Vest (Torso layer: Y=236 to 370, Neckline snugly at Y=252) -->
     <!-- Base Vest Body -->
     <path
         android:fillColor="#451A03"
-        android:pathData="M170,242 L220,240 L238,268 Q250,272 262,268 L280,240 L330,242 L332,320 L315,370 L185,370 L168,320 Z" />
+        android:pathData="M168,236 L218,235 L236,252 Q250,256 264,252 L282,235 L332,236 L334,320 L315,370 L185,370 L166,320 Z" />
 
     <!-- Quilted Panels (Left & Right) -->
     <path
         android:fillColor="#78350F"
-        android:pathData="M176,246 L218,244 L232,285 L180,318 Z M324,246 L282,244 L268,285 L320,318 Z" />
+        android:pathData="M174,240 L216,238 L230,285 L178,318 Z M326,240 L284,238 L270,285 L322,318 Z" />
 
     <path
         android:fillColor="#92400E"
-        android:pathData="M182,320 L234,288 L240,364 L188,364 Z M318,320 L266,288 L260,364 L312,364 Z" />
+        android:pathData="M180,320 L232,288 L238,364 L186,364 Z M320,320 L268,288 L262,364 L314,364 Z" />
 
     <!-- Center Lacing / Ties -->
     <path
         android:strokeColor="#F59E0B"
         android:strokeWidth="2.5"
         android:strokeLineCap="round"
-        android:pathData="M240,290 L260,300 M260,300 L240,310 M240,310 L260,320 M260,320 L240,330 M240,330 L260,340 M260,340 L240,350" />
+        android:pathData="M240,270 L260,280 M260,280 L240,290 M240,290 L260,300 M260,300 L240,310 M240,310 L260,320 M260,320 L240,330 M240,330 L260,340 M260,340 L240,350" />
 
     <!-- Leather Trim Border -->
     <path
         android:strokeColor="#271105"
         android:strokeWidth="3"
         android:strokeLineCap="round"
-        android:pathData="M170,242 L168,320 L185,370 L315,370 L332,320 L330,242" />
+        android:pathData="M168,236 L166,320 L185,370 L315,370 L334,320 L332,236" />
 </vector>

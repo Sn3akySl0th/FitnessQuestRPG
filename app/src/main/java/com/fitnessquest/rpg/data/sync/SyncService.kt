@@ -374,10 +374,10 @@ class SyncService(
             }
             @Suppress("UNCHECKED_CAST")
             val cloudInstances = doc.get("gearInstances") as? List<Map<String, Any?>>
+            val idMap = mutableMapOf<Long, Long>()
             if (!cloudInstances.isNullOrEmpty()) {
                 db.gearInstanceDao().deleteAll()
                 // Remap cloud instance ids → local ids while rewriting equip slots.
-                val idMap = mutableMapOf<Long, Long>()
                 cloudInstances
                     .mapNotNull { m ->
                         val oldId = (m["id"] as? Number)?.toLong() ?: return@mapNotNull null
@@ -414,7 +414,7 @@ class SyncService(
             @Suppress("UNCHECKED_CAST")
             val cloudProgress = doc.get("classProgress") as? List<Map<String, Any?>>
             cloudProgress?.forEach { m ->
-                db.classProgressDao().upsert(classProgressFromMap(m))
+                db.classProgressDao().upsert(classProgressFromMap(m, idMap))
             }
             @Suppress("UNCHECKED_CAST")
             val cloudMasteries = doc.get("movementMastery") as? List<Map<String, Any?>>
@@ -993,9 +993,9 @@ class SyncService(
         "freeStatPoints" to p.freeStatPoints
     )
 
-    private fun classProgressFromMap(m: Map<String, Any?>): ClassProgressEntity {
+    private fun classProgressFromMap(m: Map<String, Any?>, idMap: Map<Long, Long> = emptyMap()): ClassProgressEntity {
         fun int(key: String, default: Int = 0) = (m[key] as? Number)?.toInt() ?: default
-        fun long(key: String) = (m[key] as? Number)?.toLong()
+        fun long(key: String) = (m[key] as? Number)?.toLong()?.let { idMap[it] ?: it }
         return ClassProgressEntity(
             characterId = 1L,
             clazz = CharacterClass.valueOf(m["clazz"] as String),

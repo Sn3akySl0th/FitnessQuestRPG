@@ -182,16 +182,122 @@ class GameRepository(
         if (existingMasteries.isEmpty() && allSessions.isNotEmpty()) {
             recalculateAllMovementMasteriesFromHistory()
         }
+
+        // Automatic Equipment Slot Sanitization: Heal any misaligned gear slot assignments
+        db.characterDao().get()?.let { sanitizeEquippedGear(it) }
+        db.classProgressDao().getAll().forEach { sanitizeClassProgress(it) }
+    }
+
+    suspend fun sanitizeEquippedGear(character: CharacterEntity): CharacterEntity {
+        val initialMap = mapOf(
+            ItemSlot.WEAPON to character.weaponId,
+            ItemSlot.HEAD to character.headId,
+            ItemSlot.CHEST to character.chestId,
+            ItemSlot.HANDS to character.handsId,
+            ItemSlot.LEGS to character.legsId,
+            ItemSlot.FEET to character.feetId,
+            ItemSlot.TRINKET to character.trinketId
+        )
+
+        val matchingSlotMap = mutableMapOf<ItemSlot, Long?>()
+        val misplaced = mutableListOf<Pair<Long, ItemSlot>>()
+
+        for ((slot, instId) in initialMap) {
+            if (instId == null) continue
+            val inst = db.gearInstanceDao().get(instId)
+            val cat = inst?.let { db.itemDao().get(it.catalogId) }
+            if (inst == null || cat == null || !cat.slot.isEquippable()) {
+                continue
+            }
+            if (cat.slot == slot) {
+                matchingSlotMap[slot] = instId
+            } else {
+                misplaced.add(instId to cat.slot)
+            }
+        }
+
+        // Second pass: reassign misplaced items to their correct target slots if empty
+        for ((instId, targetSlot) in misplaced) {
+            if (matchingSlotMap[targetSlot] == null) {
+                matchingSlotMap[targetSlot] = instId
+            }
+        }
+
+        val sanitized = character.copy(
+            weaponId = matchingSlotMap[ItemSlot.WEAPON],
+            headId = matchingSlotMap[ItemSlot.HEAD],
+            chestId = matchingSlotMap[ItemSlot.CHEST],
+            handsId = matchingSlotMap[ItemSlot.HANDS],
+            legsId = matchingSlotMap[ItemSlot.LEGS],
+            feetId = matchingSlotMap[ItemSlot.FEET],
+            trinketId = matchingSlotMap[ItemSlot.TRINKET]
+        )
+
+        if (sanitized != character) {
+            db.characterDao().upsert(sanitized)
+        }
+        return sanitized
+    }
+
+    suspend fun sanitizeClassProgress(progress: ClassProgressEntity): ClassProgressEntity {
+        val initialMap = mapOf(
+            ItemSlot.WEAPON to progress.weaponId,
+            ItemSlot.HEAD to progress.headId,
+            ItemSlot.CHEST to progress.chestId,
+            ItemSlot.HANDS to progress.handsId,
+            ItemSlot.LEGS to progress.legsId,
+            ItemSlot.FEET to progress.feetId,
+            ItemSlot.TRINKET to progress.trinketId
+        )
+
+        val matchingSlotMap = mutableMapOf<ItemSlot, Long?>()
+        val misplaced = mutableListOf<Pair<Long, ItemSlot>>()
+
+        for ((slot, instId) in initialMap) {
+            if (instId == null) continue
+            val inst = db.gearInstanceDao().get(instId)
+            val cat = inst?.let { db.itemDao().get(it.catalogId) }
+            if (inst == null || cat == null || !cat.slot.isEquippable()) {
+                continue
+            }
+            if (cat.slot == slot) {
+                matchingSlotMap[slot] = instId
+            } else {
+                misplaced.add(instId to cat.slot)
+            }
+        }
+
+        for ((instId, targetSlot) in misplaced) {
+            if (matchingSlotMap[targetSlot] == null) {
+                matchingSlotMap[targetSlot] = instId
+            }
+        }
+
+        val sanitized = progress.copy(
+            weaponId = matchingSlotMap[ItemSlot.WEAPON],
+            headId = matchingSlotMap[ItemSlot.HEAD],
+            chestId = matchingSlotMap[ItemSlot.CHEST],
+            handsId = matchingSlotMap[ItemSlot.HANDS],
+            legsId = matchingSlotMap[ItemSlot.LEGS],
+            feetId = matchingSlotMap[ItemSlot.FEET],
+            trinketId = matchingSlotMap[ItemSlot.TRINKET]
+        )
+
+        if (sanitized != progress) {
+            db.classProgressDao().upsert(sanitized)
+        }
+        return sanitized
     }
 
     suspend fun getCharacter(): CharacterEntity {
-        val character = db.characterDao().get() ?: CharacterEntity().also { db.characterDao().upsert(it) }
-        val recouped = GameMath.recoupEnergy(character)
-        if (recouped != character) {
+        val base = db.characterDao().get() ?: CharacterEntity().also { db.characterDao().upsert(it) }
+        val sanitized = sanitizeEquippedGear(base)
+        val recouped = GameMath.recoupEnergy(sanitized)
+        if (recouped != sanitized) {
             db.characterDao().upsert(recouped)
             return recouped
         }
-        return character
+        return sanitized
     }
 
     suspend fun updateCharacter(character: CharacterEntity) = db.characterDao().upsert(character)
@@ -1974,6 +2080,7 @@ class GameRepository(
             val id = character.equippedIds()[slot] ?: return@mapNotNull null
             val inst = db.gearInstanceDao().get(id) ?: return@mapNotNull null
             val cat = db.itemDao().get(inst.catalogId) ?: return@mapNotNull null
+            if (cat.slot != slot) return@mapNotNull null
             slot to OwnedGear(inst, cat).asEquippedItem(runeMap)
         }.toMap()
     }

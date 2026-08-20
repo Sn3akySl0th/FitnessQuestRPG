@@ -27,6 +27,7 @@ import com.fitnessquest.rpg.data.db.ItemEntity
 import com.fitnessquest.rpg.data.db.ItemSlot
 import com.fitnessquest.rpg.domain.CharacterClass
 import com.fitnessquest.rpg.domain.GearRarity
+import com.fitnessquest.rpg.domain.build
 import com.fitnessquest.rpg.domain.visuals.EquipmentDye
 import com.fitnessquest.rpg.domain.visuals.EquipmentVisualRegistry
 import com.fitnessquest.rpg.domain.visuals.EquipmentVisualSpec
@@ -186,39 +187,50 @@ fun PaperDollLayerRenderer(
                     )
                 }
 
-                // Render each resolved 2D layer with independent 3D parallax depth and dyes
-                activeLayers.forEach { layer ->
-                    layer.drawableResId?.let { resId ->
-                        val isEquipTarget = equipAnimationState?.equippedSlot?.let {
-                            layer.spec?.domainSlot == it
-                        } ?: false
-
-                        val layerAlpha by animateFloatAsState(
-                            targetValue = 1f,
-                            animationSpec = spring(),
-                            label = "layerAlpha_${layer.order.name}"
-                        )
-
-                        val depth = layer.order.parallaxDepth()
-                        val isCapeOrWings = layer.order == PaperDollLayerOrder.GEAR_BACK
-                        val colorFilter = layer.dye.tintColor?.let { tint ->
-                            ColorFilter.tint(tint, BlendMode.SrcAtop)
+                // Render each resolved 2D layer with independent 3D parallax depth, dyes, and race-proportional scaling
+                val raceBuild = appearance.race.build()
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            scaleX = raceBuild.width
+                            scaleY = raceBuild.height
+                            transformOrigin = TransformOrigin(0.5f, 0.9f)
                         }
+                ) {
+                    activeLayers.forEach { layer ->
+                        layer.drawableResId?.let { resId ->
+                            val isEquipTarget = equipAnimationState?.equippedSlot?.let {
+                                layer.spec?.domainSlot == it
+                            } ?: false
 
-                        Image(
-                            painter = painterResource(id = resId),
-                            contentDescription = null,
-                            contentScale = ContentScale.Fit,
-                            colorFilter = colorFilter,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .alpha(layerAlpha)
-                                .scale(if (isEquipTarget) 1.04f else 1f)
-                                .graphicsLayer {
-                                    translationX = (tilt.x * depth * 14f + if (isCapeOrWings) capeFlutter else 0f) * density
-                                    translationY = (tilt.y * depth * 14f) * density
-                                }
-                        )
+                            val layerAlpha by animateFloatAsState(
+                                targetValue = 1f,
+                                animationSpec = spring(),
+                                label = "layerAlpha_${layer.order.name}"
+                            )
+
+                            val depth = layer.order.parallaxDepth()
+                            val isCapeOrWings = layer.order == PaperDollLayerOrder.GEAR_BACK
+                            val colorFilter = layer.dye.tintColor?.let { tint ->
+                                ColorFilter.tint(tint, BlendMode.SrcAtop)
+                            }
+
+                            Image(
+                                painter = painterResource(id = resId),
+                                contentDescription = null,
+                                contentScale = ContentScale.Fit,
+                                colorFilter = colorFilter,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .alpha(layerAlpha)
+                                    .scale(if (isEquipTarget) 1.04f else 1f)
+                                    .graphicsLayer {
+                                        translationX = (tilt.x * depth * 14f + if (isCapeOrWings) capeFlutter else 0f) * density
+                                        translationY = (tilt.y * depth * 14f) * density
+                                    }
+                            )
+                        }
                     }
                 }
             }

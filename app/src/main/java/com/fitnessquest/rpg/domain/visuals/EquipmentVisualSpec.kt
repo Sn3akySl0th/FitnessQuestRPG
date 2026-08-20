@@ -92,13 +92,13 @@ enum class PaperDollLayerOrder(val zIndex: Int, val layerTag: String) {
     BODY_BASE(3, "body_base"),
     BODY_HAIR_BACK(4, "body_hair_back"),
     GEAR_LEGS(5, "gear_legs"),
-    GEAR_TORSO(6, "gear_torso"),
-    GEAR_FEET(7, "gear_feet"),
+    GEAR_FEET(6, "gear_feet"),
+    GEAR_TORSO(7, "gear_torso"),
     GEAR_HANDS(8, "gear_hands"),
     BODY_HAIR_FRONT(9, "body_hair_front"),
     GEAR_HEAD(10, "gear_head"),
-    GEAR_WEAPON(11, "gear_weapon"),
-    GEAR_TRINKET(12, "gear_trinket"),
+    GEAR_TRINKET(11, "gear_trinket"),
+    GEAR_WEAPON(12, "gear_weapon"),
     FX_AURA_FRONT(13, "fx_aura_front");
 
     companion object {
