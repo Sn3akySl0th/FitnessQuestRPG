@@ -1060,4 +1060,45 @@ class ActiveSessionTest {
         assertEquals(3, secondRead?.exercises?.flatMap { it.sets }?.size)
         assertEquals("No saved completed sessions should exist yet", 0, db.savedSessions.size)
     }
+
+    /**
+     * Test 4: Ambush Wager and State Persistence
+     *
+     * Verifies that ambush wagering correctly deducts gold/energy, prevents wagering if insufficient,
+     * and that updateActiveAmbushOffer correctly persists offer status and ambush XP multipliers to the active session.
+     */
+    @Test
+    fun testAmbushWagerAndStatePersistence() = runBlocking {
+        // Setup character with 100 gold and 10 energy
+        val initialChar = repository.getCharacter()
+        db.characterDao().upsert(initialChar.copy(gold = 100, energy = 10))
+
+        // 1. Successful wager
+        val paid = repository.payAmbushWager(gold = 35, energy = 5)
+        assertTrue("Wager should succeed with sufficient gold and energy", paid)
+        val charAfter = repository.getCharacter()
+        assertEquals(65, charAfter.gold)
+        assertEquals(5, charAfter.energy)
+
+        // 2. Failed wager (insufficient gold)
+        val failedGold = repository.payAmbushWager(gold = 100, energy = 5)
+        assertFalse("Wager should fail when gold is insufficient", failedGold)
+        assertEquals(65, repository.getCharacter().gold)
+
+        // 3. Failed wager (insufficient energy)
+        val failedEnergy = repository.payAmbushWager(gold = 10, energy = 10)
+        assertFalse("Wager should fail when energy is insufficient", failedEnergy)
+
+        // 4. Session ambush state persistence
+        val exercises = listOf(SessionExercise(name = "Bench Press", category = ExerciseCategory.STRENGTH, targetSets = 3, targetReps = 10))
+        repository.startActiveSession("Ambush Test Workout", 303L, exercises)
+
+        // Update ambush state to offered with 1.3x multiplier
+        repository.updateActiveAmbushOffer(offered = true, xpMult = 1.3f)
+
+        val sessionDetails = repository.getActiveSessionWithDetails()
+        assertNotNull(sessionDetails)
+        assertTrue("ambushOfferedThisSession should be persisted as true", sessionDetails!!.session.ambushOfferedThisSession)
+        assertEquals(1.3f, sessionDetails.session.ambushXpMult, 0.001f)
+    }
 }

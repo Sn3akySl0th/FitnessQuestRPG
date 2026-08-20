@@ -675,7 +675,7 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
         if (demoMode) maybeAutoCoach(index)
         
         maybeMomentLoot(index, effectiveWeight, reps, rir)
-        maybeAmbushOffer()
+        maybeAmbushOffer(prior.restDurationSec)
         if (fromWatch) wearBridge.noteSetLogged()
         publishWearState()
     }
@@ -939,10 +939,10 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
         }
     }
 
-    private fun maybeAmbushOffer() {
+    private fun maybeAmbushOffer(restDurationSec: Int) {
         if (demoMode) return
         val s = _uiState.value
-        if (s.ambushOfferedThisSession || s.restEndsAt == null) return
+        if (s.ambushOfferedThisSession || restDurationSec <= 0) return
         if (Random.nextInt(100) >= 15) return
         viewModelScope.launch {
             val hero = container.repository.getCharacter()
@@ -961,6 +961,7 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
                     )
                 )
             }
+            container.repository.updateActiveAmbushOffer(offered = true, xpMult = s.ambushXpMult)
             wearBridge.pushFeedback(WearFeedbackKind.AMBUSH, "Ambush! ${monster.name} stalks your rest.")
         }
     }
@@ -977,6 +978,7 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
                 return@launch
             }
             val remaining = _uiState.value.restEndsAt?.let { (it - System.currentTimeMillis()).coerceAtLeast(0) }
+                ?: (_uiState.value.restDurationSec * 1000L)
             _uiState.update {
                 it.copy(
                     ambushOffer = null,
@@ -989,14 +991,20 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
     }
 
     fun resumeAfterAmbush(won: Boolean) {
+        val newXpMult = if (won) 1.3f else _uiState.value.ambushXpMult
         _uiState.update { s ->
             val remaining = s.restPausedRemainingMs ?: (s.restDurationSec * 1000L)
             s.copy(
                 restPausedRemainingMs = null,
                 restEndsAt = System.currentTimeMillis() + remaining,
-                ambushXpMult = if (won) 1.3f else s.ambushXpMult,
+                ambushXpMult = newXpMult,
                 heatStreak = if (won) s.heatStreak + 2 else s.heatStreak
             )
+        }
+        if (!demoMode) {
+            viewModelScope.launch {
+                container.repository.updateActiveAmbushOffer(offered = true, xpMult = newXpMult)
+            }
         }
         publishWearState()
     }
