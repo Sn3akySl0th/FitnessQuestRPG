@@ -1,0 +1,57 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="500dp"
+    android:height="600dp"
+    android:viewportWidth="500"
+    android:viewportHeight="600">
+
+    <!-- Iron Back Shield (Back layer Z: 02, Behind Body) -->
+    <!-- Outer Shield Shadow -->
+    <path
+        android:fillColor="#1E293B"
+        android:pathData="M140,210 L360,210 L355,340 Q350,450 250,495 Q150,450 145,340 Z" />
+
+    <!-- Iron Shield Body Outer Face -->
+    <path
+        android:fillColor="#334155"
+        android:pathData="M145,214 L355,214 L350,338 Q345,444 250,488 Q155,444 150,338 Z" />
+
+    <!-- Left & Right Shield Shading -->
+    <path
+        android:fillColor="#475569"
+        android:pathData="M148,217 L250,217 L250,482 Q158,440 153,338 Z" />
+    <path
+        android:fillColor="#64748B"
+        android:pathData="M250,217 L352,217 L347,338 Q342,440 250,482 Z" />
+
+    <!-- Polished Steel Rim Border -->
+    <path
+        android:strokeColor="#94A3B8"
+        android:strokeWidth="6"
+        android:strokeLineJoin="round"
+        android:pathData="M148,216 L352,216 L348,338 Q344,443 250,486 Q156,443 152,338 Z" />
+
+    <!-- Gold Heraldic Cross Accent (Centered on Shield) -->
+    <path
+        android:fillColor="#F59E0B"
+        android:pathData="M242,230 L258,230 L258,450 L242,450 Z" />
+    <path
+        android:fillColor="#F59E0B"
+        android:pathData="M170,290 L330,290 L330,306 L170,306 Z" />
+    <path
+        android:fillColor="#FEF08A"
+        android:pathData="M246,234 L254,234 L254,446 L246,446 Z" />
+    <path
+        android:fillColor="#FEF08A"
+        android:pathData="M174,294 L326,294 L326,302 L174,302 Z" />
+
+    <!-- Center Boss / Iron Umbo -->
+    <path
+        android:fillColor="#0F172A"
+        android:pathData="M232,298 A18,18 0 1 1 268,298 A18,18 0 1 1 232,298 Z" />
+    <path
+        android:fillColor="#CBD5E1"
+        android:pathData="M236,298 A14,14 0 1 1 264,298 A14,14 0 1 1 236,298 Z" />
+    <path
+        android:fillColor="#F8FAFC"
+        android:pathData="M242,295 A5,5 0 1 1 252,295 A5,5 0 1 1 242,295 Z" />
+</vector>

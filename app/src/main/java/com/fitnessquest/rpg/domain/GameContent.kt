@@ -98,27 +98,27 @@ object ItemCatalog {
     private val DG = CharacterClass.DRAGOON
 
     val all: List<ItemEntity> = listOf(
-        // ---- Warrior weapons ----
-        ItemEntity(1, "Rusty Sword", "\uD83D\uDDE1\uFE0F", ItemSlot.WEAPON, 1, 40, atk = 3, description = "It's seen better days, but so have you.", classAffinity = W, style = ItemStyle.SWORD),
-        ItemEntity(2, "Iron Mace", "\uD83D\uDD28", ItemSlot.WEAPON, 2, 120, atk = 7, description = "Heavy. Like leg day.", classAffinity = W, style = ItemStyle.MACE),
+        // ---- Basic & Starter weapons (Universal, no class affinity) ----
+        ItemEntity(1, "Rusty Sword", "\uD83D\uDDE1\uFE0F", ItemSlot.WEAPON, 1, 40, atk = 3, description = "It's seen better days, but so have you.", style = ItemStyle.SWORD),
+        ItemEntity(2, "Iron Mace", "\uD83D\uDD28", ItemSlot.WEAPON, 2, 120, atk = 7, description = "Heavy. Like leg day.", style = ItemStyle.MACE),
         ItemEntity(3, "Knight's Blade", "\u2694\uFE0F", ItemSlot.WEAPON, 3, 300, atk = 13, description = "Forged for those who never skip a session.", classAffinity = W, style = ItemStyle.SWORD),
         ItemEntity(4, "Dragonfang Greatsword", "\uD83D\uDC09", ItemSlot.WEAPON, 4, 700, atk = 22, description = "Carved from the fang of a dragon who skipped cardio.", classAffinity = W, style = ItemStyle.GREATSWORD),
 
-        // ---- Mage weapons ----
-        ItemEntity(13, "Apprentice Wand", "\uD83E\uDE84", ItemSlot.WEAPON, 1, 40, atk = 3, description = "A twig with delusions of grandeur.", classAffinity = M, style = ItemStyle.WAND),
-        ItemEntity(14, "Oakheart Staff", "\uD83C\uDF3F", ItemSlot.WEAPON, 2, 120, atk = 7, description = "Still growing leaves. It refuses to stop.", classAffinity = M, style = ItemStyle.STAFF),
+        // ---- Mage & Arcane weapons ----
+        ItemEntity(13, "Apprentice Wand", "\uD83E\uDE84", ItemSlot.WEAPON, 1, 40, atk = 3, description = "A simple focus wand suitable for any aspiring spellcaster.", style = ItemStyle.WAND),
+        ItemEntity(14, "Oakheart Staff", "\uD83C\uDF3F", ItemSlot.WEAPON, 2, 120, atk = 7, description = "Still growing leaves. It refuses to stop.", style = ItemStyle.STAFF),
         ItemEntity(15, "Staff of Storms", "\u26C8\uFE0F", ItemSlot.WEAPON, 3, 300, atk = 13, description = "Crackles when you hit a new personal record.", classAffinity = M, style = ItemStyle.STAFF),
         ItemEntity(16, "Archmage's Scepter", "\uD83D\uDC51", ItemSlot.WEAPON, 4, 700, atk = 22, description = "Contains the condensed willpower of a thousand morning workouts.", classAffinity = M, style = ItemStyle.STAFF),
 
-        // ---- Thief weapons ----
-        ItemEntity(17, "Bent Shiv", "\uD83D\uDD2A", ItemSlot.WEAPON, 1, 40, atk = 3, description = "Technically a weapon. Technically.", classAffinity = T, style = ItemStyle.DAGGER),
-        ItemEntity(18, "Twin Fangs", "\uD83D\uDC0D", ItemSlot.WEAPON, 2, 120, atk = 7, description = "Two daggers, because one hand should never rest.", classAffinity = T, style = ItemStyle.DAGGER),
+        // ---- Thief & Agility weapons ----
+        ItemEntity(17, "Bent Shiv", "\uD83D\uDD2A", ItemSlot.WEAPON, 1, 40, atk = 3, description = "Technically a weapon. Technically.", style = ItemStyle.DAGGER),
+        ItemEntity(18, "Twin Fangs", "\uD83D\uDC0D", ItemSlot.WEAPON, 2, 120, atk = 7, description = "Two daggers, because one hand should never rest.", style = ItemStyle.DAGGER),
         ItemEntity(19, "Nightpiercer", "\uD83C\uDF11", ItemSlot.WEAPON, 3, 300, atk = 13, description = "Strikes between heartbeats. Ideally between sets.", classAffinity = T, style = ItemStyle.DAGGER),
         ItemEntity(20, "Whisper of the Void", "\uD83D\uDD73\uFE0F", ItemSlot.WEAPON, 4, 700, atk = 22, description = "So sharp it cuts excuses before they're spoken.", classAffinity = T, style = ItemStyle.DAGGER),
 
-        // ---- Ranger weapons ----
-        ItemEntity(21, "Training Shortbow", "\uD83C\uDFF9", ItemSlot.WEAPON, 1, 40, atk = 3, description = "The string doubles as a resistance band.", classAffinity = R, style = ItemStyle.BOW),
-        ItemEntity(22, "Hunter's Recurve", "\uD83C\uDFAF", ItemSlot.WEAPON, 2, 120, atk = 7, description = "Draw weight: your bodyweight. Keep training.", classAffinity = R, style = ItemStyle.BOW),
+        // ---- Ranger & Marksmanship weapons ----
+        ItemEntity(21, "Training Shortbow", "\uD83C\uDFF9", ItemSlot.WEAPON, 1, 40, atk = 3, description = "The string doubles as a resistance band.", style = ItemStyle.BOW),
+        ItemEntity(22, "Hunter's Recurve", "\uD83C\uDFAF", ItemSlot.WEAPON, 2, 120, atk = 7, description = "Draw weight: your bodyweight. Keep training.", style = ItemStyle.BOW),
         ItemEntity(23, "Hawkeye Longbow", "\uD83E\uDD85", ItemSlot.WEAPON, 3, 300, atk = 13, description = "Its arrows have never met a rest day.", classAffinity = R, style = ItemStyle.BOW),
         ItemEntity(24, "Worldroot Warbow", "\uD83C\uDF32", ItemSlot.WEAPON, 4, 700, atk = 22, description = "Cut from the oldest tree in the oldest forest. It approves of your squat depth.", classAffinity = R, style = ItemStyle.BOW),
 
@@ -176,28 +176,42 @@ object ItemCatalog {
         ItemEntity(1083, "Wyrmslayer Spear", "\u26A1", ItemSlot.WEAPON, 3, 300, atk = 13, def = 3, hp = 10, description = "Tipped with dragon-bone. It thirsts for the clouds.", classAffinity = DG, style = ItemStyle.GREATSWORD),
         ItemEntity(1084, "Gae Bolg", "\uD83D\uDD25", ItemSlot.WEAPON, 4, 700, atk = 24, def = 5, hp = 20, description = "The legendary spear of the sky kings. It feels lighter the higher you jump.", classAffinity = DG, style = ItemStyle.GREATSWORD),
 
-        // ---- Universal weapons ----
+        // ---- Universal weapons (Equippable by all classes, no special restrictions) ----
         ItemEntity(1091, "Training Spear", "\uD83D\uDD31", ItemSlot.WEAPON, 1, 35, atk = 2, def = 1, description = "Simple reach, steady balance, no class requirement.", style = ItemStyle.SWORD),
         ItemEntity(1092, "Balanced Shortsword", "\uD83D\uDDE1\uFE0F", ItemSlot.WEAPON, 2, 110, atk = 6, def = 1, description = "A dependable blade for any hero still finding their path.", style = ItemStyle.SWORD),
         ItemEntity(1093, "Mercenary Halberd", "\u2694\uFE0F", ItemSlot.WEAPON, 3, 280, atk = 11, def = 2, description = "Practical, durable, and happy to work for whoever trains hardest.", style = ItemStyle.GREATSWORD),
         ItemEntity(1094, "Starforged Relic Blade", "\u2728", ItemSlot.WEAPON, 4, 650, atk = 18, def = 4, hp = 12, description = "A universal legend with room for any class story.", style = ItemStyle.GREATSWORD),
+        ItemEntity(1171, "Traveler's Staff", "🪵", ItemSlot.WEAPON, 1, 40, atk = 3, description = "A sturdy hardwood walking staff suitable for any traveler, hiker, or caster.", style = ItemStyle.STAFF),
+        ItemEntity(1172, "Novice Bludgeon", "🏏", ItemSlot.WEAPON, 1, 40, atk = 3, description = "A simple weighted club with no class restrictions.", style = ItemStyle.MACE),
+        ItemEntity(1173, "Focusing Wand", "🪄", ItemSlot.WEAPON, 2, 120, atk = 7, description = "A polished glass-tipped wand for versatile spellcraft.", style = ItemStyle.WAND),
+        ItemEntity(1174, "Runed Quarterstaff", "🔮", ItemSlot.WEAPON, 3, 300, atk = 13, description = "Carved with sturdy balance rings for casting or striking.", style = ItemStyle.STAFF),
+        ItemEntity(1175, "Composite Longbow", "🏹", ItemSlot.WEAPON, 3, 300, atk = 13, description = "A flexible, reliable bow crafted for any archer.", style = ItemStyle.BOW),
+        ItemEntity(1176, "Steel Morningstar", "🔨", ItemSlot.WEAPON, 3, 300, atk = 13, description = "A spiked steel mace with universal balance.", style = ItemStyle.MACE),
+        ItemEntity(1177, "Gilded Wand", "✨", ItemSlot.WEAPON, 3, 300, atk = 13, description = "Inlaid with conductive gold filigree for clean mana channeling.", style = ItemStyle.WAND),
+        ItemEntity(1178, "Duelist's Rapier", "🗡️", ItemSlot.WEAPON, 3, 300, atk = 13, description = "A sharp, balanced thrusting sword for any disciplined hero.", style = ItemStyle.SWORD),
+        ItemEntity(1179, "Woodcutter's Axe", "🪓", ItemSlot.WEAPON, 1, 40, atk = 4, description = "A simple two-handed axe that delivers straightforward power.", style = ItemStyle.GREATSWORD),
 
-        // ---- Universal starter armor ----
+        // ---- Universal starter & standard armor (Cloth / Leather / Iron) ----
         ItemEntity(5, "Padded Vest", "\uD83E\uDDBA", ItemSlot.CHEST, 1, 40, def = 3, description = "Better than nothing. Barely.", style = ItemStyle.LIGHT),
+        ItemEntity(1181, "Simple Robes", "👘", ItemSlot.CHEST, 1, 40, def = 2, hp = 6, description = "Lightweight linen robes for unrestricted movement and casting.", style = ItemStyle.ROBE),
+        ItemEntity(1187, "Ringmail Vest", "🛡️", ItemSlot.CHEST, 1, 45, def = 4, hp = 4, description = "Interlocking iron rings over padded cloth for solid basic defense.", style = ItemStyle.PLATE),
 
-        // ---- Warrior armor ----
-        ItemEntity(6, "Chainmail Shirt", "\uD83D\uDD17", ItemSlot.CHEST, 2, 120, def = 7, hp = 10, description = "Surprisingly breathable.", classAffinity = W, style = ItemStyle.PLATE),
-        ItemEntity(7, "Steel Plate", "\uD83D\uDEE1\uFE0F", ItemSlot.CHEST, 3, 300, def = 13, hp = 20, description = "The extra weight counts as resistance training.", classAffinity = W, style = ItemStyle.PLATE),
+        // ---- Standard Iron & Plate armor (Universal) ----
+        ItemEntity(6, "Chainmail Shirt", "\uD83D\uDD17", ItemSlot.CHEST, 2, 120, def = 7, hp = 10, description = "Surprisingly breathable iron mail for any front-line adventurer.", style = ItemStyle.PLATE),
+        ItemEntity(7, "Steel Plate", "\uD83D\uDEE1\uFE0F", ItemSlot.CHEST, 3, 300, def = 13, hp = 20, description = "The extra weight counts as resistance training.", style = ItemStyle.PLATE),
+        ItemEntity(1192, "Reinforced Cuirass", "🛡️", ItemSlot.CHEST, 3, 310, def = 13, hp = 22, description = "Solid curved iron plates protecting the vital chest and back.", style = ItemStyle.PLATE),
         ItemEntity(8, "Aegis of the Titan", "\uD83C\uDFDB\uFE0F", ItemSlot.CHEST, 4, 700, def = 20, hp = 40, description = "Worn by legends who deadlifted mountains.", classAffinity = W, style = ItemStyle.PLATE),
 
-        // ---- Mage armor ----
-        ItemEntity(25, "Apprentice Robes", "\uD83E\uDDE5", ItemSlot.CHEST, 2, 120, def = 5, hp = 15, description = "Machine washable. Mana resistant.", classAffinity = M, style = ItemStyle.ROBE),
-        ItemEntity(26, "Runeweave Robe", "\u2728", ItemSlot.CHEST, 3, 300, def = 10, hp = 30, description = "The runes glow brighter after cardio.", classAffinity = M, style = ItemStyle.ROBE),
+        // ---- Standard Cloth & Robe armor (Universal) ----
+        ItemEntity(25, "Apprentice Robes", "\uD83E\uDDE5", ItemSlot.CHEST, 2, 120, def = 5, hp = 15, description = "Machine washable. Mana resistant. Open to any hero.", style = ItemStyle.ROBE),
+        ItemEntity(26, "Runeweave Robe", "\u2728", ItemSlot.CHEST, 3, 300, def = 10, hp = 30, description = "The runes glow brighter after cardio.", style = ItemStyle.ROBE),
+        ItemEntity(1184, "Weaver's Garb", "🥋", ItemSlot.CHEST, 3, 300, def = 9, hp = 30, description = "Dense, breathable woven tunic for long journeys and high mobility.", style = ItemStyle.ROBE),
         ItemEntity(27, "Vestments of the Cosmos", "\uD83C\uDF0C", ItemSlot.CHEST, 4, 700, def = 16, hp = 52, description = "Woven from night sky and discipline.", classAffinity = M, style = ItemStyle.ROBE),
 
-        // ---- Thief armor ----
-        ItemEntity(28, "Supple Leathers", "\uD83E\uDD8E", ItemSlot.CHEST, 2, 120, def = 6, hp = 8, atk = 2, description = "Squeak-proof. Guaranteed.", classAffinity = T, style = ItemStyle.LIGHT),
-        ItemEntity(29, "Shadowmesh", "\uD83C\uDF2B\uFE0F", ItemSlot.CHEST, 3, 300, def = 11, hp = 16, atk = 4, description = "Woven from shadows and skipped rest timers.", classAffinity = T, style = ItemStyle.LIGHT),
+        // ---- Standard Leather & Light armor (Universal) ----
+        ItemEntity(28, "Supple Leathers", "\uD83E\uDD8E", ItemSlot.CHEST, 2, 120, def = 6, hp = 8, atk = 2, description = "Squeak-proof. Guaranteed.", style = ItemStyle.LIGHT),
+        ItemEntity(29, "Shadowmesh", "\uD83C\uDF2B\uFE0F", ItemSlot.CHEST, 3, 300, def = 11, hp = 16, atk = 4, description = "Woven from shadows and skipped rest timers.", style = ItemStyle.LIGHT),
+        ItemEntity(1185, "Studded Leather Armor", "🦺", ItemSlot.CHEST, 3, 300, def = 11, hp = 20, atk = 2, description = "Hardened leather reinforced with iron rivets for all-around protection.", style = ItemStyle.LIGHT),
         ItemEntity(30, "Nightveil Shroud", "\uD83C\uDF18", ItemSlot.CHEST, 4, 700, def = 17, hp = 28, atk = 7, description = "Even mirrors lose track of you.", classAffinity = T, style = ItemStyle.LIGHT),
 
         // ---- Ranger armor ----
@@ -215,11 +229,15 @@ object ItemCatalog {
         ItemEntity(67, "Cryptweave Mantle", "\uD83C\uDF11", ItemSlot.CHEST, 3, 300, def = 10, hp = 32, description = "Whispers encouragement. Or threats. Hard to tell.", classAffinity = N, style = ItemStyle.ROBE),
         ItemEntity(68, "Shroud of the Last Breath", "\uD83D\uDC80", ItemSlot.CHEST, 4, 700, def = 15, hp = 54, description = "Woven from expired memberships and unfinished programs.", classAffinity = N, style = ItemStyle.ROBE),
 
-        // ---- Universal trinkets ----
+        // ---- Universal trinkets & Back pieces ----
         ItemEntity(9, "Lucky Sweatband", "\uD83C\uDFC5", ItemSlot.TRINKET, 1, 60, atk = 1, def = 1, hp = 5, description = "Absorbs sweat and bad vibes."),
+        ItemEntity(1195, "Novice Cape", "🧣", ItemSlot.TRINKET, 1, 50, def = 2, hp = 5, description = "A crimson adventurer cape that billows in the wind.", style = "cape"),
+        ItemEntity(1196, "Hunter's Quiver", "🏹", ItemSlot.TRINKET, 1, 50, atk = 2, hp = 3, description = "A leather arrow quiver worn strapped across the back.", style = "quiver"),
         ItemEntity(10, "Amulet of Endurance", "\uD83D\uDCFF", ItemSlot.TRINKET, 2, 180, hp = 25, description = "One more rep. Always one more rep."),
+        ItemEntity(1197, "Iron Back Shield", "🛡️", ItemSlot.TRINKET, 2, 150, def = 8, hp = 15, description = "A sturdy strapped heater shield carried on the back between battles.", style = "shield"),
         ItemEntity(11, "Ring of Fury", "\uD83D\uDC8D", ItemSlot.TRINKET, 3, 400, atk = 8, description = "Channels pre-workout energy into raw power."),
         ItemEntity(12, "Heart of the Colossus", "\u2764\uFE0F\u200D\uD83D\uDD25", ItemSlot.TRINKET, 4, 900, atk = 6, def = 6, hp = 30, description = "Beats once per rep. Never stops."),
+        ItemEntity(1198, "Celestial Wings", "🪽", ItemSlot.TRINKET, 4, 850, atk = 8, def = 8, hp = 30, description = "Luminous wings that unfurl behind disciplined heroes.", style = "wings"),
 
         // ---- Class trinkets ----
         ItemEntity(34, "Grimoire of Gains", "\uD83D\uDCD6", ItemSlot.TRINKET, 3, 400, atk = 5, hp = 15, description = "Every page is a workout log from a legendary mage.", classAffinity = M),
@@ -242,11 +260,19 @@ object ItemCatalog {
         ItemEntity(1083, "Wyrmslayer Spear", "\u26A1", ItemSlot.WEAPON, 3, 300, atk = 13, def = 3, hp = 10, description = "Tipped with dragon-bone. It thirsts for the clouds.", classAffinity = DG, style = ItemStyle.GREATSWORD),
         ItemEntity(1084, "Gae Bolg", "\uD83D\uDD25", ItemSlot.WEAPON, 4, 700, atk = 24, def = 5, hp = 20, description = "The legendary spear of the sky kings. It feels lighter the higher you jump.", classAffinity = DG, style = ItemStyle.GREATSWORD),
 
-        // ---- Universal starter armor pieces ----
+        // ---- Universal starter armor pieces (Cloth / Leather / Iron) ----
         ItemEntity(50, "Leather Cap", "\uD83E\uDDE2", ItemSlot.HEAD, 1, 30, def = 2, hp = 3, description = "Keeps the sun out of your eyes during outdoor sets.", style = ItemStyle.LIGHT),
+        ItemEntity(1182, "Cloth Cowl", "🧣", ItemSlot.HEAD, 1, 30, def = 1, hp = 4, description = "A simple fabric hood keeping the chill away.", style = ItemStyle.ROBE),
+        ItemEntity(1188, "Iron Kettle Helm", "🪖", ItemSlot.HEAD, 1, 35, def = 3, hp = 4, description = "A domed iron helmet with a protective brim.", style = ItemStyle.PLATE),
         ItemEntity(51, "Cloth Gloves", "\uD83E\uDDE4", ItemSlot.HANDS, 1, 25, def = 1, hp = 2, description = "Callus prevention, medieval edition.", style = ItemStyle.LIGHT),
+        ItemEntity(1186, "Leather Bracers", "🧤", ItemSlot.HANDS, 1, 25, def = 2, hp = 2, description = "Supple wrist guards for tool and weapon handling.", style = ItemStyle.LIGHT),
+        ItemEntity(1189, "Iron Vambraces", "🦾", ItemSlot.HANDS, 1, 30, def = 2, hp = 3, description = "Solid iron forearm guards.", style = ItemStyle.PLATE),
         ItemEntity(52, "Worn Trousers", "\uD83D\uDC56", ItemSlot.LEGS, 1, 25, def = 2, hp = 2, description = "They've seen a thousand squats. They'll see a thousand more.", style = ItemStyle.LIGHT),
+        ItemEntity(1190, "Linen Pants", "👖", ItemSlot.LEGS, 1, 25, def = 1, hp = 3, description = "Breathable lightweight pants allowing full freedom of movement.", style = ItemStyle.ROBE),
+        ItemEntity(1191, "Iron Greaves", "🦿", ItemSlot.LEGS, 1, 30, def = 3, hp = 3, description = "Iron shin guards over quilted padding.", style = ItemStyle.PLATE),
         ItemEntity(53, "Old Boots", "\uD83E\uDD7E", ItemSlot.FEET, 1, 25, def = 2, hp = 2, description = "Broken in. Like your excuses.", style = ItemStyle.LIGHT),
+        ItemEntity(1183, "Cloth Slippers", "🥿", ItemSlot.FEET, 1, 25, def = 1, hp = 3, description = "Soft, silent slippers tailored from sturdy cotton.", style = ItemStyle.ROBE),
+        ItemEntity(1193, "Iron Sabatons", "🥾", ItemSlot.FEET, 1, 30, def = 3, hp = 3, description = "Reinforced steel-toed boots.", style = ItemStyle.PLATE),
 
         // ---- Universal adventurer gear ----
         ItemEntity(1101, "Adventurer's Hood", "\uD83E\uDDE2", ItemSlot.HEAD, 2, 95, def = 4, hp = 6, description = "A reliable hood for heroes between identities.", style = ItemStyle.LIGHT),

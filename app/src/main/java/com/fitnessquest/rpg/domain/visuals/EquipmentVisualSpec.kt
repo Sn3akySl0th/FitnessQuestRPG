@@ -32,8 +32,12 @@ enum class PaperDollVisualSlot {
                 nameLower.contains("quiver") ||
                 nameLower.contains("wings") ||
                 nameLower.contains("mantle") ||
+                nameLower.contains("shield") ||
                 styleLower == "cape" ||
-                styleLower == "cloak"
+                styleLower == "cloak" ||
+                styleLower == "quiver" ||
+                styleLower == "shield" ||
+                styleLower == "wings"
 
             return when (slot) {
                 ItemSlot.WEAPON -> WEAPON
@@ -315,9 +319,17 @@ object EquipmentVisualRegistry {
      * Converts item names into snake_case keys (e.g. "Dumbbell Hammer" -> "dumbbell_hammer").
      */
     fun normalizeItemKey(name: String): String {
-        return name.lowercase()
+        val key = name.lowercase()
             .replace(Regex("[^a-z0-9]+"), "_")
             .trim('_')
+        return when (key) {
+            "rusty_broadsword" -> "rusty_sword"
+            "training_bow" -> "training_shortbow"
+            "novice_wand" -> "apprentice_wand"
+            "worn_dagger" -> "bent_shiv"
+            "iron_back_shield", "reinforced_back_shield" -> "iron_shield"
+            else -> key
+        }
     }
 
     /**

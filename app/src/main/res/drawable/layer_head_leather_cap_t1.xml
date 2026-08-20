@@ -4,31 +4,31 @@
     android:viewportWidth="500"
     android:viewportHeight="600">
 
-    <!-- Tier 1: Leather Cap (Head layer: Head center=(250,150), Cap fits Y=60 to 150, X=176 to 324) -->
+    <!-- Tier 1: Leather Cap (Head layer: Head center=(250,150), Cap fits Y=50 to 134, X=176 to 324) -->
     <!-- Cap Dome -->
     <path
         android:fillColor="#78350F"
-        android:pathData="M180,140 Q178,65 250,60 Q322,65 320,140 Q250,146 180,140 Z" />
+        android:pathData="M180,118 Q178,55 250,50 Q322,55 320,118 Q250,126 180,118 Z" />
 
     <!-- Leather Shading / Highlight -->
     <path
         android:fillColor="#92400E"
-        android:pathData="M190,135 Q190,72 250,66 Q290,70 306,105 Q250,90 190,135 Z" />
+        android:pathData="M190,114 Q190,62 250,56 Q290,60 306,90 Q250,78 190,114 Z" />
 
-    <!-- Cap Front Brim / Brow Band (Resting cleanly on forehead at Y=136..148, clear of eyes at Y=155) -->
+    <!-- Cap Front Brim / Brow Band (Resting cleanly on upper forehead at Y=114..134, clear of eyebrows at Y=137.5 and eyes at Y=155) -->
     <path
         android:fillColor="#451A03"
-        android:pathData="M178,136 Q250,146 322,136 L324,148 Q250,158 176,148 Z" />
+        android:pathData="M178,114 Q250,124 322,114 L324,124 Q250,134 176,124 Z" />
 
     <!-- Stitching Details -->
     <path
         android:strokeColor="#D97706"
         android:strokeWidth="2"
         android:strokeLineCap="round"
-        android:pathData="M200,98 L204,105 M220,85 L224,91 M248,76 L252,82 M276,85 L280,91 M296,98 L300,105" />
+        android:pathData="M200,82 L204,89 M220,70 L224,76 M248,64 L252,70 M276,70 L280,76 M296,82 L300,89" />
 
     <!-- Center Bronze Rivet -->
     <path
         android:fillColor="#B45309"
-        android:pathData="M250,142 m-4,0 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0" />
+        android:pathData="M250,120 m-4,0 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0" />
 </vector>

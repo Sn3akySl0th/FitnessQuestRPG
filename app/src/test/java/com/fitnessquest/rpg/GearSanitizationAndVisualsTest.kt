@@ -2,6 +2,7 @@ package com.fitnessquest.rpg
 
 import com.fitnessquest.rpg.data.GameRepository
 import com.fitnessquest.rpg.data.db.*
+import com.fitnessquest.rpg.domain.ItemCatalog
 import com.fitnessquest.rpg.domain.CharacterClass
 import com.fitnessquest.rpg.domain.CharacterRace
 import com.fitnessquest.rpg.domain.build
@@ -106,7 +107,73 @@ class GearSanitizationAndVisualsTest {
         assertTrue("Legs must be below feet", PaperDollLayerOrder.GEAR_LEGS.zIndex < PaperDollLayerOrder.GEAR_FEET.zIndex)
         assertTrue("Feet must be below torso/robes", PaperDollLayerOrder.GEAR_FEET.zIndex < PaperDollLayerOrder.GEAR_TORSO.zIndex)
         assertTrue("Torso must be below trinkets", PaperDollLayerOrder.GEAR_TORSO.zIndex < PaperDollLayerOrder.GEAR_TRINKET.zIndex)
+        assertTrue("Trinkets must be below weapons", PaperDollLayerOrder.GEAR_TRINKET.zIndex < PaperDollLayerOrder.GEAR_WEAPON.zIndex)
         assertTrue("Head must be below weapons", PaperDollLayerOrder.GEAR_HEAD.zIndex < PaperDollLayerOrder.GEAR_WEAPON.zIndex)
+    }
+
+    @Test
+    fun normalizeItemKey_aliasesStarterWeaponsToAvailableAssets() {
+        assertEquals("rusty_sword", EquipmentVisualRegistry.normalizeItemKey("Rusty Broadsword"))
+        assertEquals("training_shortbow", EquipmentVisualRegistry.normalizeItemKey("Training Bow"))
+        assertEquals("apprentice_wand", EquipmentVisualRegistry.normalizeItemKey("Novice Wand"))
+        assertEquals("bent_shiv", EquipmentVisualRegistry.normalizeItemKey("Worn Dagger"))
+    }
+
+    @Test
+    fun universalWeapons_coverAllArchetypesWithoutClassLock() {
+        val universalWeapons = ItemCatalog.all.filter { it.slot == ItemSlot.WEAPON && it.classAffinity == null }
+        val styles = universalWeapons.map { it.style }.toSet()
+
+        assertTrue("Must have universal wands for casters", styles.contains(ItemStyle.WAND))
+        assertTrue("Must have universal staffs for casters", styles.contains(ItemStyle.STAFF))
+        assertTrue("Must have universal swords", styles.contains(ItemStyle.SWORD))
+        assertTrue("Must have universal maces", styles.contains(ItemStyle.MACE))
+        assertTrue("Must have universal bows", styles.contains(ItemStyle.BOW))
+        assertTrue("Must have universal daggers", styles.contains(ItemStyle.DAGGER))
+        assertTrue("Must have universal two-handed axes/greatswords", styles.contains(ItemStyle.GREATSWORD))
+
+        val starterWand = universalWeapons.find { it.name == "Apprentice Wand" }
+        assertNotNull(starterWand)
+        assertNull("Starter wand must have null classAffinity so any class can buy/equip it", starterWand?.classAffinity)
+
+        val starterStaff = universalWeapons.find { it.name == "Oakheart Staff" }
+        assertNotNull(starterStaff)
+        assertNull("Starter staff must have null classAffinity", starterStaff?.classAffinity)
+    }
+
+    @Test
+    fun universalArmor_coversClothLeatherAndIronWithoutClassLock() {
+        val universalArmor = ItemCatalog.all.filter { it.slot == ItemSlot.CHEST && it.classAffinity == null }
+        val styles = universalArmor.map { it.style }.toSet()
+
+        assertTrue("Must have universal cloth/robe armor", styles.contains(ItemStyle.ROBE))
+        assertTrue("Must have universal leather/light armor", styles.contains(ItemStyle.LIGHT))
+        assertTrue("Must have universal iron/plate armor", styles.contains(ItemStyle.PLATE))
+
+        val starterCloth = universalArmor.find { it.name == "Simple Robes" || it.name == "Apprentice Robes" }
+        assertNotNull(starterCloth)
+        assertNull("Starter cloth armor must have null classAffinity", starterCloth?.classAffinity)
+
+        val starterIron = universalArmor.find { it.name == "Ringmail Vest" || it.name == "Chainmail Shirt" }
+        assertNotNull(starterIron)
+        assertNull("Starter iron armor must have null classAffinity", starterIron?.classAffinity)
+    }
+
+    @Test
+    fun backPieces_routeToBackVisualSlotAndHaveValidSpecs() {
+        val cape = ItemCatalog.all.find { it.name == "Novice Cape" }
+        assertNotNull(cape)
+        assertEquals(PaperDollVisualSlot.BACK, PaperDollVisualSlot.fromDomainSlot(cape!!.slot, cape.style, cape.name))
+        assertEquals(PaperDollLayerOrder.GEAR_BACK, PaperDollLayerOrder.forVisualSlot(PaperDollVisualSlot.BACK))
+
+        val quiver = ItemCatalog.all.find { it.name == "Hunter's Quiver" }
+        assertNotNull(quiver)
+        assertEquals(PaperDollVisualSlot.BACK, PaperDollVisualSlot.fromDomainSlot(quiver!!.slot, quiver.style, quiver.name))
+
+        val shield = ItemCatalog.all.find { it.name == "Iron Back Shield" }
+        assertNotNull(shield)
+        assertEquals(PaperDollVisualSlot.BACK, PaperDollVisualSlot.fromDomainSlot(shield!!.slot, shield.style, shield.name))
+        assertEquals("iron_shield", EquipmentVisualRegistry.normalizeItemKey(shield.name))
     }
 
     @Test

@@ -187,7 +187,7 @@ data class AvatarPose(
     val prop: HeroAnimation? = null
 )
 
-private fun calculatePose(anim: HeroAnimation, phase: Float, u: Float): AvatarPose {
+internal fun calculatePose(anim: HeroAnimation, phase: Float, u: Float): AvatarPose {
     return when (anim) {
         HeroAnimation.IDLE -> AvatarPose()
         HeroAnimation.SQUAT -> {
@@ -1167,7 +1167,7 @@ private fun DrawScope.drawChestGarmentLayer(f: AvatarFrame) {
     }
 }
 
-private fun DrawScope.drawTrinketLayer(f: AvatarFrame) {
+internal fun DrawScope.drawTrinketLayer(f: AvatarFrame) {
     val item = f.trinket ?: return
     val tc = GearVisuals.trinketColor(item.id)
     drawCircle(tc.copy(alpha = 0.35f), radius = 6.5f * f.u, center = f.p(50f, 51f))
@@ -1736,7 +1736,7 @@ private fun DrawScope.eyes(f: AvatarFrame, x1: Float, y1: Float, x2: Float) {
 
 // ---- Weapon + hands ----
 
-private fun DrawScope.drawWeaponLayer(f: AvatarFrame, pose: AvatarPose) {
+internal fun DrawScope.drawWeaponLayer(f: AvatarFrame, pose: AvatarPose) {
     val handsPal = f.hands?.let { GearVisuals.palette(it) }
     val leftHand = handsPal?.main ?: f.skinColor("forearms", "hands", "arms")
     val rightHand = when {

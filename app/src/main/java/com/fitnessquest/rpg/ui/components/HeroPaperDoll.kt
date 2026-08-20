@@ -2,20 +2,25 @@ package com.fitnessquest.rpg.ui.components
 
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.Icon
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -25,12 +30,14 @@ import com.fitnessquest.rpg.domain.CharacterClass
 import com.fitnessquest.rpg.domain.GearRarity
 import com.fitnessquest.rpg.domain.ItemCatalog
 import com.fitnessquest.rpg.ui.theme.FitQuestTheme
+import com.fitnessquest.rpg.ui.theme.Gold
 import androidx.compose.ui.tooling.preview.Preview
 import kotlinx.coroutines.launch
 
 /**
  * Centered hero paper doll character showcase with magical pedestal,
- * equipment layer pipeline, ambient auras, 3D parallax depth, and equip animations.
+ * equipment layer pipeline, ambient auras, 3D parallax depth, equip animations,
+ * and interactive 360-degree rotation view toggle.
  */
 @Composable
 fun HeroPaperDoll(
@@ -42,11 +49,24 @@ fun HeroPaperDoll(
     modifier: Modifier = Modifier,
     animation: HeroAnimation = HeroAnimation.IDLE,
     expression: AvatarExpression = AvatarExpression.CALM,
+    facingBack: Boolean? = null,
+    showRotateButton: Boolean = true,
+    onRotateToggle: ((Boolean) -> Unit)? = null,
     onAvatarClick: (() -> Unit)? = null
 ) {
     val coroutineScope = rememberCoroutineScope()
     val tapSquash = remember { Animatable(1f) }
     val tapStretch = remember { Animatable(1f) }
+
+    var internalFacingBack by remember { mutableStateOf(false) }
+    val isFacingBack = facingBack ?: internalFacingBack
+
+    // Smooth turn-around rotation angle
+    val rotationAngle by animateFloatAsState(
+        targetValue = if (isFacingBack) 180f else 0f,
+        animationSpec = tween(durationMillis = 350, easing = FastOutSlowInEasing),
+        label = "avatarTurnaround"
+    )
 
     val baseScale = equipAnimationState?.avatarScale?.value ?: 1f
 
@@ -55,7 +75,7 @@ fun HeroPaperDoll(
             .fillMaxWidth()
             .heightIn(min = 260.dp, max = 320.dp)
             .semantics {
-                contentDescription = "${clazz.label} avatar with ${gear.size} gear pieces equipped"
+                contentDescription = "${clazz.label} avatar with ${gear.size} gear pieces equipped, ${if (isFacingBack) "facing back" else "facing front"}"
             },
         contentAlignment = Alignment.Center
     ) {
@@ -70,7 +90,7 @@ fun HeroPaperDoll(
             )
         }
 
-        // 3. Layered Character Paper Doll (5:6 unified canvas with Squash & Stretch Tap Physics)
+        // 3. Layered Character Paper Doll (5:6 unified canvas with Squash & Stretch Tap Physics + Turnaround)
         Box(
             modifier = Modifier
                 .fillMaxHeight()
@@ -121,6 +141,7 @@ fun HeroPaperDoll(
                 modifier = Modifier.fillMaxSize(),
                 animation = animation,
                 expression = expression,
+                facingBack = isFacingBack,
                 equipAnimationState = equipAnimationState
             )
         }
@@ -133,6 +154,38 @@ fun HeroPaperDoll(
                     slot = slot,
                     rarity = highestRarity,
                     modifier = Modifier.fillMaxSize()
+                )
+            }
+        }
+
+        // 5. Interactive Rotation Arrow Button (Front/Back View Toggle)
+        if (showRotateButton) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 12.dp, bottom = 8.dp)
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(Color.Black.copy(alpha = 0.65f))
+                    .border(1.2.dp, Gold.copy(alpha = 0.55f), CircleShape)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClickLabel = if (isFacingBack) "View front of hero" else "View back of hero"
+                    ) {
+                        val newFacing = !isFacingBack
+                        internalFacingBack = newFacing
+                        onRotateToggle?.invoke(newFacing)
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Refresh,
+                    contentDescription = if (isFacingBack) "Rotate to front" else "Rotate to back",
+                    tint = Gold,
+                    modifier = Modifier
+                        .size(20.dp)
+                        .graphicsLayer(rotationZ = rotationAngle)
                 )
             }
         }

@@ -8,6 +8,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
@@ -17,6 +18,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.layout.ContentScale
@@ -28,6 +30,7 @@ import com.fitnessquest.rpg.data.db.ItemSlot
 import com.fitnessquest.rpg.domain.CharacterClass
 import com.fitnessquest.rpg.domain.GearRarity
 import com.fitnessquest.rpg.domain.build
+import com.fitnessquest.rpg.domain.visuals.BodyRegion
 import com.fitnessquest.rpg.domain.visuals.EquipmentDye
 import com.fitnessquest.rpg.domain.visuals.EquipmentVisualRegistry
 import com.fitnessquest.rpg.domain.visuals.EquipmentVisualSpec
@@ -82,7 +85,10 @@ fun PaperDollLayerRenderer(
     animation: HeroAnimation = HeroAnimation.IDLE,
     expression: AvatarExpression = AvatarExpression.CALM,
     equipAnimationState: EquipAnimationState? = null,
-    customDyes: Map<ItemSlot, EquipmentDye> = emptyMap()
+    customDyes: Map<ItemSlot, EquipmentDye> = emptyMap(),
+    facingBack: Boolean = false,
+    showClassOutfit: Boolean = false,
+    detail: AvatarDetail = AvatarDetail.FULL
 ) {
     val context = LocalContext.current
     val tilt by rememberDeviceTilt()
@@ -106,6 +112,36 @@ fun PaperDollLayerRenderer(
         ),
         label = "capeFlutter"
     )
+    val animPhase by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "animPhase"
+    )
+
+    fun buildAvatarFrame(
+        u: Float,
+        gearMap: Map<ItemSlot, ItemEntity>,
+        hiddenRegs: Set<BodyRegion> = emptySet()
+    ): AvatarFrame {
+        return AvatarFrame(
+            u = u,
+            cls = clazz,
+            look = lookFor(clazz),
+            gear = gearMap,
+            costume = showClassOutfit,
+            highlightMuscles = emptySet(),
+            facingBack = facingBack,
+            appearance = appearance,
+            expression = expression,
+            detail = detail,
+            phase = animPhase,
+            hiddenRegions = hiddenRegs
+        )
+    }
 
     // Resolve visual layers for all equipped items
     val activeLayers = remember(gear, customDyes) {
@@ -168,9 +204,11 @@ fun PaperDollLayerRenderer(
                 gear = gear,
                 appearance = appearance,
                 modifier = Modifier.fillMaxSize(),
+                showClassOutfit = showClassOutfit,
+                facingBack = facingBack,
                 animation = animation,
                 expression = expression,
-                detail = AvatarDetail.FULL,
+                detail = detail,
                 enableBreathing = false,
                 hiddenRegions = hiddenBodyRegions
             )
@@ -178,7 +216,9 @@ fun PaperDollLayerRenderer(
             // 2D Layer Compositor (rendered strictly in z-index order 00 to 13)
             val unhandledCanvasGear = remember(gear, visibleLayers) {
                 val handledSlots = visibleLayers.filter { it.drawableResId != null }.mapNotNull { it.spec?.domainSlot }.toSet()
-                gear.filterKeys { it !in handledSlots }
+                // When 2D layers are active, TRINKET and WEAPON are rendered at their proper zIndex in the layer stack Box,
+                // so we don't render them in the underlying base avatar canvas.
+                gear.filterKeys { it !in handledSlots && it != ItemSlot.TRINKET && it != ItemSlot.WEAPON }
             }
 
             Box(modifier = Modifier.fillMaxSize()) {
@@ -197,9 +237,11 @@ fun PaperDollLayerRenderer(
                         gear = unhandledCanvasGear,
                         appearance = appearance,
                         modifier = Modifier.fillMaxSize(),
+                        showClassOutfit = showClassOutfit,
+                        facingBack = facingBack,
                         animation = animation,
                         expression = expression,
-                        detail = AvatarDetail.FULL,
+                        detail = detail,
                         enableBreathing = false,
                         hiddenRegions = hiddenBodyRegions
                     )
@@ -217,7 +259,7 @@ fun PaperDollLayerRenderer(
                         }
                 ) {
                     visibleLayers.forEach { layer ->
-                        layer.drawableResId?.let { resId ->
+                        if (layer.drawableResId != null) {
                             val isEquipTarget = equipAnimationState?.equippedSlot?.let {
                                 layer.spec?.domainSlot == it
                             } ?: false
@@ -235,7 +277,7 @@ fun PaperDollLayerRenderer(
                             }
 
                             Image(
-                                painter = painterResource(id = resId),
+                                painter = painterResource(id = layer.drawableResId),
                                 contentDescription = null,
                                 contentScale = ContentScale.Fit,
                                 colorFilter = colorFilter,
@@ -248,6 +290,44 @@ fun PaperDollLayerRenderer(
                                         translationY = (tilt.y * depth * 14f) * density
                                     }
                             )
+                        } else if (layer.visualSlot == PaperDollVisualSlot.TRINKET && layer.item != null) {
+                            // Foreground Trinket Canvas Overlay (rendered strictly after GEAR_TORSO at GEAR_TRINKET z-index 11)
+                            if (!facingBack) {
+                                val depth = PaperDollLayerOrder.GEAR_TRINKET.parallaxDepth()
+                                Canvas(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .graphicsLayer {
+                                            translationX = (tilt.x * depth * 14f) * density
+                                            translationY = (tilt.y * depth * 14f) * density
+                                        }
+                                ) {
+                                    val frame = buildAvatarFrame(size.width / 100f, mapOf(ItemSlot.TRINKET to layer.item))
+                                    val pose = calculatePose(animation, frame.phase, frame.u)
+                                    withTransform({
+                                        translate(pose.bodyOffset.x, pose.bodyOffset.y)
+                                    }) {
+                                        drawTrinketLayer(frame)
+                                    }
+                                }
+                            }
+                        } else if (layer.visualSlot == PaperDollVisualSlot.WEAPON && layer.item != null) {
+                            // Foreground Weapon Canvas Overlay (rendered strictly after GEAR_TRINKET and GEAR_TORSO at GEAR_WEAPON z-index 12)
+                            val depth = PaperDollLayerOrder.GEAR_WEAPON.parallaxDepth()
+                            Canvas(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .graphicsLayer {
+                                        translationX = (tilt.x * depth * 14f) * density
+                                        translationY = (tilt.y * depth * 14f) * density
+                                    }
+                            ) {
+                                val frame = buildAvatarFrame(size.width / 100f, mapOf(ItemSlot.WEAPON to layer.item))
+                                val pose = calculatePose(animation, frame.phase, frame.u)
+                                if (pose.prop == null) {
+                                    drawWeaponLayer(frame, pose)
+                                }
+                            }
                         }
                     }
                 }
