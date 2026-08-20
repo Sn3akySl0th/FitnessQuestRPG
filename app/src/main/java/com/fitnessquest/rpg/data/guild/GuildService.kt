@@ -254,16 +254,29 @@ class GuildService(
         
         return try {
             val result = firestore.runTransaction { transaction ->
+                val guildSnap = transaction.get(doc)
+                if (!guildSnap.exists()) {
+                    return@runTransaction OutboxSyncResult.NOT_APPLICABLE
+                }
                 val snapshot = transaction.get(eventDoc)
                 if (snapshot.exists()) {
                     OutboxSyncResult.ALREADY_PROCESSED
                 } else {
+                    val currentHp = guildSnap.getLong("raidHp") ?: 0L
+                    val newHp = (currentHp - damage).coerceAtLeast(0L)
+
+                    @Suppress("UNCHECKED_CAST")
+                    val rawDamage = (guildSnap.get("raidDamage") as? Map<String, Any?>).orEmpty()
+                    val updatedDamage = rawDamage.mapValues { (it.value as? Number)?.toLong() ?: 0L }.toMutableMap()
+                    val currentMemberDamage = updatedDamage[uid] ?: 0L
+                    updatedDamage[uid] = currentMemberDamage + damage
+
                     transaction.set(eventDoc, mapOf("processedAt" to FieldValue.serverTimestamp(), "xp" to xp, "uid" to uid))
                     transaction.update(
                         doc,
                         mapOf(
-                            "raidHp" to FieldValue.increment(-damage),
-                            "raidDamage.$uid" to FieldValue.increment(damage)
+                            "raidHp" to newHp,
+                            "raidDamage" to updatedDamage
                         )
                     )
                     OutboxSyncResult.DELIVERED

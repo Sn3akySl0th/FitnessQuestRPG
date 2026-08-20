@@ -2,6 +2,7 @@ package com.fitnessquest.rpg.ui.screens
 
 import android.content.ClipData
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -258,7 +259,13 @@ class RivalsViewModel(private val container: AppContainer) : ViewModel() {
 
     fun deleteSharedWorkout(shared: SharedWorkout) = partyAction {
         container.party.deleteSharedWorkout(shared.id).getOrThrow()
-        "Removed ${shared.name} from shared quests."
+        "Shared quest removed."
+    }
+
+    fun sendCheer(eventId: String, emoji: String) {
+        viewModelScope.launch {
+            container.party.sendCheer(eventId, emoji)
+        }
     }
 
     fun dismissPartyMessage() {
@@ -378,7 +385,8 @@ fun RivalsScreen(
             onLeaveGuild = viewModel::leaveGuild,
             onClaimGuildRaidReward = viewModel::claimGuildRaidReward,
             onDismissRewardReveal = viewModel::dismissRewardReveal,
-            onDismissGuildMessage = viewModel::dismissGuildMessage
+            onDismissGuildMessage = viewModel::dismissGuildMessage,
+            onSendCheer = viewModel::sendCheer
         )
     )
 }
@@ -401,7 +409,8 @@ data class RivalsActions(
     val onLeaveGuild: () -> Unit = {},
     val onClaimGuildRaidReward: () -> Unit = {},
     val onDismissRewardReveal: () -> Unit = {},
-    val onDismissGuildMessage: () -> Unit = {}
+    val onDismissGuildMessage: () -> Unit = {},
+    val onSendCheer: (String, String) -> Unit = { _, _ -> }
 )
 
 @Composable
@@ -772,8 +781,19 @@ private fun PartyTabContent(
                 PartyMemberRow(
                     member = member,
                     isMe = member.uid == myUid,
+                    isTopDamager = member.uid == party.topDamagerUid && (party.boss?.damageByUid?.get(member.uid) ?: 0L) > 0L,
+                    isMostActive = member.uid == party.mostActiveMemberUid && member.weeklyXp > 0,
                     activeEffects = pulse?.effects.orEmpty()
                 )
+            }
+            if (party.feed.isNotEmpty()) {
+                item {
+                    PartyCombatFeedCard(
+                        feed = party.feed,
+                        myUid = myUid,
+                        onSendCheer = actions.onSendCheer
+                    )
+                }
             }
             item {
                 SharedWorkoutsCard(
@@ -971,6 +991,35 @@ private fun PartyHeaderCard(party: PartyState) {
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+
+        if (party.activeAuras.isNotEmpty()) {
+            Spacer(Modifier.height(4.dp))
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
+                    .padding(10.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    "ACTIVE PARTY AURAS",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                party.activeAuras.forEach { aura ->
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(aura.emoji, style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            "${aura.title}: ${aura.description}",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -988,75 +1037,111 @@ private fun RaidBossCard(
     val activeDamage = pulses.sumOf { it.xp }.toLong()
     val ghostHp = (boss.hp - activeDamage).coerceAtLeast(0L)
 
-    SectionCard {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(boss.emoji, style = MaterialTheme.typography.displaySmall)
-            Column(Modifier.weight(1f)) {
-                Text(boss.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+    val enragedBorder = if (boss.isEnraged) {
+        Modifier.border(2.dp, Color(0xFFEF4444), RoundedCornerShape(16.dp))
+    } else Modifier
+
+    Box(modifier = enragedBorder) {
+        SectionCard {
+            if (boss.isEnraged) {
+                Surface(
+                    color = Color(0xFFEF4444).copy(alpha = 0.15f),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        "🔥 ENRAGED! Boss is below 30% HP — Strike now to finish the raid!",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFEF4444),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(boss.emoji, style = MaterialTheme.typography.displaySmall)
+                Column(Modifier.weight(1f)) {
+                    Text(boss.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            "Tier ${boss.tier} raid boss",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        boss.weaknessCategory?.let { weakness ->
+                            Surface(
+                                color = MaterialTheme.colorScheme.primaryContainer,
+                                shape = RoundedCornerShape(6.dp)
+                            ) {
+                                Text(
+                                    "🎯 Weak to ${weakness.name.replace('_', ' ')}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            if (boss.defeated) {
                 Text(
-                    "Tier ${boss.tier} raid boss",
+                    "🎉 DEFEATED! Every contributor earns ${boss.rewardGold} gold and a ${boss.rewardXpBoost} XP boost.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Gold
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = onClaim,
+                        enabled = !busy && !claimed && myDamage > 0,
+                        modifier = Modifier.weight(1f)
+                    ) { Text(if (claimed) "Claimed ✓" else "Claim spoils") }
+                    OutlinedButton(
+                        onClick = onSummon,
+                        enabled = !busy,
+                        modifier = Modifier.weight(1f)
+                    ) { Text("Summon next") }
+                }
+            } else {
+                GhostBarMeter(
+                    label = if (boss.isEnraged) "Boss HP (ENRAGED)" else "Boss HP",
+                    valueText = if (activeDamage > 0) "${ghostHp} / ${boss.hp} HP" else "${boss.hp} / ${boss.maxHp}",
+                    actualProgress = (boss.hp.toFloat() / boss.maxHp).coerceIn(0f, 1f),
+                    ghostProgress = (ghostHp.toFloat() / boss.maxHp).coerceIn(0f, 1f),
+                    color = if (boss.isEnraged) Color(0xFFDC2626) else MaterialTheme.colorScheme.error,
+                    ghostColor = Color.White.copy(alpha = 0.25f)
+                )
+                if (pulses.isNotEmpty()) {
+                    val pulseEffects = pulses.flatMap { it.effects }.distinct().joinToString(" ")
+                    Text(
+                        text = buildString {
+                            append("⚔️ ${pulses.size} hero${if (pulses.size > 1) "es" else ""} striking!")
+                            if (pulseEffects.isNotEmpty()) append(" Status: $pulseEffects")
+                            append(" Pending: $activeDamage XP")
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Text(
+                    "Every XP point your party earns from workouts strikes the boss. Its health scales with your roster - everyone must fight!",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-            }
-        }
-        if (boss.defeated) {
-            Text(
-                "\uD83C\uDF89 DEFEATED! Every contributor earns ${boss.rewardGold} gold " +
-                    "and a ${boss.rewardXpBoost} XP boost.",
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = Gold
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(
-                    onClick = onClaim,
-                    enabled = !busy && !claimed && myDamage > 0,
-                    modifier = Modifier.weight(1f)
-                ) { Text(if (claimed) "Claimed \u2713" else "Claim spoils") }
-                OutlinedButton(
-                    onClick = onSummon,
-                    enabled = !busy,
-                    modifier = Modifier.weight(1f)
-                ) { Text("Summon next") }
-            }
-        } else {
-            val activeDamage = pulses.sumOf { it.xp }.toLong()
-            val ghostHp = (boss.hp - activeDamage).coerceAtLeast(0L)
-            GhostBarMeter(
-                label = "Boss HP",
-                valueText = if (activeDamage > 0) "${ghostHp} / ${boss.hp} HP" else "${boss.hp} / ${boss.maxHp}",
-                actualProgress = (boss.hp.toFloat() / boss.maxHp).coerceIn(0f, 1f),
-                ghostProgress = (ghostHp.toFloat() / boss.maxHp).coerceIn(0f, 1f),
-                color = MaterialTheme.colorScheme.error,
-                ghostColor = Color.White.copy(alpha = 0.25f)
-            )
-            if (pulses.isNotEmpty()) {
-                val pulseEffects = pulses.flatMap { it.effects }.distinct().joinToString(" ")
-                Text(
-                    text = buildString {
-                        append("\u2694\uFE0F ${pulses.size} hero${if (pulses.size > 1) "es" else ""} striking!")
-                        if (pulseEffects.isNotEmpty()) append(" Status: $pulseEffects")
-                        append(" Pending: $activeDamage XP")
-                    },
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-            Text(
-                "Every XP point your party earns from workouts strikes the boss. " +
-                    "Its health scales with your roster - everyone must fight!",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            if (myDamage > 0) {
-                Text(
-                    "\u2694\uFE0F Your damage: $myDamage",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.primary
-                )
+                if (myDamage > 0) {
+                    Text(
+                        "⚔️ Your damage: $myDamage",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
             }
         }
     }
@@ -1066,6 +1151,8 @@ private fun RaidBossCard(
 private fun PartyMemberRow(
     member: PartyMember,
     isMe: Boolean,
+    isTopDamager: Boolean = false,
+    isMostActive: Boolean = false,
     activeEffects: List<String> = emptyList()
 ) {
     val scheme = MaterialTheme.colorScheme
@@ -1098,25 +1185,107 @@ private fun PartyMemberRow(
             }
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(if (isMe) "${member.name} (you)" else member.name, fontWeight = FontWeight.SemiBold)
+                    if (isTopDamager) {
+                        Surface(
+                            color = Gold.copy(alpha = 0.2f),
+                            shape = RoundedCornerShape(4.dp)
+                        ) {
+                            Text(
+                                "🏆 Boss Slayer",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Gold,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                            )
+                        }
+                    } else if (isMostActive) {
+                        Surface(
+                            color = scheme.primary.copy(alpha = 0.15f),
+                            shape = RoundedCornerShape(4.dp)
+                        ) {
+                            Text(
+                                "⚡ Swift Striker",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = scheme.primary,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                            )
+                        }
+                    }
                     if (activeEffects.size > 1) {
-                        Spacer(Modifier.width(4.dp))
                         Text(activeEffects.drop(1).joinToString(" "), style = MaterialTheme.typography.labelSmall)
                     }
                 }
                 Text(
-                    "Lv ${member.level} \u00B7 ${member.weeklyXp} XP this week",
+                    "Lv ${member.level} · ${member.weeklyXp} XP this week",
                     style = MaterialTheme.typography.labelSmall,
                     color = if (isMe) scheme.onPrimaryContainer.copy(alpha = 0.8f) else scheme.onSurfaceVariant
                 )
             }
             if (member.bossDamage > 0) {
                 Text(
-                    "\u2694\uFE0F ${member.bossDamage}",
+                    "⚔️ ${member.bossDamage}",
                     fontWeight = FontWeight.Bold,
                     color = if (isMe) scheme.onPrimaryContainer else scheme.primary
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PartyCombatFeedCard(
+    feed: List<com.fitnessquest.rpg.data.party.PartyFeedEvent>,
+    myUid: String?,
+    onSendCheer: (String, String) -> Unit
+) {
+    SectionCard {
+        Text("📜 Combat Activity Log", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            feed.take(5).forEach { event ->
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                event.text,
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = if (event.isCrit) FontWeight.Bold else FontWeight.Normal,
+                                color = if (event.isCrit) Gold else MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            val cheersList = listOf("🔥", "💪", "⚡", "🛡️")
+                            cheersList.forEach { emoji ->
+                                val count = event.cheers.values.count { it == emoji }
+                                val hasCheered = myUid != null && event.cheers[myUid] == emoji
+                                Surface(
+                                    color = if (hasCheered) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier
+                                        .clickable { onSendCheer(event.id, emoji) }
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        if (count > 0) "$emoji $count" else emoji,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = if (hasCheered) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }

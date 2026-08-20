@@ -45,6 +45,27 @@ data class PartyMember(
     val bossDamage: Long = 0,
 )
 
+data class PartyFeedEvent(
+    val id: String,
+    val authorUid: String,
+    val authorName: String,
+    val text: String,
+    val isCrit: Boolean = false,
+    val damage: Long = 0L,
+    val createdAt: Long = System.currentTimeMillis(),
+    val cheers: Map<String, String> = emptyMap() // uid -> emoji
+)
+
+enum class PartyAura(
+    val title: String,
+    val emoji: String,
+    val description: String
+) {
+    VANGUARD_HARMONY("Vanguard Harmony", "⚔️", "+10% Raid Boss Damage (2+ distinct classes)"),
+    BOUNTY_SYNC("Bounty Sync", "💰", "+5% Gold & Loot Luck (3+ active heroes)"),
+    TITAN_FORTITUDE("Titan Fortitude", "🛡️", "Adrenaline gains boosted by 15% in battle")
+}
+
 data class PartyBoss(
     val tier: Int,
     val name: String,
@@ -53,8 +74,10 @@ data class PartyBoss(
     val hp: Long,
     val claimedBy: List<String> = emptyList(),
     val damageByUid: Map<String, Long> = emptyMap(),
+    val weaknessCategory: ExerciseCategory? = null
 ) {
     val defeated: Boolean get() = hp <= 0
+    val isEnraged: Boolean get() = !defeated && hp <= (maxHp * 0.30f).toLong()
     val rewardGold: Int get() = 100 + (50 * tier)
     val rewardXpBoost: Int get() = 50 + (25 * tier)
 }
@@ -89,9 +112,25 @@ data class PartyState(
     val members: List<PartyMember> = emptyList(),
     val boss: PartyBoss? = null,
     val sharedWorkouts: List<SharedWorkout> = emptyList(),
-    val activePulses: List<PartyPulse> = emptyList()
+    val activePulses: List<PartyPulse> = emptyList(),
+    val feed: List<PartyFeedEvent> = emptyList()
 ) {
     val inParty: Boolean get() = partyId != null
+
+    val activeAuras: List<PartyAura> get() {
+        val auras = mutableListOf<PartyAura>()
+        val distinctClasses = members.map { it.classEmoji }.distinct().size
+        if (distinctClasses >= 2) {
+            auras += PartyAura.VANGUARD_HARMONY
+        }
+        if (members.size >= 3) {
+            auras += PartyAura.BOUNTY_SYNC
+        }
+        return auras
+    }
+
+    val topDamagerUid: String? get() = boss?.damageByUid?.maxByOrNull { it.value }?.key
+    val mostActiveMemberUid: String? get() = members.maxByOrNull { it.weeklyXp }?.uid
 }
 
 /**
@@ -101,7 +140,7 @@ data class PartyState(
  * dealt to the boss as damage.
  */
 class PartyService(
-    app: Application,
+    private val app: Application,
     private val repository: GameRepository,
     private val auth: AuthService
 ) {
@@ -140,6 +179,11 @@ class PartyService(
                     refreshMemberCard()
                 }
         }
+        scope.launch {
+            (app as? com.fitnessquest.rpg.FitQuestApp)?.let {
+                com.fitnessquest.rpg.data.sync.OutboxWorker.syncNow(it)
+            }
+        }
     }
 
     // ---- Live listeners ----
@@ -156,15 +200,17 @@ class PartyService(
             @Suppress("UNCHECKED_CAST")
             val damage = (snap["bossDamage"] as? Map<String, Any?>).orEmpty()
                 .mapValues { (it.value as? Number)?.toLong() ?: 0L }
+            val tier = (snap.getLong("bossTier") ?: 1L).toInt()
             val boss = if (snap.getLong("bossMaxHp") != null) {
                 PartyBoss(
-                    tier = (snap.getLong("bossTier") ?: 1L).toInt(),
+                    tier = tier,
                     name = snap.getString("bossName") ?: "Raid Boss",
                     emoji = snap.getString("bossEmoji") ?: "\uD83D\uDC79",
                     maxHp = snap.getLong("bossMaxHp") ?: 1L,
                     hp = snap.getLong("bossHp") ?: 0L,
                     claimedBy = (snap["bossClaimed"] as? List<*>).orEmpty().filterIsInstance<String>(),
-                    damageByUid = damage
+                    damageByUid = damage,
+                    weaknessCategory = bossWeaknessForTier(tier)
                 )
             } else null
             _state.update {
@@ -234,14 +280,34 @@ class PartyService(
                 val updated = d.getTimestamp("updatedAt")?.toDate()?.time ?: now
                 @Suppress("UNCHECKED_CAST")
                 val effects = (d["effects"] as? List<String>).orEmpty()
-                // Safety: Show all pulses regardless of local clock sync
                 if (xp > 0 || effects.isNotEmpty()) {
                     PartyPulse(uid = d.id, xp = xp, updatedAt = updated, effects = effects)
                 } else null
             }
-            Log.d("PartyService", "Received ${pulses.size} active pulses from Firestore")
             _state.update { it.copy(activePulses = pulses) }
         }
+        listeners += doc.collection("feed")
+            .orderBy("createdAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
+            .limit(20)
+            .addSnapshotListener { snap, _ ->
+                if (snap == null) return@addSnapshotListener
+                val feedEvents = snap.documents.map { d ->
+                    @Suppress("UNCHECKED_CAST")
+                    val cheers = (d.get("cheers") as? Map<String, Any?>).orEmpty()
+                        .mapValues { it.value.toString() }
+                    PartyFeedEvent(
+                        id = d.id,
+                        authorUid = d.getString("authorUid") ?: "",
+                        authorName = d.getString("authorName") ?: "Hero",
+                        text = d.getString("text") ?: "",
+                        isCrit = d.getBoolean("isCrit") ?: false,
+                        damage = d.getLong("damage") ?: 0L,
+                        createdAt = d.getLong("createdAt") ?: System.currentTimeMillis(),
+                        cheers = cheers
+                    )
+                }
+                _state.update { it.copy(feed = feedEvents) }
+            }
     }
 
     private fun detach() {
@@ -313,28 +379,30 @@ class PartyService(
         xp: Int,
         eventId: String,
         targetPartyId: String? = null,
-        targetUid: String? = null
+        targetUid: String? = null,
+        isCrit: Boolean = false,
+        authorName: String? = null
     ): OutboxSyncResult {
         if (xp <= 0) {
             Log.d("PartyService", "reportSessionXp: XP is <= 0 ($xp), skipping.")
             return OutboxSyncResult.NOT_APPLICABLE
         }
         
-        // Fallback resolution: Outbox payload -> Local StateFlow -> Repository fallback (Issue 3.2)
-        val partyId = targetPartyId ?: _partyId.value ?: repository.getCharacter().partyId
+        val partyId = targetPartyId ?: _partyId.value ?: repository.getCharacter().partyId ?: prefs.getString(KEY_PARTY_ID, null)
         val uid = targetUid ?: auth.state.value.uid
 
         if (partyId == null) {
             Log.d("PartyService", "reportSessionXp: partyId is null, retrying later.")
-            return OutboxSyncResult.RETRYABLE_FAILURE // Issue 3.3
+            return OutboxSyncResult.RETRYABLE_FAILURE
         }
         if (uid == null) {
             Log.d("PartyService", "reportSessionXp: uid is null, retrying later.")
-            return OutboxSyncResult.RETRYABLE_FAILURE // Issue 3.3
+            return OutboxSyncResult.RETRYABLE_FAILURE
         }
         
         val doc = partyDoc(partyId)
         val eventDoc = doc.collection("processedEvents").document(eventId)
+        val feedColl = doc.collection("feed")
         
         return try {
             val result = firestore.runTransaction { transaction ->
@@ -348,7 +416,6 @@ class PartyService(
                 if (snapshot.exists()) {
                     OutboxSyncResult.ALREADY_PROCESSED
                 } else {
-                    // Issue 4.1: Verify bossHp exists and is > 0
                     val currentHp = partySnap.getLong("bossHp")
                     if (currentHp == null || currentHp <= 0) {
                         Log.d("PartyService", "reportSessionXp: Boss missing or already at 0 HP.")
@@ -356,29 +423,62 @@ class PartyService(
                         return@runTransaction OutboxSyncResult.DELIVERED
                     }
 
-                    // Issue 4.2: Clamp bossHp to 0 after damage
-                    val newHp = (currentHp - xp).coerceAtLeast(0L)
-                    
-                    val updates = mutableMapOf<String, Any>(
-                        "bossHp" to newHp,
-                        "bossDamage.$uid" to FieldValue.increment(xp.toLong())
-                    )
+                    val newHp = (currentHp - xp.toLong()).coerceAtLeast(0L)
 
-                    // Issue 4.3: Initialize bossDamage map if missing
-                    if (partySnap.get("bossDamage") == null) {
-                        transaction.update(doc, "bossDamage", emptyMap<String, Long>())
-                    }
+                    @Suppress("UNCHECKED_CAST")
+                    val rawDamage = (partySnap.get("bossDamage") as? Map<String, Any?>).orEmpty()
+                    val updatedDamage = rawDamage.mapValues { (it.value as? Number)?.toLong() ?: 0L }.toMutableMap()
+                    val currentMemberDamage = updatedDamage[uid] ?: 0L
+                    updatedDamage[uid] = currentMemberDamage + xp.toLong()
+
+                    val updates = mapOf<String, Any>(
+                        "bossHp" to newHp,
+                        "bossDamage" to updatedDamage
+                    )
 
                     transaction.set(eventDoc, mapOf("processedAt" to FieldValue.serverTimestamp(), "xp" to xp, "uid" to uid))
                     transaction.update(doc, updates)
                     OutboxSyncResult.DELIVERED
                 }
             }.await()
+
+            if (result == OutboxSyncResult.DELIVERED) {
+                scope.launch {
+                    runCatching {
+                        val heroName = authorName ?: repository.getCharacter().name
+                        val bossName = _state.value.boss?.name ?: "the raid boss"
+                        val critText = if (isCrit) " 💥 CRITICAL HIT!" else ""
+                        val text = "⚔️ $heroName struck $bossName for $xp damage!$critText"
+                        feedColl.document(eventId).set(
+                            mapOf(
+                                "authorUid" to uid,
+                                "authorName" to heroName,
+                                "text" to text,
+                                "isCrit" to isCrit,
+                                "damage" to xp.toLong(),
+                                "createdAt" to System.currentTimeMillis(),
+                                "cheers" to emptyMap<String, String>()
+                            )
+                        ).await()
+                    }
+                }
+            }
+
             scope.launch { refreshMemberCard() }
             result
         } catch (e: Exception) {
+            Log.e("PartyService", "reportSessionXp transaction failed for event $eventId", e)
             OutboxSyncResult.RETRYABLE_FAILURE
         }
+    }
+
+    /** Sends a cheer / fist-bump reaction on a combat feed event. */
+    suspend fun sendCheer(eventId: String, emoji: String) = runCatching {
+        val partyId = _partyId.value ?: return@runCatching
+        val uid = auth.state.value.uid ?: return@runCatching
+        partyDoc(partyId).collection("feed").document(eventId).update(
+            "cheers.$uid", emoji
+        ).await()
     }
 
     /** Grants the boss reward locally and records the claim so it's once per hero. */
@@ -570,7 +670,7 @@ class PartyService(
     private fun generateInviteCode(): String =
         (1..CODE_LENGTH).map { CODE_CHARS.random() }.joinToString("")
 
-    private companion object {
+    companion object {
         const val KEY_PARTY_ID = "party_id"
         const val CODE_LENGTH = 6
 
@@ -596,5 +696,12 @@ class PartyService(
 
         fun bossHpFor(memberCount: Int, tier: Int): Long =
             BOSS_HP_PER_MEMBER * memberCount.coerceAtLeast(1) * (100 + 25 * (tier - 1)) / 100
+
+        fun bossWeaknessForTier(tier: Int): ExerciseCategory = when ((tier - 1) % 4) {
+            0 -> ExerciseCategory.STRENGTH
+            1 -> ExerciseCategory.BODYWEIGHT
+            2 -> ExerciseCategory.CARDIO
+            else -> ExerciseCategory.FLEXIBILITY
+        }
     }
 }

@@ -1304,6 +1304,7 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
                     activeDurationMs = state.wearActiveDurationMs
                 )
                 container.party.clearActivePulse()
+                OutboxWorker.syncNow(container.app)
                 OutboxWorker.enqueue(container.app)
 
                 val summaryItems = state.exercises.map { ex ->

@@ -105,6 +105,10 @@ service cloud.firestore {
         allow read: if isMemberOfParty(partyId);
         allow create: if isMemberOfParty(partyId) && processedEventCreateOk();
       }
+
+      match /feed/{feedId} {
+        allow read, create, update: if isSignedIn();
+      }
     }
 
     match /guilds/{guildId} {

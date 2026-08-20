@@ -1402,7 +1402,10 @@ class GameRepository(
             val uid = userId?.takeIf { it.isNotBlank() }
 
             if (!partyId.isNullOrBlank() && uid != null) {
-                val partyPayload = "{\"xp\":${res.xp},\"partyId\":\"$partyId\",\"uid\":\"$uid\"}"
+                val hasNewPr = res.prs.any { it.isNew }
+                val partyDamage = if (hasNewPr) (res.xp * 1.5).toInt() else res.xp
+                val escapedName = freshCharacter.name.replace("\"", "\\\"")
+                val partyPayload = "{\"xp\":$partyDamage,\"partyId\":\"$partyId\",\"uid\":\"$uid\",\"isCrit\":$hasNewPr,\"authorName\":\"$escapedName\"}"
                 db.activeSessionDao().insertOutboxEvent(
                     PendingSyncEntity(
                         eventId = "$token:PARTY",
@@ -1413,7 +1416,8 @@ class GameRepository(
             }
 
             if (!guildId.isNullOrBlank() && uid != null) {
-                val guildPayload = "{\"xp\":${res.xp},\"guildId\":\"$guildId\",\"uid\":\"$uid\"}"
+                val escapedName = freshCharacter.name.replace("\"", "\\\"")
+                val guildPayload = "{\"xp\":${res.xp},\"guildId\":\"$guildId\",\"uid\":\"$uid\",\"authorName\":\"$escapedName\"}"
                 db.activeSessionDao().insertOutboxEvent(
                     PendingSyncEntity(
                         eventId = "$token:GUILD",
