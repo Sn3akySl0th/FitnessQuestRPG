@@ -100,6 +100,14 @@ interface WorkoutDao {
         deleteExercisesFor(id)
         deleteWorkout(id)
     }
+
+    @Transaction
+    suspend fun deleteWorkoutsFully(ids: List<Long>) {
+        ids.forEach { id ->
+            deleteExercisesFor(id)
+            deleteWorkout(id)
+        }
+    }
 }
 
 @Dao
@@ -109,6 +117,9 @@ interface SessionDao {
 
     @Query("SELECT * FROM sessions")
     suspend fun getAllSessions(): List<SessionEntity>
+
+    @Query("SELECT * FROM set_logs")
+    suspend fun getAllSetLogs(): List<SetLogEntity>
 
     @Query("SELECT * FROM sessions WHERE completionToken = :token LIMIT 1")
     suspend fun getByCompletionToken(token: String): SessionEntity?

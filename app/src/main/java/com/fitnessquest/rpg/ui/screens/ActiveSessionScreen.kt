@@ -1269,7 +1269,10 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
         if (isFinishing) return
         val state = _uiState.value
         val logs = state.exercises.flatMap { it.loggedSets }
-        if (logs.isEmpty()) return
+        if (logs.isEmpty()) {
+            _uiState.update { it.copy(finishError = "Log at least one set before finishing the quest.") }
+            return
+        }
         isFinishing = true
         _uiState.update { it.copy(finishError = null) }
         viewModelScope.launch {
@@ -1330,11 +1333,11 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
                     _uiState.update { s -> s.finish?.let { f -> s.copy(finish = f.copy(praise = praise, praisePending = false)) } ?: s }
                 }
             } catch (error: CancellationException) {
-                isFinishing = false
                 throw error
             } catch (error: Exception) {
+                _uiState.update { it.copy(finishError = error.message?.takeIf { msg -> msg.isNotBlank() } ?: "Workout couldn't be saved.") }
+            } finally {
                 isFinishing = false
-                _uiState.update { it.copy(finishError = "Workout couldn't be saved.") }
             }
         }
     }

@@ -219,6 +219,20 @@ class WorkoutsViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
+    fun deleteWorkoutsBulk(ids: List<Long>, onDone: (() -> Unit)? = null) {
+        viewModelScope.launch {
+            container.repository.deleteWorkoutsBulk(ids, container.auth.currentUid())
+            onDone?.invoke()
+        }
+    }
+
+    fun cleanDuplicateWorkouts(onCleaned: (Int) -> Unit) {
+        viewModelScope.launch {
+            val count = container.repository.cleanDuplicateWorkouts(container.auth.currentUid())
+            onCleaned(count)
+        }
+    }
+
     companion object {
         val Factory = viewModelFactory {
             initializer { WorkoutsViewModel(appContainer) }
@@ -265,6 +279,8 @@ fun WorkoutsScreen(
             onImportWorkouts = viewModel::importWorkouts,
             onRenameWithAi = viewModel::renameWithAi,
             onRenameAllWithAi = viewModel::renameAllWithAi,
+            onDeleteWorkoutsBulk = viewModel::deleteWorkoutsBulk,
+            onCleanDuplicates = viewModel::cleanDuplicateWorkouts,
             onDiscardActiveSession = {
                 coroutineScope.launch {
                     container.repository.discardActiveSession()
@@ -292,6 +308,8 @@ data class WorkoutsActions(
     val onImportWorkouts: (List<ImportedWorkout>, (ImportPersistResult, RewardBatch?) -> Unit) -> Unit = { _, _ -> },
     val onRenameWithAi: (Long) -> Unit = {},
     val onRenameAllWithAi: () -> Unit = {},
+    val onDeleteWorkoutsBulk: (List<Long>, () -> Unit) -> Unit = { _, _ -> },
+    val onCleanDuplicates: ((Int) -> Unit) -> Unit = {},
     val onDiscardActiveSession: suspend () -> Unit = {}
 )
 
@@ -308,6 +326,11 @@ fun WorkoutsScreenContent(
     var showSorenessDialog by remember { mutableStateOf(false) }
     var importRewardBatch by remember { mutableStateOf<RewardBatch?>(null) }
     var importSummary by remember { mutableStateOf<String?>(null) }
+    var cleanDuplicateMsg by remember { mutableStateOf<String?>(null) }
+
+    var isSelectionMode by remember { mutableStateOf(false) }
+    val selectedWorkoutIds = remember { mutableStateListOf<Long>() }
+    var showBulkDeleteDialog by remember { mutableStateOf(false) }
 
     var pendingStartWorkoutId by remember { mutableStateOf<Long?>(null) }
     var showActiveSessionPrompt by remember { mutableStateOf(false) }
@@ -319,6 +342,34 @@ fun WorkoutsScreenContent(
         } else {
             actions.onStartWorkout(workoutId)
         }
+    }
+
+    if (showBulkDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showBulkDeleteDialog = false },
+            title = { Text("Delete ${selectedWorkoutIds.size} Quests?") },
+            text = { Text("Are you sure you want to permanently delete these ${selectedWorkoutIds.size} routine quest(s)? This action cannot be undone.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val idsToDelete = selectedWorkoutIds.toList()
+                        showBulkDeleteDialog = false
+                        actions.onDeleteWorkoutsBulk(idsToDelete) {
+                            selectedWorkoutIds.clear()
+                            isSelectionMode = false
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Delete")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showBulkDeleteDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 
     if (showActiveSessionPrompt) {
@@ -460,6 +511,78 @@ fun WorkoutsScreenContent(
                         Spacer(Modifier.width(8.dp))
                         Text("Import Workouts", maxLines = 1)
                     }
+
+                    if (workouts.size > 1) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(
+                                onClick = {
+                                    actions.onCleanDuplicates { count ->
+                                        cleanDuplicateMsg = if (count > 0) "Cleaned up $count duplicate quest(s)!" else "No duplicates found."
+                                    }
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Icons.Filled.CleaningServices, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text("Clean Duplicates", maxLines = 1)
+                            }
+                            OutlinedButton(
+                                onClick = {
+                                    isSelectionMode = !isSelectionMode
+                                    selectedWorkoutIds.clear()
+                                },
+                                modifier = Modifier.weight(1f),
+                                colors = if (isSelectionMode) ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error) else ButtonDefaults.outlinedButtonColors()
+                            ) {
+                                Icon(if (isSelectionMode) Icons.Filled.Close else Icons.Filled.Checklist, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text(if (isSelectionMode) "Cancel Select" else "Select Quests", maxLines = 1)
+                            }
+                        }
+                    }
+
+                    if (isSelectionMode) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                        ) {
+                            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        "${selectedWorkoutIds.size} of ${workouts.size} selected",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        TextButton(onClick = {
+                                            selectedWorkoutIds.clear()
+                                            selectedWorkoutIds.addAll(workouts.map { it.id })
+                                        }) { Text("Select All") }
+                                        TextButton(onClick = { selectedWorkoutIds.clear() }) { Text("Clear") }
+                                    }
+                                }
+                                Button(
+                                    onClick = { showBulkDeleteDialog = true },
+                                    enabled = selectedWorkoutIds.isNotEmpty(),
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Icon(Icons.Filled.Delete, contentDescription = null)
+                                    Spacer(Modifier.width(8.dp))
+                                    Text("Delete Selected (${selectedWorkoutIds.size})")
+                                }
+                            }
+                        }
+                    }
+
+                    cleanDuplicateMsg?.let { msg ->
+                        Text(msg, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                    }
                     
                     if (workouts.any { it.name.lowercase().contains("routine") || it.name.lowercase().contains("trial") }) {
                         OutlinedButton(
@@ -513,19 +636,44 @@ fun WorkoutsScreenContent(
             }
 
             items(workouts, key = { it.id }) { workout ->
+                val isSelected = workout.id in selectedWorkoutIds
                 SectionCard {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f).clickable { actions.onOpenWorkout(workout.id) }) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = if (isSelectionMode) Modifier.clickable {
+                            if (isSelected) selectedWorkoutIds.remove(workout.id) else selectedWorkoutIds.add(workout.id)
+                        } else Modifier
+                    ) {
+                        if (isSelectionMode) {
+                            Checkbox(
+                                checked = isSelected,
+                                onCheckedChange = { checked ->
+                                    if (checked) selectedWorkoutIds.add(workout.id) else selectedWorkoutIds.remove(workout.id)
+                                }
+                            )
+                            Spacer(Modifier.width(8.dp))
+                        }
+                        Column(
+                            Modifier.weight(1f).clickable {
+                                if (isSelectionMode) {
+                                    if (isSelected) selectedWorkoutIds.remove(workout.id) else selectedWorkoutIds.add(workout.id)
+                                } else {
+                                    actions.onOpenWorkout(workout.id)
+                                }
+                            }
+                        ) {
                             Text(workout.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                             Text(if (workout.aiGenerated) "✨ AI-forged" else "Tap to view or edit", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                        IconButton(onClick = { actions.onRenameWithAi(workout.id) }, enabled = !state.renaming) {
-                            if (state.renaming) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-                            else Icon(Icons.Filled.AutoAwesome, contentDescription = "Rename with AI", tint = MaterialTheme.colorScheme.tertiary)
-                        }
-                        Button(onClick = { handleStartWorkout(workout.id) }) {
-                            Icon(Icons.Filled.PlayArrow, contentDescription = null)
-                            Text("Start")
+                        if (!isSelectionMode) {
+                            IconButton(onClick = { actions.onRenameWithAi(workout.id) }, enabled = !state.renaming) {
+                                if (state.renaming) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                                else Icon(Icons.Filled.AutoAwesome, contentDescription = "Rename with AI", tint = MaterialTheme.colorScheme.tertiary)
+                            }
+                            Button(onClick = { handleStartWorkout(workout.id) }) {
+                                Icon(Icons.Filled.PlayArrow, contentDescription = null)
+                                Text("Start")
+                            }
                         }
                     }
                 }

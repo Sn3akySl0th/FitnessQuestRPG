@@ -175,6 +175,13 @@ class GameRepository(
             }
             prefs.setStatPointsRetroApplied(true)
         }
+
+        // Automatic Mastery Recovery: Backfill movement masteries from historical sessions if empty or incomplete
+        val existingMasteries = db.movementMasteryDao().getAll()
+        val allSessions = db.sessionDao().getAllSessions()
+        if (existingMasteries.isEmpty() && allSessions.isNotEmpty()) {
+            recalculateAllMovementMasteriesFromHistory()
+        }
     }
 
     suspend fun getCharacter(): CharacterEntity {
@@ -324,7 +331,22 @@ class GameRepository(
         )
     }
 
-    suspend fun deleteWorkout(id: Long) = db.workoutDao().deleteWorkoutFully(id)
+    suspend fun deleteWorkout(id: Long, userId: String? = null) {
+        db.workoutDao().deleteWorkoutFully(id)
+        if (!userId.isNullOrBlank()) {
+            syncService?.deleteCloudWorkout(userId, id)
+        }
+    }
+
+    suspend fun deleteWorkoutsBulk(ids: List<Long>, userId: String? = null) {
+        if (ids.isEmpty()) return
+        db.workoutDao().deleteWorkoutsFully(ids)
+        if (!userId.isNullOrBlank()) {
+            ids.forEach { id ->
+                syncService?.deleteCloudWorkout(userId, id)
+            }
+        }
+    }
 
     suspend fun deleteSession(sessionId: Long, userId: String? = null) {
         val session = db.sessionDao().getSession(sessionId) ?: return
@@ -429,6 +451,16 @@ class GameRepository(
                 existingSessions.add(importKey)
                 sessionsAdded++
             } else {
+                // Deduplicate by exercise signature to avoid generating clone routines on sync
+                val incomingSignature = imported.exercises.map { it.name.trim().lowercase() }.sorted().joinToString(";")
+                val existingWorkouts = db.workoutDao().getAllWorkouts()
+                val alreadyExists = existingWorkouts.any { existing ->
+                    val existingExercises = db.workoutDao().exercisesFor(existing.id)
+                    val existingSig = existingExercises.map { it.exerciseName.trim().lowercase() }.sorted().joinToString(";")
+                    existingSig.isNotBlank() && existingSig == incomingSignature
+                }
+                if (alreadyExists) return@forEach
+
                 val immersiveTitle = if (renameTemplates) {
                     gemini?.renameImportedRoutine(cleanTitle, imported.exercises.map { it.name })
                         ?.getOrNull()
@@ -471,22 +503,29 @@ class GameRepository(
                         sessionId = 0,
                         exerciseName = exercise.exerciseName,
                         category = ExerciseCategories.resolveStored(exercise.exerciseName, exercise.category),
+                        weightKg = exercise.targetWeightKg?.coerceAtLeast(0.0) ?: 0.0,
                         reps = exercise.targetReps.coerceAtLeast(0)
                     )
                 }
-            }.map { log -> log.copy(xp = GameMath.xpForSet(log)) }.toList()
-            val session = SessionEntity(
-                name = workout.name,
-                startedAt = endedAt,
-                endedAt = endedAt,
-                xpEarned = logs.sumOf { it.xp },
-                goldEarned = 0,
-                energyEarned = 0,
-                setCount = logs.size
-            )
-            val existing = db.sessionDao().getAllSessions()
-                .any { sessionImportKey(it.name, it.startedAt, it.endedAt, it.setCount) == sessionImportKey(session.name, session.startedAt, session.endedAt, session.setCount) }
-            if (!existing) {
+            }.map { log ->
+                log.copy(
+                    sessionId = 0,
+                    category = ExerciseCategories.resolveStored(log.exerciseName, log.category),
+                    xp = if (log.xp > 0) log.xp else GameMath.xpForSet(log)
+                )
+            }.toList()
+
+            if (logs.isNotEmpty()) {
+                val session = SessionEntity(
+                    name = workout.name,
+                    startedAt = endedAt,
+                    endedAt = endedAt,
+                    xpEarned = logs.sumOf { it.xp },
+                    goldEarned = 0,
+                    energyEarned = 0,
+                    setCount = logs.size,
+                    completionToken = "repaired_template_${workout.id}_$endedAt"
+                )
                 val sessionId = db.sessionDao().insertSession(session)
                 db.sessionDao().insertSetLogs(logs.map { it.copy(sessionId = sessionId) })
             }
@@ -513,6 +552,50 @@ class GameRepository(
             db.workoutDao().deleteWorkoutFully(workout.id)
         }
         return candidates.size
+    }
+
+    /**
+     * Identifies and deletes duplicate routine clones that have identical exercise configurations.
+     */
+    suspend fun cleanDuplicateWorkouts(userId: String? = null): Int {
+        val workouts = db.workoutDao().getAllWorkouts()
+        if (workouts.size <= 1) return 0
+
+        val workoutsWithExercises = workouts.map { w ->
+            val exercises = db.workoutDao().exercisesFor(w.id)
+            val signature = exercises.map { "${it.exerciseName.trim().lowercase()}|${it.targetSets}|${it.targetReps}" }.sorted().joinToString(";")
+            Triple(w, exercises, signature)
+        }
+
+        val toDelete = mutableListOf<Long>()
+        val seenSignatures = mutableMapOf<String, WorkoutEntity>()
+
+        for ((workout, _, signature) in workoutsWithExercises) {
+            if (signature.isBlank()) continue
+            val existing = seenSignatures[signature]
+            if (existing != null) {
+                val isCurrentNumbered = workout.name.matches(Regex(""".*\(\d+\)$"""))
+                val isExistingNumbered = existing.name.matches(Regex(""".*\(\d+\)$"""))
+                if (isCurrentNumbered && !isExistingNumbered) {
+                    toDelete.add(workout.id)
+                } else if (!isCurrentNumbered && isExistingNumbered) {
+                    toDelete.add(existing.id)
+                    seenSignatures[signature] = workout
+                } else if (workout.createdAt >= existing.createdAt) {
+                    toDelete.add(workout.id)
+                } else {
+                    toDelete.add(existing.id)
+                    seenSignatures[signature] = workout
+                }
+            } else {
+                seenSignatures[signature] = workout
+            }
+        }
+
+        if (toDelete.isNotEmpty()) {
+            deleteWorkoutsBulk(toDelete, userId)
+        }
+        return toDelete.size
     }
 
     /**
@@ -2528,6 +2611,91 @@ class GameRepository(
     @Suppress("unused")
     suspend fun getMasteryByCanonicalKey(key: String, characterId: Long = 1L): MovementMasteryEntity? =
         db.movementMasteryDao().getByCanonicalKey(key, characterId)
+
+    suspend fun recalculateAllMovementMasteriesFromHistory(characterId: Long = 1L): Int {
+        val character = db.characterDao().get() ?: return 0
+        val allSessions = db.sessionDao().getAllSessions().associateBy { it.id }
+        val allLogs = db.sessionDao().getAllSetLogs()
+        if (allLogs.isEmpty()) return 0
+
+        val userWeight = character.bodyWeightKg
+        val logsBySession = allLogs.groupBy { it.sessionId }
+        val sortedSessionIds = logsBySession.keys.sortedBy { allSessions[it]?.endedAt ?: allSessions[it]?.startedAt ?: 0L }
+
+        val masteryMap = mutableMapOf<String, MovementMasteryEntity>()
+
+        for (sessionId in sortedSessionIds) {
+            val session = allSessions[sessionId]
+            val sessionDate = session?.endedAt ?: session?.startedAt ?: 0L
+            val sessionLogs = logsBySession[sessionId].orEmpty()
+            val groupedByMovement = sessionLogs.groupBy {
+                MovementMasteryCatalog.resolve(it.exerciseName, it.category)
+            }
+
+            for ((movement, sets) in groupedByMovement) {
+                val rawXp = sets.sumOf { set ->
+                    MasteryProgression.calculateSetXp(set, userWeight)
+                }
+                val maxXpCap = if (movement.category == ExerciseCategory.CARDIO) {
+                    MasteryProgression.MAX_CARDIO_XP_PER_SESSION
+                } else {
+                    MasteryProgression.MAX_STRENGTH_XP_PER_SESSION
+                }
+                val sessionMasteryXp = rawXp.coerceIn(0, maxXpCap).toLong()
+
+                val current = masteryMap[movement.canonicalKey]
+                    ?: MovementMasteryEntity(
+                        characterId = characterId,
+                        canonicalKey = movement.canonicalKey,
+                        displayName = movement.displayName,
+                        category = movement.category
+                    )
+
+                val newTotalXp = current.currentXp + sessionMasteryXp
+                val newLevel = MasteryProgression.levelForXp(newTotalXp)
+                val sessionVolume = sets.filter { it.weightKg > 0.0 }.sumOf { it.weightKg * it.reps }
+                val sessionReps = sets.sumOf { it.reps }
+                val sessionDist = sets.sumOf { it.distanceKm }
+                val sessionDuration = sets.sumOf { (it.durationMin * 60.0).toLong() }
+
+                val sessionMax1Rm = sets.filter { it.weightKg > 0.0 }
+                    .maxOfOrNull { GameMath.calculate1RM(it.weightKg, it.reps) } ?: 0.0
+                val sessionMaxWeight = sets.maxOfOrNull { it.weightKg } ?: 0.0
+                val sessionMaxDist = sets.maxOfOrNull { it.distanceKm } ?: 0.0
+
+                val sessionBestPaceSec = sets.filter { it.distanceKm > 0.0 && it.durationMin > 0.0 }
+                    .minOfOrNull { ((it.durationMin * 60.0) / it.distanceKm).toLong() } ?: 0L
+
+                val bestPace = if (sessionBestPaceSec > 0L) {
+                    if (current.bestPaceSecPerKm == 0L) sessionBestPaceSec
+                    else minOf(current.bestPaceSecPerKm, sessionBestPaceSec)
+                } else {
+                    current.bestPaceSecPerKm
+                }
+
+                val updated = current.copy(
+                    level = newLevel,
+                    currentXp = newTotalXp,
+                    lifetimeVolumeKg = current.lifetimeVolumeKg + sessionVolume,
+                    lifetimeReps = current.lifetimeReps + sessionReps,
+                    lifetimeDistanceKm = current.lifetimeDistanceKm + sessionDist,
+                    lifetimeDurationSec = current.lifetimeDurationSec + sessionDuration,
+                    totalSessionsLogged = current.totalSessionsLogged + 1,
+                    highest1RmKg = maxOf(current.highest1RmKg, sessionMax1Rm),
+                    highestWeightKg = maxOf(current.highestWeightKg, sessionMaxWeight),
+                    bestDistanceKm = maxOf(current.bestDistanceKm, sessionMaxDist),
+                    bestPaceSecPerKm = bestPace,
+                    lastTrainedEpochMs = maxOf(current.lastTrainedEpochMs, sessionDate)
+                )
+                masteryMap[movement.canonicalKey] = updated
+            }
+        }
+
+        if (masteryMap.isNotEmpty()) {
+            db.movementMasteryDao().upsertAll(masteryMap.values.toList())
+        }
+        return masteryMap.size
+    }
 
     // ---- Fuzzy Matching & Previous Performance (Task 1.2) ----
 

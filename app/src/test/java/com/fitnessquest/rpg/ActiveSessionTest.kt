@@ -405,7 +405,7 @@ class ActiveSessionTest {
         val existingColumns = mutableMapOf<String, MutableSet<String>>(
             "workout_exercises" to mutableSetOf("id", "workoutId", "exerciseName", "category", "targetSets", "targetReps"),
             "set_logs" to mutableSetOf("id", "sessionId", "exerciseName", "category", "weightKg", "reps", "durationMin", "distanceKm", "xp", "loggedAt"),
-            "sessions" to mutableSetOf("id", "name", "startedAt", "endedAt", "xpEarned", "goldEarned", "energyEarned", "setCount")
+            "sessions" to mutableSetOf("id", "name", "startedAt", "endedAt", "xpEarned", "goldEarned", "energyEarned", "setCount", "completionToken", "completionReceiptJson")
         )
 
         val dbProxy = Proxy.newProxyInstance(
@@ -469,15 +469,14 @@ class ActiveSessionTest {
         } as SupportSQLiteDatabase
 
         // Execute production migrations
+        AppDatabase.MIGRATION_22_23.migrate(dbProxy)
         AppDatabase.MIGRATION_23_24.migrate(dbProxy)
         AppDatabase.MIGRATION_24_25.migrate(dbProxy)
 
         // Verify MIGRATION_23_24 repairs & additions
         assertTrue("workout_exercises.targetWeightKg repaired", existingColumns["workout_exercises"]?.contains("targetWeightKg") == true)
-        assertTrue("set_logs.setType repaired", existingColumns["set_logs"]?.contains("setType") == true)
-        assertTrue("sessions.completionToken added", existingColumns["sessions"]?.contains("completionToken") == true)
-        assertTrue("sessions.completionReceiptJson added", existingColumns["sessions"]?.contains("completionReceiptJson") == true)
-        assertTrue("sessions completionToken unique index created", executedSqls.any { it.contains("index_sessions_completion_token") })
+        assertTrue("gear_instances.upgradeLevel added", existingColumns["gear_instances"]?.contains("upgradeLevel") == true)
+        assertTrue("gear_instances.rarity added", existingColumns["gear_instances"]?.contains("rarity") == true)
 
         // Verify MIGRATION_24_25 tables created
         assertTrue("active_sessions table created", executedSqls.any { it.contains("CREATE TABLE IF NOT EXISTS active_sessions") })

@@ -13,6 +13,8 @@ import com.fitnessquest.rpg.data.db.ExerciseCategory
 import com.fitnessquest.rpg.data.db.GearInstanceEntity
 import com.fitnessquest.rpg.data.db.ItemEntity
 import com.fitnessquest.rpg.data.db.ItemSlot
+import com.fitnessquest.rpg.data.db.MovementMasteryEntity
+import com.fitnessquest.rpg.data.db.PendingSyncEntity
 import com.fitnessquest.rpg.data.db.SessionEntity
 import com.fitnessquest.rpg.data.db.SetLogEntity
 import com.fitnessquest.rpg.data.db.WorkoutEntity
@@ -93,14 +95,21 @@ class SyncService(
                     // Live premium grants/revokes from the Firebase console.
                     val premiumListen = launch { listenCloudPremium(uid) }
                     try {
-                        // Watch local data and push changes, debounced via collectLatest+delay.
-                        val coreFlow = combine(
+                        val characterGearFlow = combine(
                             db.characterDao().observe().filterNotNull(),
                             db.itemDao().observeAll(),
-                            db.gearInstanceDao().observeAll(),
+                            db.gearInstanceDao().observeAll()
+                        ) { c, i, inst -> Triple(c, i, inst) }
+
+                        val progressMasteryFlow = combine(
                             db.classProgressDao().observeAll(),
+                            db.movementMasteryDao().observeAll(),
                             userPrefs.developerSandbox
-                        ) { c, i, inst, cp, s -> CoreSync(c, i, inst, cp, s) }
+                        ) { cp, mm, s -> Triple(cp, mm, s) }
+
+                        val coreFlow = combine(characterGearFlow, progressMasteryFlow) { (c, i, inst), (cp, mm, s) ->
+                            CoreSync(c, i, inst, cp, mm, s)
+                        }
 
                         val activityFlow = combine(
                             db.sessionDao().observeAll(),
@@ -123,6 +132,7 @@ class SyncService(
                                 items = core.items,
                                 instances = core.instances,
                                 classProgress = core.classProgress,
+                                masteries = core.masteries,
                                 sessions = activity.first,
                                 workouts = activity.second,
                                 sandbox = core.sandbox
@@ -137,6 +147,7 @@ class SyncService(
                                     payload.items,
                                     payload.instances,
                                     payload.classProgress,
+                                    payload.masteries,
                                     payload.sessions,
                                     payload.workouts
                                 )
@@ -174,6 +185,18 @@ class SyncService(
             runCatching {
                 userDoc(uid).collection("sessions")
                     .document(sessionId.toString())
+                    .delete()
+                    .await()
+            }
+        }
+    }
+
+    /** Permanently removes a workout routine from this account's cloud storage. */
+    fun deleteCloudWorkout(uid: String, workoutId: Long) {
+        scope.launch {
+            runCatching {
+                userDoc(uid).collection("workouts")
+                    .document(workoutId.toString())
                     .delete()
                     .await()
             }
@@ -296,15 +319,13 @@ class SyncService(
             val cloudUpdatedAt = doc.getLong("updatedAt") ?: 0L
             val lastPushAt = prefs?.getLong("last_push_at_$uid", 0L) ?: 0L
 
-            // Reconcile if:
-            // 1. Forced (leaving sandbox)
-            // 2. Cloud has strictly more progress (higher level/xp/etc)
-            // 3. Progress is equal but cloud was updated more recently than our last push (settings change from other device)
             val cloudHasProgress = cloudIsAhead(cloud, local)
             val localHasProgress = cloudIsAhead(local, cloud)
             val cloudIsNewer = cloudUpdatedAt > lastPushAt
+            val cloudHasIdentity = (cloud.characterClass != null && local.characterClass == null) ||
+                (!cloud.name.equals("Hero", ignoreCase = true) && local.name.equals("Hero", ignoreCase = true))
 
-            val shouldRestore = force || cloudHasProgress || (!localHasProgress && cloudIsNewer)
+            val shouldRestore = force || cloudHasProgress || (!localHasProgress && cloudIsNewer) || cloudHasIdentity
             if (!shouldRestore) return
 
             db.characterDao().upsert(cloud.copy(id = 1L))
@@ -395,8 +416,18 @@ class SyncService(
             cloudProgress?.forEach { m ->
                 db.classProgressDao().upsert(classProgressFromMap(m))
             }
+            @Suppress("UNCHECKED_CAST")
+            val cloudMasteries = doc.get("movementMastery") as? List<Map<String, Any?>>
+            val restoredMasteries = cloudMasteries?.mapNotNull { masteryFromMap(it) }.orEmpty()
+            if (restoredMasteries.isNotEmpty()) {
+                db.movementMasteryDao().upsertAll(restoredMasteries)
+            }
             restoreSessions(uid)
             restoreWorkouts(uid)
+            // Backfill masteries from sessions if mastery table is still empty
+            if (db.movementMasteryDao().getAll().isEmpty()) {
+                (app as? com.fitnessquest.rpg.FitQuestApp)?.container?.repository?.recalculateAllMovementMasteriesFromHistory()
+            }
             // Ensure the restored name is treated as a valid local claim.
             usernameService.ensureClaimedForExistingName()
             _status.value = SyncStatus(lastSyncAt = System.currentTimeMillis())
@@ -500,6 +531,7 @@ class SyncService(
         items: List<ItemEntity>,
         instances: List<GearInstanceEntity>,
         classProgress: List<ClassProgressEntity>,
+        masteries: List<MovementMasteryEntity>,
         sessions: List<SessionEntity>,
         workouts: List<WorkoutEntity>
     ) {
@@ -526,6 +558,7 @@ class SyncService(
                     "character" to characterToMap(character),
                     "settings" to settingsMap,
                     "classProgress" to classProgress.map { classProgressToMap(it) },
+                    "movementMastery" to masteries.map { masteryToMap(it) },
                     "stacks" to items.asSequence()
                         .filter { it.slot.isStackable() && it.quantity > 0 }
                         .associateBy({ it.id.toString() }, { it.quantity }),
@@ -649,6 +682,7 @@ class SyncService(
         val items: List<ItemEntity>,
         val instances: List<GearInstanceEntity>,
         val classProgress: List<ClassProgressEntity>,
+        val masteries: List<MovementMasteryEntity>,
         val sandbox: Boolean
     )
 
@@ -657,6 +691,7 @@ class SyncService(
         val items: List<ItemEntity>,
         val instances: List<GearInstanceEntity>,
         val classProgress: List<ClassProgressEntity>,
+        val masteries: List<MovementMasteryEntity>,
         val sessions: List<SessionEntity>,
         val workouts: List<WorkoutEntity>,
         val sandbox: Boolean
@@ -982,6 +1017,52 @@ class SyncService(
             feetId = long("feetId"),
             trinketId = long("trinketId"),
             freeStatPoints = int("freeStatPoints")
+        )
+    }
+
+    private fun masteryToMap(m: MovementMasteryEntity): Map<String, Any?> = mapOf(
+        "canonicalKey" to m.canonicalKey,
+        "displayName" to m.displayName,
+        "category" to m.category.name,
+        "level" to m.level,
+        "currentXp" to m.currentXp,
+        "lifetimeVolumeKg" to m.lifetimeVolumeKg,
+        "lifetimeReps" to m.lifetimeReps,
+        "lifetimeDistanceKm" to m.lifetimeDistanceKm,
+        "lifetimeDurationSec" to m.lifetimeDurationSec,
+        "totalSessionsLogged" to m.totalSessionsLogged,
+        "highest1RmKg" to m.highest1RmKg,
+        "highestWeightKg" to m.highestWeightKg,
+        "bestDistanceKm" to m.bestDistanceKm,
+        "bestPaceSecPerKm" to m.bestPaceSecPerKm,
+        "lastTrainedEpochMs" to m.lastTrainedEpochMs
+    )
+
+    private fun masteryFromMap(m: Map<String, Any?>): MovementMasteryEntity? {
+        val canonicalKey = m["canonicalKey"] as? String ?: return null
+        val displayName = m["displayName"] as? String ?: return null
+        val categoryStr = m["category"] as? String ?: return null
+        val category = ExerciseCategory.entries.find { it.name == categoryStr } ?: return null
+        fun int(key: String, default: Int = 0) = (m[key] as? Number)?.toInt() ?: default
+        fun long(key: String, default: Long = 0L) = (m[key] as? Number)?.toLong() ?: default
+        fun double(key: String, default: Double = 0.0) = (m[key] as? Number)?.toDouble() ?: default
+        return MovementMasteryEntity(
+            characterId = 1L,
+            canonicalKey = canonicalKey,
+            displayName = displayName,
+            category = category,
+            level = int("level", 1),
+            currentXp = long("currentXp"),
+            lifetimeVolumeKg = double("lifetimeVolumeKg"),
+            lifetimeReps = int("lifetimeReps"),
+            lifetimeDistanceKm = double("lifetimeDistanceKm"),
+            lifetimeDurationSec = long("lifetimeDurationSec"),
+            totalSessionsLogged = int("totalSessionsLogged"),
+            highest1RmKg = double("highest1RmKg"),
+            highestWeightKg = double("highestWeightKg"),
+            bestDistanceKm = double("bestDistanceKm"),
+            bestPaceSecPerKm = long("bestPaceSecPerKm"),
+            lastTrainedEpochMs = long("lastTrainedEpochMs")
         )
     }
 }

@@ -483,13 +483,19 @@ class OnboardingViewModel(private val container: AppContainer) : ViewModel() {
                 _ui.value = _ui.value.copy(busy = false)
                 goTo(OnboardingStep.CLASS)
             }
+            character.name.isNotBlank() && !character.name.equals("Hero", ignoreCase = true) -> {
+                container.prefs.setUsernameClaim(character.name)
+                container.usernames.syncPublicPointer()
+                completeOnboarding()
+            }
             !container.prefs.usernameSet.value -> {
                 container.usernames.ensureClaimedForExistingName()
                 if (!container.prefs.usernameSet.value) {
                     _ui.value = _ui.value.copy(busy = false)
                     goTo(OnboardingStep.USERNAME)
+                } else {
+                    completeOnboarding()
                 }
-                else completeOnboarding()
             }
             else -> completeOnboarding()
         }

@@ -269,8 +269,9 @@ class AuthService(private val app: Application) {
         } else {
             auth.signInWithCredential(credential).await()
         }
-        // Refresh the local user so profile fields (email, name, providers) are current.
+        // Refresh the local user and force ID token refresh so REST/Firestore uses the new UID.
         runCatching { auth.currentUser?.reload()?.await() }
+        runCatching { auth.currentUser?.getIdToken(true)?.await() }
         _state.value = currentState()
     }
 
