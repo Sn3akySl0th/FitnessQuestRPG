@@ -138,10 +138,74 @@ data class EquipmentVisualSpec(
     val layerOrder: PaperDollLayerOrder,
     val anchor: VisualAnchor? = null,
     val supportsRarityTint: Boolean = true,
+    val coverageProfile: CoverageProfile = CoverageProfile.NONE,
+    val coveredRegions: Set<BodyRegion> = emptySet(),
+    val hiddenVisualSlots: Set<PaperDollVisualSlot> = emptySet(),
     @get:DrawableRes val layerResId: Int? = null,
     @get:DrawableRes val iconResId: Int? = null,
     @get:DrawableRes val glowResId: Int? = null
 )
+
+/**
+ * Helpers for default body region coverage and slot suppression per profile.
+ */
+fun CoverageProfile.defaultCoveredRegions(): Set<BodyRegion> = when (this) {
+    CoverageProfile.NONE -> emptySet()
+    CoverageProfile.CAP -> setOf(BodyRegion.SCALP, BodyRegion.FOREHEAD)
+    CoverageProfile.HOOD -> setOf(BodyRegion.SCALP, BodyRegion.FOREHEAD, BodyRegion.NECK)
+    CoverageProfile.CLOSED_HELM -> setOf(BodyRegion.SCALP, BodyRegion.FOREHEAD, BodyRegion.NECK)
+    CoverageProfile.SLEEVELESS_VEST -> setOf(BodyRegion.TORSO, BodyRegion.HIPS)
+    CoverageProfile.SLEEVED_TUNIC -> setOf(
+        BodyRegion.TORSO,
+        BodyRegion.HIPS,
+        BodyRegion.LEFT_UPPER_ARM,
+        BodyRegion.RIGHT_UPPER_ARM
+    )
+    CoverageProfile.HEAVY_PLATE -> setOf(
+        BodyRegion.TORSO,
+        BodyRegion.HIPS,
+        BodyRegion.LEFT_UPPER_ARM,
+        BodyRegion.RIGHT_UPPER_ARM,
+        BodyRegion.LEFT_FOREARM,
+        BodyRegion.RIGHT_FOREARM
+    )
+    CoverageProfile.BRACERS -> setOf(BodyRegion.LEFT_FOREARM, BodyRegion.RIGHT_FOREARM)
+    CoverageProfile.FULL_GLOVES -> setOf(
+        BodyRegion.LEFT_FOREARM,
+        BodyRegion.RIGHT_FOREARM,
+        BodyRegion.LEFT_HAND,
+        BodyRegion.RIGHT_HAND
+    )
+    CoverageProfile.TROUSERS,
+    CoverageProfile.GREAVES -> setOf(
+        BodyRegion.HIPS,
+        BodyRegion.LEFT_THIGH,
+        BodyRegion.RIGHT_THIGH,
+        BodyRegion.LEFT_CALF,
+        BodyRegion.RIGHT_CALF
+    )
+    CoverageProfile.BOOTS -> setOf(
+        BodyRegion.LEFT_CALF,
+        BodyRegion.RIGHT_CALF,
+        BodyRegion.LEFT_FOOT,
+        BodyRegion.RIGHT_FOOT
+    )
+    CoverageProfile.ROBE -> setOf(
+        BodyRegion.TORSO,
+        BodyRegion.HIPS,
+        BodyRegion.LEFT_UPPER_ARM,
+        BodyRegion.RIGHT_UPPER_ARM,
+        BodyRegion.LEFT_THIGH,
+        BodyRegion.RIGHT_THIGH,
+        BodyRegion.LEFT_CALF,
+        BodyRegion.RIGHT_CALF
+    )
+}
+
+fun CoverageProfile.defaultHiddenVisualSlots(): Set<PaperDollVisualSlot> = when (this) {
+    CoverageProfile.ROBE -> setOf(PaperDollVisualSlot.LEGS)
+    else -> emptySet()
+}
 
 /**
  * Central registry that resolves 2D asset specs and drawable resources for equipment.
@@ -200,6 +264,36 @@ object EquipmentVisualRegistry {
                 PaperDollVisualSlot.TRINKET -> TrinketAnchor
             }
 
+            val nameLower = item.name.lowercase()
+            val profile = when (visualSlot) {
+                PaperDollVisualSlot.HEAD -> when {
+                    nameLower.contains("hood") || nameLower.contains("coif") -> CoverageProfile.HOOD
+                    nameLower.contains("helm") || nameLower.contains("crown") -> CoverageProfile.CLOSED_HELM
+                    else -> CoverageProfile.CAP
+                }
+                PaperDollVisualSlot.CHEST -> when {
+                    item.style == ItemStyle.ROBE || nameLower.contains("robe") || nameLower.contains("vestment") -> CoverageProfile.ROBE
+                    item.style == ItemStyle.PLATE || nameLower.contains("plate") || nameLower.contains("aegis") -> CoverageProfile.HEAVY_PLATE
+                    item.style == ItemStyle.LIGHT || nameLower.contains("vest") || nameLower.contains("tunic") || nameLower.contains("shirt") -> CoverageProfile.SLEEVED_TUNIC
+                    else -> CoverageProfile.SLEEVED_TUNIC
+                }
+                PaperDollVisualSlot.LEGS -> when {
+                    nameLower.contains("greave") || nameLower.contains("guard") -> CoverageProfile.GREAVES
+                    else -> CoverageProfile.TROUSERS
+                }
+                PaperDollVisualSlot.FEET -> CoverageProfile.BOOTS
+                PaperDollVisualSlot.HANDS -> when {
+                    nameLower.contains("glove") || nameLower.contains("gauntlet") || nameLower.contains("mitt") -> CoverageProfile.FULL_GLOVES
+                    else -> CoverageProfile.BRACERS
+                }
+                PaperDollVisualSlot.WEAPON,
+                PaperDollVisualSlot.BACK,
+                PaperDollVisualSlot.TRINKET -> CoverageProfile.NONE
+            }
+
+            val coveredRegions = profile.defaultCoveredRegions()
+            val hiddenVisualSlots = profile.defaultHiddenVisualSlots()
+
             EquipmentVisualSpec(
                 itemKey = itemKey,
                 domainSlot = item.slot,
@@ -209,7 +303,10 @@ object EquipmentVisualRegistry {
                 glowResName = glowResName,
                 layerOrder = layerOrder,
                 anchor = anchor,
-                supportsRarityTint = true
+                supportsRarityTint = true,
+                coverageProfile = profile,
+                coveredRegions = coveredRegions,
+                hiddenVisualSlots = hiddenVisualSlots
             )
         }
     }

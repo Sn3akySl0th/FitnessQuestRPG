@@ -31,6 +31,7 @@ import com.fitnessquest.rpg.domain.CharacterClass
 import com.fitnessquest.rpg.domain.CharacterRace
 import com.fitnessquest.rpg.domain.build
 import com.fitnessquest.rpg.domain.ItemStyle
+import com.fitnessquest.rpg.domain.visuals.BodyRegion
 import com.fitnessquest.rpg.ui.effects.rememberDeviceTilt
 import kotlin.math.cos
 import kotlin.math.sin
@@ -324,7 +325,8 @@ fun CharacterAvatar(
     highlightMuscles: Set<String> = emptySet(),
     facingBack: Boolean = false,
     enableBreathing: Boolean = true,
-    focus: AvatarFocus = AvatarFocus.FULL_BODY
+    focus: AvatarFocus = AvatarFocus.FULL_BODY,
+    hiddenRegions: Set<BodyRegion> = emptySet()
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "heroIdle")
     val internalBreatheScale by infiniteTransition.animateFloat(
@@ -370,7 +372,8 @@ fun CharacterAvatar(
             appearance,
             expression,
             detail,
-            animPhase
+            animPhase,
+            hiddenRegions
         )
         with(AvatarPainter) {
             draw(frame, focus, tilt, animation)
@@ -395,7 +398,8 @@ internal class AvatarFrame(
     val appearance: AvatarAppearance,
     val expression: AvatarExpression,
     val detail: AvatarDetail,
-    val phase: Float
+    val phase: Float,
+    val hiddenRegions: Set<BodyRegion> = emptySet()
 ) {
     val weapon get() = gear[ItemSlot.WEAPON]
     val head get() = gear[ItemSlot.HEAD]
@@ -723,23 +727,28 @@ private fun DrawScope.drawArmsLayer(f: AvatarFrame, pose: AvatarPose) {
     val isBare = !f.costume && f.robeChest == null
 
     fun DrawScope.drawBareArmSegments(baseX: Float, isLeft: Boolean) {
-        // Forearm: bottom half
-        val forearmColor = f.skinColor("forearms")
-        drawRoundRect(forearmColor, topLeft = f.p(baseX, 60f), size = f.s(11f, 16f), cornerRadius = CornerRadius(4f * f.u))
-        
-        // Triceps: outer half of upper arm
-        val tricepColor = f.skinColor("triceps")
-        val tricepX = if (isLeft) baseX else baseX + 5.5f
-        drawRect(tricepColor, topLeft = f.p(tricepX, 52f), size = f.s(5.5f, 12f))
-        
-        // Biceps: inner half of upper arm
-        val bicepColor = f.skinColor("biceps")
-        val bicepX = if (isLeft) baseX + 5.5f else baseX
-        drawRect(bicepColor, topLeft = f.p(bicepX, 52f), size = f.s(5.5f, 12f))
+        val upperArmHidden = if (isLeft) BodyRegion.LEFT_UPPER_ARM in f.hiddenRegions else BodyRegion.RIGHT_UPPER_ARM in f.hiddenRegions
+        val forearmHidden = if (isLeft) BodyRegion.LEFT_FOREARM in f.hiddenRegions else BodyRegion.RIGHT_FOREARM in f.hiddenRegions
 
-        // Shoulders (Deltoid): top cap, slightly wider
-        val shoulderColor = f.skinColor("shoulders", "delts")
-        drawRoundRect(shoulderColor, topLeft = f.p(baseX - 0.5f, 45.5f), size = f.s(12f, 9f), cornerRadius = CornerRadius(4.5f * f.u))
+        // Forearm: bottom half
+        if (!forearmHidden) {
+            val forearmColor = f.skinColor("forearms")
+            drawRoundRect(forearmColor, topLeft = f.p(baseX, 60f), size = f.s(11f, 16f), cornerRadius = CornerRadius(4f * f.u))
+        }
+        
+        // Upper Arm (Triceps, Biceps, Deltoid)
+        if (!upperArmHidden) {
+            val tricepColor = f.skinColor("triceps")
+            val tricepX = if (isLeft) baseX else baseX + 5.5f
+            drawRect(tricepColor, topLeft = f.p(tricepX, 52f), size = f.s(5.5f, 12f))
+
+            val bicepColor = f.skinColor("biceps")
+            val bicepX = if (isLeft) baseX + 5.5f else baseX
+            drawRect(bicepColor, topLeft = f.p(bicepX, 52f), size = f.s(5.5f, 12f))
+
+            val shoulderColor = f.skinColor("shoulders", "delts")
+            drawRoundRect(shoulderColor, topLeft = f.p(baseX - 0.5f, 45.5f), size = f.s(12f, 9f), cornerRadius = CornerRadius(4.5f * f.u))
+        }
     }
 
     withTransform({
@@ -801,21 +810,33 @@ private fun DrawScope.drawLowerBodyLayer(f: AvatarFrame, pose: AvatarPose) {
     val feetPal = f.feet?.let { GearVisuals.palette(it) }
     
     fun DrawScope.drawBareLegSegments(baseX: Float, isLeft: Boolean) {
-        // Glutes: top back.
-        val glutesColor = f.skinColor("glutes")
-        drawRoundRect(glutesColor, topLeft = f.p(baseX - 0.5f, 73f), size = f.s(11f, 8f), cornerRadius = CornerRadius(3f * f.u))
-        
-        // Quads (Front/Inner Thigh) and Hamstrings (Back/Outer Thigh)
-        val quadsColor = f.skinColor("quads")
-        val hamstringsColor = f.skinColor("hamstrings")
-        val innerX = if (isLeft) baseX + 5f else baseX
-        val outerX = if (isLeft) baseX else baseX + 5f
-        drawRect(hamstringsColor, topLeft = f.p(outerX, 74f), size = f.s(5f, 15f))
-        drawRect(quadsColor, topLeft = f.p(innerX, 74f), size = f.s(5f, 15f))
+        val thighHidden = if (isLeft) BodyRegion.LEFT_THIGH in f.hiddenRegions else BodyRegion.RIGHT_THIGH in f.hiddenRegions
+        val calfHidden = if (isLeft) BodyRegion.LEFT_CALF in f.hiddenRegions else BodyRegion.RIGHT_CALF in f.hiddenRegions
+        val footHidden = if (isLeft) BodyRegion.LEFT_FOOT in f.hiddenRegions else BodyRegion.RIGHT_FOOT in f.hiddenRegions
+
+        // Glutes / Thighs
+        if (!thighHidden) {
+            val glutesColor = f.skinColor("glutes")
+            drawRoundRect(glutesColor, topLeft = f.p(baseX - 0.5f, 73f), size = f.s(11f, 8f), cornerRadius = CornerRadius(3f * f.u))
+
+            val quadsColor = f.skinColor("quads")
+            val hamstringsColor = f.skinColor("hamstrings")
+            val innerX = if (isLeft) baseX + 5f else baseX
+            val outerX = if (isLeft) baseX else baseX + 5f
+            drawRect(hamstringsColor, topLeft = f.p(outerX, 74f), size = f.s(5f, 15f))
+            drawRect(quadsColor, topLeft = f.p(innerX, 74f), size = f.s(5f, 15f))
+        }
         
         // Calves (lower leg)
-        val calvesColor = f.skinColor("calves")
-        drawRoundRect(calvesColor, topLeft = f.p(baseX, 88f), size = f.s(10f, 15f), cornerRadius = CornerRadius(3f * f.u))
+        if (!calfHidden) {
+            val calvesColor = f.skinColor("calves")
+            drawRoundRect(calvesColor, topLeft = f.p(baseX, 88f), size = f.s(10f, 15f), cornerRadius = CornerRadius(3f * f.u))
+        }
+
+        // Feet (deterministic mask authority: draw if LEFT_FOOT/RIGHT_FOOT not hidden)
+        if (!footHidden) {
+            drawOval(f.skinColor("feet", "legs"), topLeft = f.p(if (isLeft) 36.5f else 51.5f, 101f), size = f.s(12f, 7f))
+        }
     }
 
     withTransform({
@@ -838,8 +859,6 @@ private fun DrawScope.drawLowerBodyLayer(f: AvatarFrame, pose: AvatarPose) {
             feetPal.glow?.let { g ->
                 drawRect(g.copy(alpha = 0.85f), topLeft = f.p(36f, 100.5f), size = f.s(13f, 1.2f))
             }
-        } else {
-            drawOval(f.skinColor("feet", "legs"), topLeft = f.p(36.5f, 101f), size = f.s(12f, 7f))
         }
     }
 
@@ -863,29 +882,29 @@ private fun DrawScope.drawLowerBodyLayer(f: AvatarFrame, pose: AvatarPose) {
             feetPal.glow?.let { g ->
                 drawRect(g.copy(alpha = 0.85f), topLeft = f.p(50f, 100.5f), size = f.s(13f, 1.2f))
             }
-        } else {
-            drawOval(f.skinColor("feet", "legs"), topLeft = f.p(51.5f, 101f), size = f.s(12f, 7f))
         }
     }
     
     // Modesty layer moves with the body, not the individual legs.
-    withTransform({
-        translate(pose.bodyOffset.x, pose.bodyOffset.y)
-    }) {
-        val modestyColor = legPal?.main ?: f.appearance.underwearColor
-        drawRoundRect(modestyColor, topLeft = f.p(36f, 71f), size = f.s(28f, 13f), cornerRadius = CornerRadius(4f * f.u))
-        if (legPal != null) {
-            drawRect(legPal.dark, topLeft = f.p(36f, 71f), size = f.s(28f, 3f))
-        }
-        
-        // Glute highlight overlay (draw over underwear if sore, back view only)
-        if (f.facingBack && f.hasHighlight("glutes", "legs")) {
-            drawRoundRect(
-                Color(0xFFE57373).copy(alpha = 0.8f), // Increased alpha to 0.8f
-                topLeft = f.p(36f, 71f),
-                size = f.s(28f, 13f),
-                cornerRadius = CornerRadius(4f * f.u)
-            )
+    if (BodyRegion.HIPS !in f.hiddenRegions) {
+        withTransform({
+            translate(pose.bodyOffset.x, pose.bodyOffset.y)
+        }) {
+            val modestyColor = legPal?.main ?: f.appearance.underwearColor
+            drawRoundRect(modestyColor, topLeft = f.p(36f, 71f), size = f.s(28f, 13f), cornerRadius = CornerRadius(4f * f.u))
+            if (legPal != null) {
+                drawRect(legPal.dark, topLeft = f.p(36f, 71f), size = f.s(28f, 3f))
+            }
+
+            // Glute highlight overlay (draw over underwear if sore, back view only)
+            if (f.facingBack && f.hasHighlight("glutes", "legs")) {
+                drawRoundRect(
+                    Color(0xFFE57373).copy(alpha = 0.8f),
+                    topLeft = f.p(36f, 71f),
+                    size = f.s(28f, 13f),
+                    cornerRadius = CornerRadius(4f * f.u)
+                )
+            }
         }
     }
 }
@@ -910,6 +929,7 @@ private fun DrawScope.drawCostumeLowerBody(f: AvatarFrame) {
 }
 
 private fun DrawScope.drawNeckLayer(f: AvatarFrame) {
+    if (BodyRegion.NECK in f.hiddenRegions) return
     val neckColor = f.skinColor("neck")
     val neckShade = f.skinShade("neck").copy(alpha = 0.65f)
     // Strong neck cylinder connecting jawline (Y=38) down into clavicles (Y=48.5)
@@ -940,8 +960,10 @@ private fun DrawScope.drawTorsoLayer(f: AvatarFrame) {
         return
     }
 
-    // Bare torso split into zones (same pattern as arms/legs). Garment draws over this.
-    drawBareTorsoSegments(f)
+    // Bare torso split into zones (only rendered if TORSO region is not hidden)
+    if (BodyRegion.TORSO !in f.hiddenRegions) {
+        drawBareTorsoSegments(f)
+    }
 
     if (f.chest == null) {
         if (f.appearance.gender == "female") {
@@ -1220,7 +1242,11 @@ private fun DrawScope.drawHeadLayer(f: AvatarFrame) {
     if (item == null) {
         drawRaceEars(f) // behind the skull so elf tips read clearly
         drawCircle(f.skinColor("head", "face"), radius = 14f * f.u, center = f.p(50f, 30f))
-        drawHair(f, f.appearance.hairStyle, isHat = false)
+        val hideAllHair = BodyRegion.SCALP in f.hiddenRegions && BodyRegion.FOREHEAD in f.hiddenRegions
+        if (!hideAllHair) {
+            val isHat = BodyRegion.FOREHEAD in f.hiddenRegions || BodyRegion.SCALP in f.hiddenRegions
+            drawHair(f, f.appearance.hairStyle, isHat = isHat)
+        }
         if (!f.facingBack) {
             eyes(f, 44f, 32f, 56f)
             drawRaceFaceAccents(f)

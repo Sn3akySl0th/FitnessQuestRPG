@@ -4,11 +4,11 @@
     android:viewportWidth="500"
     android:viewportHeight="600">
 
-    <!-- Tier 1: Old Boots (Feet layer Z: 07, Y=488 to 555) -->
+    <!-- Tier 1: Old Boots (Feet layer Z: 06, Y=476 to 555, cuffs securely overlapping trousers) -->
     <!-- Boot Ankle Shaft & Wrinkles (Left & Right) -->
     <path
         android:fillColor="#3E2723"
-        android:pathData="M184,490 L236,490 L240,530 L180,530 Z M316,490 L264,490 L260,530 L320,530 Z" />
+        android:pathData="M182,476 L238,476 L240,530 L180,530 Z M318,476 L262,476 L260,530 L320,530 Z" />
 
     <!-- Boot Upper & Vamp -->
     <path
@@ -24,10 +24,17 @@
         android:fillColor="#1F2937"
         android:pathData="M170,546 L246,546 L246,554 L170,554 Z M330,546 L254,546 L254,554 L330,554 Z" />
 
-    <!-- Rolled Leather Ankle Collar & Ties -->
+    <!-- Rolled Leather Ankle Collar Overlapping Trousers -->
     <path
         android:fillColor="#271105"
-        android:pathData="M182,488 L238,488 L236,498 L184,498 Z M318,488 L262,488 L264,498 L316,498 Z" />
+        android:pathData="M180,474 L240,474 L236,492 L184,492 Z M320,474 L260,474 L264,492 L316,492 Z" />
+
+    <!-- Top Cuff Lip Inner Shadow onto Pants -->
+    <path
+        android:fillColor="#150A04"
+        android:pathData="M182,474 L238,474 L238,478 L182,478 Z M318,474 L262,474 L262,478 L318,478 Z" />
+
+    <!-- Wrinkle Stitching Details -->
     <path
         android:strokeColor="#A1887F"
         android:strokeWidth="1.5"

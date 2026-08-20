@@ -5,7 +5,12 @@ import com.fitnessquest.rpg.data.db.*
 import com.fitnessquest.rpg.domain.CharacterClass
 import com.fitnessquest.rpg.domain.CharacterRace
 import com.fitnessquest.rpg.domain.build
+import com.fitnessquest.rpg.domain.ItemStyle
 import com.fitnessquest.rpg.domain.visuals.PaperDollLayerOrder
+import com.fitnessquest.rpg.domain.visuals.BodyRegion
+import com.fitnessquest.rpg.domain.visuals.CoverageProfile
+import com.fitnessquest.rpg.domain.visuals.EquipmentVisualRegistry
+import com.fitnessquest.rpg.domain.visuals.PaperDollVisualSlot
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
@@ -148,5 +153,51 @@ class GearSanitizationAndVisualsTest {
         assertEquals(102L, sanitized.trinketId)  // Boar's Slumber Girdle is now in Trinket
         assertEquals(103L, sanitized.feetId)     // Bonebound Slippers is now in Feet
         assertNull(sanitized.legsId)             // Legs slot is cleanly freed up
+    }
+
+    @Test
+    fun visualSpec_resolvesCorrectCoveredRegionsAndHiddenSlots() {
+        val paddedVest = ItemEntity(id = 1L, name = "Padded Vest", slot = ItemSlot.CHEST, style = ItemStyle.LIGHT, tier = 1, emoji = "🦺", price = 50)
+        val vestSpec = EquipmentVisualRegistry.resolveSpec(paddedVest)
+        assertEquals(CoverageProfile.SLEEVED_TUNIC, vestSpec.coverageProfile)
+        assertTrue(vestSpec.coveredRegions.contains(BodyRegion.TORSO))
+        assertTrue(vestSpec.coveredRegions.contains(BodyRegion.HIPS))
+        assertTrue(vestSpec.coveredRegions.contains(BodyRegion.LEFT_UPPER_ARM))
+        assertTrue(vestSpec.coveredRegions.contains(BodyRegion.RIGHT_UPPER_ARM))
+        assertTrue(vestSpec.hiddenVisualSlots.isEmpty())
+
+        val robe = ItemEntity(id = 2L, name = "Apprentice Robes", slot = ItemSlot.CHEST, style = ItemStyle.ROBE, tier = 2, emoji = "🥋", price = 100)
+        val robeSpec = EquipmentVisualRegistry.resolveSpec(robe)
+        assertEquals(CoverageProfile.ROBE, robeSpec.coverageProfile)
+        assertTrue(robeSpec.hiddenVisualSlots.contains(PaperDollVisualSlot.LEGS))
+        assertTrue(robeSpec.coveredRegions.contains(BodyRegion.TORSO))
+        assertTrue(robeSpec.coveredRegions.contains(BodyRegion.HIPS))
+        assertTrue(robeSpec.coveredRegions.contains(BodyRegion.LEFT_UPPER_ARM))
+        assertTrue(robeSpec.coveredRegions.contains(BodyRegion.RIGHT_UPPER_ARM))
+        assertTrue(robeSpec.coveredRegions.contains(BodyRegion.LEFT_THIGH))
+        assertTrue(robeSpec.coveredRegions.contains(BodyRegion.RIGHT_THIGH))
+        assertTrue(robeSpec.coveredRegions.contains(BodyRegion.LEFT_CALF))
+        assertTrue(robeSpec.coveredRegions.contains(BodyRegion.RIGHT_CALF))
+
+        val wraps = ItemEntity(id = 3L, name = "Novice Handwraps", slot = ItemSlot.HANDS, tier = 1, emoji = "🥊", price = 30)
+        val wrapsSpec = EquipmentVisualRegistry.resolveSpec(wraps)
+        assertEquals(CoverageProfile.BRACERS, wrapsSpec.coverageProfile)
+        assertTrue(wrapsSpec.coveredRegions.contains(BodyRegion.LEFT_FOREARM))
+        assertTrue(wrapsSpec.coveredRegions.contains(BodyRegion.RIGHT_FOREARM))
+        assertFalse("Wraps must not hide bare hands/fingers", wrapsSpec.coveredRegions.contains(BodyRegion.LEFT_HAND))
+        assertFalse("Wraps must not hide bare hands/fingers", wrapsSpec.coveredRegions.contains(BodyRegion.RIGHT_HAND))
+
+        val fullGloves = ItemEntity(id = 5L, name = "Heavy Iron Gauntlets", slot = ItemSlot.HANDS, tier = 3, emoji = "🧤", price = 200)
+        val glovesSpec = EquipmentVisualRegistry.resolveSpec(fullGloves)
+        assertEquals(CoverageProfile.FULL_GLOVES, glovesSpec.coverageProfile)
+        assertTrue(glovesSpec.coveredRegions.contains(BodyRegion.LEFT_HAND))
+        assertTrue(glovesSpec.coveredRegions.contains(BodyRegion.RIGHT_HAND))
+
+        val cap = ItemEntity(id = 4L, name = "Leather Cap", slot = ItemSlot.HEAD, tier = 1, emoji = "🧢", price = 30)
+        val capSpec = EquipmentVisualRegistry.resolveSpec(cap)
+        assertEquals(CoverageProfile.CAP, capSpec.coverageProfile)
+        assertTrue(capSpec.coveredRegions.contains(BodyRegion.SCALP))
+        assertTrue(capSpec.coveredRegions.contains(BodyRegion.FOREHEAD))
+        assertFalse("Cap must not hide neck", capSpec.coveredRegions.contains(BodyRegion.NECK))
     }
 }

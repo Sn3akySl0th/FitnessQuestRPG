@@ -129,8 +129,24 @@ fun PaperDollLayerRenderer(
         layers.sortedBy { it.order.zIndex }
     }
 
-    val hasAny2DLayer = remember(activeLayers) {
-        activeLayers.any { it.drawableResId != null }
+    // Derive hidden visual slots from active gear before rendering (e.g. Robes suppress LEGS slot)
+    val hiddenVisualSlots = remember(activeLayers) {
+        activeLayers.flatMap { it.spec?.hiddenVisualSlots.orEmpty() }.toSet()
+    }
+
+    val visibleLayers = remember(activeLayers, hiddenVisualSlots) {
+        activeLayers
+            .filterNot { it.visualSlot in hiddenVisualSlots }
+            .sortedBy { it.order.zIndex }
+    }
+
+    val hasAny2DLayer = remember(visibleLayers) {
+        visibleLayers.any { it.drawableResId != null }
+    }
+
+    // Derive all covered body regions across equipped visible gear
+    val hiddenBodyRegions = remember(visibleLayers) {
+        visibleLayers.flatMap { it.spec?.coveredRegions.orEmpty() }.toSet()
     }
 
     Box(
@@ -155,17 +171,18 @@ fun PaperDollLayerRenderer(
                 animation = animation,
                 expression = expression,
                 detail = AvatarDetail.FULL,
-                enableBreathing = false
+                enableBreathing = false,
+                hiddenRegions = hiddenBodyRegions
             )
         } else {
             // 2D Layer Compositor (rendered strictly in z-index order 00 to 13)
-            val unhandledCanvasGear = remember(gear, activeLayers) {
-                val handledSlots = activeLayers.filter { it.drawableResId != null }.mapNotNull { it.spec?.domainSlot }.toSet()
+            val unhandledCanvasGear = remember(gear, visibleLayers) {
+                val handledSlots = visibleLayers.filter { it.drawableResId != null }.mapNotNull { it.spec?.domainSlot }.toSet()
                 gear.filterKeys { it !in handledSlots }
             }
 
             Box(modifier = Modifier.fillMaxSize()) {
-                // Base canvas avatar (body, face, hair) with body depth parallax
+                // Base canvas avatar (body, face, hair) with body depth parallax and region masking
                 val bodyDepth = PaperDollLayerOrder.BODY_BASE.parallaxDepth()
                 Box(
                     modifier = Modifier
@@ -183,7 +200,8 @@ fun PaperDollLayerRenderer(
                         animation = animation,
                         expression = expression,
                         detail = AvatarDetail.FULL,
-                        enableBreathing = false
+                        enableBreathing = false,
+                        hiddenRegions = hiddenBodyRegions
                     )
                 }
 
@@ -198,7 +216,7 @@ fun PaperDollLayerRenderer(
                             transformOrigin = TransformOrigin(0.5f, 0.9f)
                         }
                 ) {
-                    activeLayers.forEach { layer ->
+                    visibleLayers.forEach { layer ->
                         layer.drawableResId?.let { resId ->
                             val isEquipTarget = equipAnimationState?.equippedSlot?.let {
                                 layer.spec?.domainSlot == it
