@@ -4,14 +4,22 @@ import android.app.Activity
 import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -22,17 +30,19 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilterChip
-
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.ui.Alignment
-import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
@@ -491,409 +501,464 @@ fun SettingsDialog(
     var deletePassword by remember { mutableStateOf("") }
     var titleTaps by remember { mutableIntStateOf(0) }
     var titleTapWindowStart by remember { mutableLongStateOf(0L) }
+    var showEmailAuth by remember { mutableStateOf(false) }
     val sandbox by viewModel.developerSandbox.collectAsState()
     val isPremium by viewModel.isPremium.collectAsState()
     val toolsUnlocked by viewModel.developerToolsUnlocked.collectAsState()
     val showDeveloperSection =
         viewModel.developerToolsAvailable && (toolsUnlocked || sandbox)
 
-    AlertDialog(
+    Dialog(
         onDismissRequest = ::close,
-        title = {
-            Text(
-                "Settings",
-                modifier = Modifier.clickable {
-                    if (!viewModel.developerToolsAvailable || toolsUnlocked) return@clickable
-                    val now = System.currentTimeMillis()
-                    if ((now - titleTapWindowStart) > 3_000L) {
-                        titleTapWindowStart = now
-                        titleTaps = 1
-                    } else {
-                        titleTaps += 1
-                    }
-                    if (titleTaps >= 7) {
-                        titleTaps = 0
-                        viewModel.unlockDeveloperTools()
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.background
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .statusBarsPadding()
+                    .navigationBarsPadding()
+            ) {
+                // Top Header Action Bar
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "Settings",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.clickable {
+                            if (!viewModel.developerToolsAvailable || toolsUnlocked) return@clickable
+                            val now = System.currentTimeMillis()
+                            if ((now - titleTapWindowStart) > 3_000L) {
+                                titleTapWindowStart = now
+                                titleTaps = 1
+                            } else {
+                                titleTaps += 1
+                            }
+                            if (titleTaps >= 7) {
+                                titleTaps = 0
+                                viewModel.unlockDeveloperTools()
+                            }
+                        }
+                    )
+                    Button(
+                        onClick = {
+                            viewModel.saveApiKey(key)
+                            close()
+                        }
+                    ) {
+                        Text("Done")
                     }
                 }
-            )
-        },
-        text = {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.verticalScroll(rememberScrollState())
-            ) {
-                if (showDeveloperSection) {
-                    Text(
-                        "Developer",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.tertiary
-                    )
-                    if (sandbox) {
+
+                HorizontalDivider()
+
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                ) {
+                    if (showDeveloperSection) {
                         Text(
-                            "Sandbox active — cloud sync is off. Sign in with Google below to restore your live hero (sandbox progress is discarded).",
+                            "Developer",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.tertiary
+                        )
+                        if (sandbox) {
+                            Text(
+                                "Sandbox active — cloud sync is off. Sign in with Google below to restore your live hero (sandbox progress is discarded).",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                TextButton(onClick = viewModel::debugGrantGold) { Text("+Gold") }
+                                TextButton(onClick = viewModel::debugGrantXp) { Text("+XP") }
+                                TextButton(onClick = viewModel::debugFillEnergy) { Text("Energy") }
+                            }
+                            TextButton(onClick = viewModel::debugResetHero) { Text("Reset sandbox hero") }
+                        } else {
+                            Text(
+                                "Enter sandbox to experiment locally. You will be signed out and a disposable Dev Hero is created. Your live cloud save is left alone.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Button(
+                                onClick = viewModel::enterDeveloperSandbox,
+                                modifier = Modifier.fillMaxWidth()
+                            ) { Text("Enter developer sandbox") }
+                        }
+                        val devMessage by viewModel.devMessage.collectAsState()
+                        devMessage?.let { msg ->
+                            Text(
+                                msg,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.tertiary
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Premium User Override", style = MaterialTheme.typography.bodyMedium)
+                            Switch(
+                                checked = isPremium,
+                                onCheckedChange = { viewModel.setPremium(it) }
+                            )
+                        }
+
+                        HorizontalDivider()
+                    }
+                    Text("Account", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                    if (account.hasAccount) {
+                        Text(
+                            "Signed in via ${viewModel.loginProvider}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.tertiary
+                        )
+                        Text(
+                            account.email ?: account.displayName ?: "your account",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            "UID: ${account.uid?.take(8)}...",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                        )
+                        val syncStatus by viewModel.syncStatus.collectAsState()
+                        Text(
+                            when {
+                                syncStatus.error != null ->
+                                    "\u26A0\uFE0F Backup issue: ${syncStatus.error}"
+                                syncStatus.lastSyncAt != null -> {
+                                    val fmt = remember { SimpleDateFormat("h:mm a", Locale.getDefault()) }
+                                    "\u2601\uFE0F Hero backed up \u00B7 ${fmt.format(Date(syncStatus.lastSyncAt!!))}"
+                                }
+                                else -> "\u2601\uFE0F Cloud backup is on"
+                            },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            TextButton(onClick = viewModel::debugGrantGold) { Text("+Gold") }
-                            TextButton(onClick = viewModel::debugGrantXp) { Text("+XP") }
-                            TextButton(onClick = viewModel::debugFillEnergy) { Text("Energy") }
+                            TextButton(onClick = viewModel::forceSync) { Text("Sync Now") }
+                            TextButton(onClick = { confirmSignOut = true }) { Text("Sign out") }
                         }
-                        TextButton(onClick = viewModel::debugResetHero) { Text("Reset sandbox hero") }
+                        TextButton(onClick = { confirmFreshStart = true }) {
+                            Text("Start fresh (reset live hero)")
+                        }
+                        TextButton(onClick = { confirmDeleteAccount = true }) {
+                            Text(
+                                "Delete account",
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
                     } else {
                         Text(
-                            "Enter sandbox to experiment locally. You will be signed out and a disposable Dev Hero is created. Your live cloud save is left alone.",
+                            "Sign in to back up your hero and keep progress across devices.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Button(
-                            onClick = viewModel::enterDeveloperSandbox,
+                            onClick = { activity?.let(viewModel::signInWithGoogle) },
                             modifier = Modifier.fillMaxWidth()
-                        ) { Text("Enter developer sandbox") }
+                        ) { Text("Sign in with Google") }
+
+                        TextButton(
+                            onClick = { showEmailAuth = !showEmailAuth },
+                            modifier = Modifier.align(Alignment.CenterHorizontally)
+                        ) {
+                            Text(if (showEmailAuth) "Hide email sign-in" else "Or sign in with email")
+                        }
+
+                        AnimatedVisibility(visible = showEmailAuth) {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlinedTextField(
+                                    value = email,
+                                    onValueChange = { email = it },
+                                    singleLine = true,
+                                    label = { Text("Email") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                OutlinedTextField(
+                                    value = password,
+                                    onValueChange = { password = it },
+                                    singleLine = true,
+                                    label = { Text("Password") },
+                                    visualTransformation = PasswordVisualTransformation(),
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    TextButton(
+                                        onClick = { viewModel.signUpWithEmail(email, password) },
+                                        enabled = email.isNotBlank() && password.length >= 6
+                                    ) { Text("Create account") }
+                                    TextButton(
+                                        onClick = { viewModel.signInWithEmail(email, password) },
+                                        enabled = email.isNotBlank() && password.isNotEmpty()
+                                    ) { Text("Sign in") }
+                                }
+                            }
+                        }
+
+                        TextButton(onClick = { confirmFreshStart = true }) {
+                            Text("Start fresh (local hero)")
+                        }
                     }
-                    val devMessage by viewModel.devMessage.collectAsState()
-                    devMessage?.let { msg ->
+
+                    // Unified Hero Maintenance Section (SD-4)
+                    Spacer(Modifier.size(4.dp))
+                    Text("Hero Maintenance", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                    OutlinedButton(
+                        onClick = viewModel::repairDuplicateGear,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Repair duplicate gear")
+                    }
+                    OutlinedButton(
+                        onClick = viewModel::recalculateMasteries,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Recalculate masteries from history")
+                    }
+
+                    authMessage?.let { msg ->
                         Text(
                             msg,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.tertiary
                         )
                     }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text("Premium User Override", style = MaterialTheme.typography.bodyMedium)
-                        Switch(
-                            checked = isPremium,
-                            onCheckedChange = { viewModel.setPremium(it) }
-                        )
-                    }
-
-                    HorizontalDivider()
-                }
-                Text("Account", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-                if (account.hasAccount) {
-                    Text(
-                        "Signed in via ${viewModel.loginProvider}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.tertiary
-                    )
-                    Text(
-                        account.email ?: account.displayName ?: "your account",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        "UID: ${account.uid?.take(8)}...",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                    )
-                    val syncStatus by viewModel.syncStatus.collectAsState()
-                    Text(
-                        when {
-                            syncStatus.error != null ->
-                                "\u26A0\uFE0F Backup issue: ${syncStatus.error}"
-                            syncStatus.lastSyncAt != null -> {
-                                val fmt = remember { SimpleDateFormat("h:mm a", Locale.getDefault()) }
-                                "\u2601\uFE0F Hero backed up \u00B7 ${fmt.format(Date(syncStatus.lastSyncAt!!))}"
-                            }
-                            else -> "\u2601\uFE0F Cloud backup is on"
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Row {
-                        TextButton(onClick = viewModel::forceSync) { Text("Sync Now") }
-                        TextButton(onClick = { confirmSignOut = true }) { Text("Sign out") }
-                    }
-                    TextButton(onClick = { confirmFreshStart = true }) {
-                        Text("Start fresh (reset live hero)")
-                    }
-                    OutlinedButton(
-                        onClick = viewModel::repairDuplicateGear,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Repair duplicate gear")
-                    }
-                    OutlinedButton(
-                        onClick = viewModel::recalculateMasteries,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Recalculate masteries from history")
-                    }
-                    TextButton(onClick = { confirmDeleteAccount = true }) {
+                    val resetMessage by viewModel.resetMessage.collectAsState()
+                    resetMessage?.let { msg ->
                         Text(
-                            "Delete account",
+                            msg,
+                            style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.error
                         )
                     }
-                } else {
+                    HorizontalDivider()
+                    Text("Premium", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
                     Text(
-                        "Sign in to back up your hero and keep progress across devices.",
+                        if (isPremium) "✦ Premium active — RGB sliders, fantasy races, Paladin / Necromancer, and extra hairstyles unlocked."
+                        else "Free: a few color picks + Human race. Premium unlocks RGB sliders, races, extra classes, and more hairstyles. Signed-in accounts can also receive Premium remotely.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (isPremium) MaterialTheme.colorScheme.tertiary
+                        else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (!isPremium) {
+                        var redeemCode by remember { mutableStateOf("") }
+                        OutlinedTextField(
+                            value = redeemCode,
+                            onValueChange = { redeemCode = it },
+                            singleLine = true,
+                            label = { Text("Redeem code") },
+                            placeholder = { Text("Enter code...") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Button(
+                            onClick = { viewModel.redeemPremiumCode(redeemCode) },
+                            enabled = redeemCode.isNotBlank(),
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("Unlock Premium") }
+                    }
+                    HorizontalDivider()
+                    Text("Units", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        FilterChip(
+                            selected = !imperial,
+                            onClick = { viewModel.setImperial(false) },
+                            label = { Text("Metric (kg \u00B7 km)") }
+                        )
+                        FilterChip(
+                            selected = imperial,
+                            onClick = { viewModel.setImperial(true) },
+                            label = { Text("Imperial (lb \u00B7 mi)") }
+                        )
+                    }
+                    HorizontalDivider()
+                    Text("Navigation hand", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                    Text(
+                        "Places the navigation pill on your preferred side.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Button(
-                        onClick = { activity?.let(viewModel::signInWithGoogle) },
-                        modifier = Modifier.fillMaxWidth()
-                    ) { Text("Sign in with Google") }
-                    OutlinedTextField(
-                        value = email,
-                        onValueChange = { email = it },
-                        singleLine = true,
-                        label = { Text("Email") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email)
-                    )
-                    OutlinedTextField(
-                        value = password,
-                        onValueChange = { password = it },
-                        singleLine = true,
-                        label = { Text("Password") },
-                        visualTransformation = PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
-                    )
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        TextButton(
-                            onClick = { viewModel.signUpWithEmail(email, password) },
-                            enabled = email.isNotBlank() && password.length >= 6
-                        ) { Text("Create account") }
-                        TextButton(
-                            onClick = { viewModel.signInWithEmail(email, password) },
-                            enabled = email.isNotBlank() && password.isNotEmpty()
-                        ) { Text("Sign in") }
-                    }
-                    TextButton(onClick = { confirmFreshStart = true }) {
-                        Text("Start fresh (local hero)")
-                    }
-                    OutlinedButton(
-                        onClick = viewModel::repairDuplicateGear,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Repair duplicate gear")
-                    }
-                    OutlinedButton(
-                        onClick = viewModel::recalculateMasteries,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Recalculate masteries from history")
-                    }
-                }
-                authMessage?.let { msg ->
-                    Text(
-                        msg,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.tertiary
-                    )
-                }
-                val resetMessage by viewModel.resetMessage.collectAsState()
-                resetMessage?.let { msg ->
-                    Text(
-                        msg,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error
-                    )
-                }
-                HorizontalDivider()
-                Text("Premium", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-                Text(
-                    if (isPremium) "✦ Premium active — RGB sliders, fantasy races, Paladin / Necromancer, and extra hairstyles unlocked."
-                    else "Free: a few color picks + Human race. Premium unlocks RGB sliders, races, extra classes, and more hairstyles. Signed-in accounts can also receive Premium remotely.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = if (isPremium) MaterialTheme.colorScheme.tertiary
-                    else MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                if (!isPremium) {
-                    var redeemCode by remember { mutableStateOf("") }
-                    OutlinedTextField(
-                        value = redeemCode,
-                        onValueChange = { redeemCode = it },
-                        singleLine = true,
-                        label = { Text("Redeem code") },
-                        placeholder = { Text("Enter code...") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Button(
-                        onClick = { viewModel.redeemPremiumCode(redeemCode) },
-                        enabled = redeemCode.isNotBlank(),
-                        modifier = Modifier.fillMaxWidth()
-                    ) { Text("Unlock Premium") }
-                }
-                HorizontalDivider()
-                Text("Units", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    FilterChip(
-                        selected = !imperial,
-                        onClick = { viewModel.setImperial(false) },
-                        label = { Text("Metric (kg \u00B7 km)") }
-                    )
-                    FilterChip(
-                        selected = imperial,
-                        onClick = { viewModel.setImperial(true) },
-                        label = { Text("Imperial (lb \u00B7 mi)") }
-                    )
-                }
-                HorizontalDivider()
-                Text("Navigation hand", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-                Text(
-                    "Places the navigation pill on your preferred side.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    FilterChip(
-                        selected = leftHanded,
-                        onClick = { viewModel.setLeftHanded(true) },
-                        label = { Text("Left") }
-                    )
-                    FilterChip(
-                        selected = !leftHanded,
-                        onClick = { viewModel.setLeftHanded(false) },
-                        label = { Text("Right") }
-                    )
-                }
-                HorizontalDivider()
-                BodyMetricsSection(viewModel = viewModel, imperial = imperial)
-                HorizontalDivider()
-                Text("Watch", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-                val wear by viewModel.wearPresence.collectAsState()
-                Text(
-                    wear.statusText,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = if (wear.watchLinked) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    }
-                )
-                Text(
-                    if (wear.watchLinked) {
-                        "Open FitnessRPG on the watch, then start a quest on Train."
-                    } else {
-                        "Keep FitnessRPG open on the watch. Phone and watch must use the same install signing (debug↔debug)."
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    TextButton(onClick = viewModel::refreshWearPresence) { Text("Refresh link") }
-                }
-                HorizontalDivider()
-                Text("Feedback", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    val sound by viewModel.sound.collectAsState()
-                    val haptics by viewModel.haptics.collectAsState()
-                    FilterChip(
-                        selected = sound,
-                        onClick = { viewModel.setSound(!sound) },
-                        label = { Text("\uD83D\uDD0A Sound") }
-                    )
-                    FilterChip(
-                        selected = haptics,
-                        onClick = { viewModel.setHaptics(!haptics) },
-                        label = { Text("\uD83D\uDCF3 Haptics") }
-                    )
-                }
-                HorizontalDivider()
-                Text("Graphics", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-                val lowPowerUi by viewModel.lowPowerUi.collectAsState()
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Low Power Mode", style = MaterialTheme.typography.bodyMedium)
-                        Text(
-                            "Disables intensive fantasy effects (embers & glows) for better performance and stability.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    Switch(
-                        checked = lowPowerUi,
-                        onCheckedChange = { viewModel.setLowPowerUi(it) }
-                    )
-                }
-                HorizontalDivider()
-                Text("Effort tracking", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-                val effortMethod by viewModel.effortMethod.collectAsState()
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    EffortMethod.entries.forEach { method ->
                         FilterChip(
-                            selected = effortMethod == method,
-                            onClick = { viewModel.setEffortMethod(method) },
-                            label = { Text(method.label) }
+                            selected = leftHanded,
+                            onClick = { viewModel.setLeftHanded(true) },
+                            label = { Text("Left") }
+                        )
+                        FilterChip(
+                            selected = !leftHanded,
+                            onClick = { viewModel.setLeftHanded(false) },
+                            label = { Text("Right") }
                         )
                     }
-                }
-                Text(
-                    effortMethod.description +
-                        if (effortMethod != EffortMethod.OFF) {
-                            ". Rate each strength set and the app adjusts your next set's weight and reps."
+                    HorizontalDivider()
+                    BodyMetricsSection(viewModel = viewModel, imperial = imperial)
+                    HorizontalDivider()
+                    Text("Watch", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                    val wear by viewModel.wearPresence.collectAsState()
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(10.dp)
+                                .background(
+                                    color = if (wear.watchLinked) Color(0xFF4CAF50) else Color.Gray,
+                                    shape = CircleShape
+                                )
+                        )
+                        Text(
+                            wear.statusText,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (wear.watchLinked) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            }
+                        )
+                    }
+                    Text(
+                        if (wear.watchLinked) {
+                            "Open FitnessRPG on the watch, then start a quest on Train."
                         } else {
-                            ""
+                            "Keep FitnessRPG open on the watch. Phone and watch must use the same install signing (debug↔debug)."
                         },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.size(4.dp))
-                Text("Gemini API key", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-                Text(
-                    "Powers AI workout generation and battle narration. " +
-                        "Get a free key at aistudio.google.com",
-                    style = MaterialTheme.typography.bodySmall
-                )
-                var keyVisible by remember { mutableStateOf(false) }
-                OutlinedTextField(
-                    value = key,
-                    onValueChange = {
-                        key = it
-                        viewModel.saveApiKey(it)
-                    },
-                    singleLine = true,
-                    label = { Text("API key") },
-                    visualTransformation = if (keyVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                    trailingIcon = {
-                        val icon = if (keyVisible) Icons.Filled.Visibility else Icons.Filled.VisibilityOff
-                        IconButton(onClick = { keyVisible = !keyVisible }) {
-                            Icon(icon, contentDescription = if (keyVisible) "Hide API key" else "Show API key")
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    OutlinedButton(
+                        onClick = viewModel::refreshWearPresence,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Refresh watch link")
+                    }
+                    HorizontalDivider()
+                    Text("Feedback", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        val sound by viewModel.sound.collectAsState()
+                        val haptics by viewModel.haptics.collectAsState()
+                        FilterChip(
+                            selected = sound,
+                            onClick = { viewModel.setSound(!sound) },
+                            label = { Text("\uD83D\uDD0A Sound") }
+                        )
+                        FilterChip(
+                            selected = haptics,
+                            onClick = { viewModel.setHaptics(!haptics) },
+                            label = { Text("\uD83D\uDCF3 Haptics") }
+                        )
+                    }
+                    HorizontalDivider()
+                    Text("Graphics", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                    val lowPowerUi by viewModel.lowPowerUi.collectAsState()
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Low Power Mode", style = MaterialTheme.typography.bodyMedium)
+                            Text(
+                                "Disables intensive fantasy effects (embers & glows) for better performance and stability.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                HorizontalDivider()
-                val useLocalAi by viewModel.useLocalAi.collectAsState()
-                LocalAiModelSection(
-                    viewModel = viewModel,
-                    useLocalAi = useLocalAi,
-                    onUseLocalAiChange = viewModel::setUseLocalAi
-                )
-                HorizontalDivider()
+                        Switch(
+                            checked = lowPowerUi,
+                            onCheckedChange = { viewModel.setLowPowerUi(it) }
+                        )
+                    }
+                    HorizontalDivider()
+                    Text("Effort tracking", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                    val effortMethod by viewModel.effortMethod.collectAsState()
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        EffortMethod.entries.forEach { method ->
+                            FilterChip(
+                                selected = effortMethod == method,
+                                onClick = { viewModel.setEffortMethod(method) },
+                                label = { Text(method.label) }
+                            )
+                        }
+                    }
+                    Text(
+                        effortMethod.description +
+                            if (effortMethod != EffortMethod.OFF) {
+                                ". Rate each strength set and the app adjusts your next set's weight and reps."
+                            } else {
+                                ""
+                            },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.size(4.dp))
+                    Text("Gemini API key", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                    Text(
+                        "Powers AI workout generation and battle narration. " +
+                            "Get a free key at aistudio.google.com",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    var keyVisible by remember { mutableStateOf(false) }
+                    OutlinedTextField(
+                        value = key,
+                        onValueChange = {
+                            key = it
+                            viewModel.saveApiKey(it)
+                        },
+                        singleLine = true,
+                        label = { Text("API key") },
+                        visualTransformation = if (keyVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                        trailingIcon = {
+                            val icon = if (keyVisible) Icons.Filled.Visibility else Icons.Filled.VisibilityOff
+                            IconButton(onClick = { keyVisible = !keyVisible }) {
+                                Icon(icon, contentDescription = if (keyVisible) "Hide API key" else "Show API key")
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    HorizontalDivider()
+                    val useLocalAi by viewModel.useLocalAi.collectAsState()
+                    LocalAiModelSection(
+                        viewModel = viewModel,
+                        useLocalAi = useLocalAi,
+                        onUseLocalAiChange = viewModel::setUseLocalAi
+                    )
+                    HorizontalDivider()
 
-                HevySyncSection(userPrefs = viewModel.userPrefs, repository = viewModel.repository, gemini = viewModel.gemini)
+                    HevySyncSection(userPrefs = viewModel.userPrefs, repository = viewModel.repository, gemini = viewModel.gemini)
 
-                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
 
-                Text(
-                    text = "FitQuest v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                    modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = 4.dp)
-                )
+                    Text(
+                        text = "FitQuest v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = 4.dp)
+                    )
+                }
             }
-        },
-        confirmButton = {
-            TextButton(onClick = {
-                viewModel.saveApiKey(key)
-                close()
-            }) { Text("Done") }
         }
-    )
+    }
 
     if (confirmFreshStart) {
         AlertDialog(

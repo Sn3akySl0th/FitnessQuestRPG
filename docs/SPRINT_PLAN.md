@@ -31,7 +31,7 @@
 
 ---
 
-## Sprint 2 — Settings Restructure + Global Text Overflow Pass
+## Sprint 2 — Settings Restructure + Global Text Overflow Pass [COMPLETED]
 **Goal:** Restructure the Settings dialog into a proper full-screen experience and fix all text overflow/truncation issues app-wide in a single sweep.  
 **Issues:** 15 | **Effort:** 1–2 sessions
 
@@ -60,12 +60,12 @@
 | A-7 | Session | Remove duplicate import statements (×4) [DONE] | `ActiveSessionScreen.kt` |
 
 ### Acceptance Criteria
-- [ ] Settings opens fullscreen or as bottom sheet — all 11 sections reachable without frustration
-- [ ] Guest auth shows only Google button by default; email form revealed on tap
-- [ ] "Repair Gear" appears exactly once, below the Account section header
-- [ ] Watch status has a ● indicator and Refresh is an `OutlinedButton`
-- [ ] Every `Text` with `maxLines` has matching `overflow = TextOverflow.Ellipsis`
-- [ ] All compact Buttons have at minimum `PaddingValues(horizontal = 8.dp)`
+- [x] Settings opens fullscreen or as bottom sheet — all 11 sections reachable without frustration
+- [x] Guest auth shows only Google button by default; email form revealed on tap
+- [x] "Repair Gear" appears exactly once, below the Account section header
+- [x] Watch status has a ● indicator and Refresh is an `OutlinedButton`
+- [x] Every `Text` with `maxLines` has matching `overflow = TextOverflow.Ellipsis`
+- [x] All compact Buttons have at minimum `PaddingValues(horizontal = 8.dp)`
 - [x] Duplicate imports removed from `ActiveSessionScreen.kt`
 
 ---
@@ -93,7 +93,7 @@
 
 ---
 
-## Sprint 4 — Polish, Alignment & Empty States
+## Sprint 4 — Polish, Alignment & Empty States [COMPLETED]
 **Goal:** Address every remaining cosmetic issue, alignment fix, empty state, and minor motivation improvement.  
 **Issues:** 19 | **Effort:** 1–2 sessions
 
@@ -152,15 +152,15 @@
 | SD-5 | OutlinedTextField labels at 1.3× scale | Verify on device; fix width guards if confirmed |
 
 ### Acceptance Criteria
-- [ ] Currency bar trailing fade gradient visible when scrollable
-- [ ] Settings icon anchored to top-right of hero banner
-- [ ] Battle arena scales proportionally (no fixed height)
-- [ ] Victory narration bounded — Claim Rewards always visible
-- [ ] Log button is full-width below input fields in session screen
-- [ ] `rewardPresentation()` returns emoji for Gold/XP/Energy
-- [ ] Party invite code has clipboard copy button
-- [ ] Mastery tab has an empty state card
-- [ ] Heat streak badge shown in ActiveSession header
+- [x] Currency bar trailing fade gradient visible when scrollable
+- [x] Settings icon anchored to top-right of hero banner
+- [x] Battle arena scales proportionally (no fixed height)
+- [x] Victory narration bounded — Claim Rewards always visible
+- [x] Log button is full-width below input fields in session screen
+- [x] `rewardPresentation()` returns emoji for Gold/XP/Energy
+- [x] Party invite code has clipboard copy button
+- [x] Mastery tab has an empty state card
+- [x] Heat streak badge shown in ActiveSession header
 
 ---
 

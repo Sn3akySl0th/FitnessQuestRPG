@@ -565,7 +565,9 @@ fun JobSwitchSheet(
                                     else -> "Lv $level"
                                 },
                                 style = MaterialTheme.typography.labelSmall,
-                                color = if (isActive) Gold else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                color = if (isActive) Gold else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
@@ -1654,7 +1656,7 @@ private fun StatMeterRow(
         if (showAdd) {
             FilledIconButton(
                 onClick = onAdd,
-                modifier = Modifier.size(32.dp),
+                modifier = Modifier.size(36.dp),
                 colors = IconButtonDefaults.filledIconButtonColors(
                     containerColor = Gold,
                     contentColor = NightBg
@@ -1664,7 +1666,7 @@ private fun StatMeterRow(
                 Icon(
                     imageVector = Icons.Default.Add,
                     contentDescription = "Allocate point to $label",
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(20.dp)
                 )
             }
         }

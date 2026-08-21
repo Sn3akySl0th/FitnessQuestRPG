@@ -51,6 +51,7 @@ import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -686,7 +687,9 @@ private fun RivalRow(rank: Int, entry: RivalEntry, isMe: Boolean) {
             Column(Modifier.weight(1f)) {
                 Text(
                     if (isMe) "${entry.name} (you)" else entry.name,
-                    fontWeight = FontWeight.SemiBold
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(

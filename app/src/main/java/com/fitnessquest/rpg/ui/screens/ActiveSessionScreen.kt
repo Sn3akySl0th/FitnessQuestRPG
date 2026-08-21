@@ -1729,6 +1729,10 @@ fun ActiveSessionScreenContent(
                     )
                     MetricItem("Volume", "${Units.toDisplay(state.totalVolumeKg, imperial).toInt()} ${Units.label(imperial)}")
                     MetricItem("Sets", state.totalSets.toString())
+                    if (state.heatStreak > 0) {
+                        val heatMult = GameMath.calculateHeatMultiplier(state.heatStreak)
+                        MetricItem("Heat", "🔥 ×${"%.1f".format(heatMult)}")
+                    }
                     MetricItem("XP", "+${state.totalXp}")
                 }
 
@@ -2048,8 +2052,8 @@ private fun DurationEditDialog(
 @Composable
 private fun MetricItem(label: String, value: String, modifier: Modifier = Modifier) {
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier) {
-        Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary)
-        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 

@@ -326,7 +326,8 @@ private fun DockItemVertical(
                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
             ),
             color = if (selected) Gold else Parchment.copy(alpha = 0.7f),
-            maxLines = 1
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }
@@ -387,7 +388,8 @@ private fun RowScope.DockItem(
             style = MaterialTheme.typography.labelSmall,
             color = if (selected) Gold else MaterialTheme.colorScheme.onSurfaceVariant,
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-            maxLines = 1
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }

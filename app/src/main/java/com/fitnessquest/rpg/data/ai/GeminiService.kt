@@ -669,11 +669,11 @@ class GeminiService(private val context: Context) {
 
     suspend fun battleNarration(monsterName: String, victory: Boolean, playerName: String, level: Int): Result<String> {
         val outcome = if (victory) "defeated" else "was defeated by"
-        val prompt = "Write a dramatic 2-3 sentence fantasy battle epilogue: the hero \"$playerName\" (level $level) " +
+        val prompt = "Write a vivid, dramatic 2-3 sentence fantasy battle epilogue (under 50 words, single short paragraph): the hero \"$playerName\" (level $level) " +
                 "$outcome the monster \"$monsterName\" in an RPG where real-world workouts power the hero. " +
                 if (victory) "Make it triumphant with a wink of fitness humor."
                 else "Make it encouraging: the hero should train harder in the real world and return. " +
-                    "Respond with only the narration text."
+                    "Do not write multiple paragraphs. Respond with only the narration text."
         return generateText(prompt)
     }
 
