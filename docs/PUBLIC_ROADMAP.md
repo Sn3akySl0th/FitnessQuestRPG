@@ -41,6 +41,9 @@ The next major focus is boss-gated biome progression, followed by Movement Maste
 - Upgrade details now name the required material instead of saying only "materials."
 - Gear details now clearly show which class can equip an item, or whether all classes can use it.
 - Forge salvage rewards now use a forge reward label instead of looking like chest rewards.
+- **Movement Mastery Perks & Dynamic Energy Caps**: Reaching level 10, 25, or 50 in any movement pattern (e.g., Squat, Running) now unlocks permanent passive perks (ATK, DEF, Max HP). Added dynamic energy caps that expand as users master low-intensity movements like walking or cycling.
+- **Boss-Gated travel & Quest Hub Chapter Milestones**: Finalized backend enforcement for biome travel, requiring the previous biome boss to be defeated. Integrated "Chapter Milestones" into the Home screen Quest Hub to guide players toward boss encounters.
+- **Account Isolation & Multi-UID Party Cleanup**: Implemented automatic local data wipe on logout and a background Firestore cleanup tool to remove "ghost" member entries from party/guild rosters.
 - Reward reveal badges were cleaned up so labels are readable.
 - Offline battle loot is now stored until claim, then applied through the reward reveal so item rewards are not silently added.
 - Idle rewards no longer estimate gear from monster kills before the exact reveal.
