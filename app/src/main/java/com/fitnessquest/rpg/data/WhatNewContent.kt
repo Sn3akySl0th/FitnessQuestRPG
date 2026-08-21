@@ -15,6 +15,7 @@ object WhatNewContent {
             version = "0.12.0",
             date = "August 2026",
             changes = listOf(
+                "🥋 Movement Mastery Perks: Reaching level 10, 25, or 50 in any movement pattern (Squat, Running, etc.) now unlocks permanent passive perks! Boost your ATK, DEF, Max HP, and even your max Energy cap through consistent training.",
                 "🏰 Quest Hub Redesign (Issue #48): A brand new home screen that centralizes your next workout, active bounties, and current biome encounter in one sleek, glanceable view.",
                 "🔒 Account Isolation: Local data is now automatically wiped upon sign-out to prevent account overlap and ensure account privacy.",
                 "🥋 Mastery Recovery: New tool in Settings > Account to restore lost mastery levels and XP directly from your workout history.",
