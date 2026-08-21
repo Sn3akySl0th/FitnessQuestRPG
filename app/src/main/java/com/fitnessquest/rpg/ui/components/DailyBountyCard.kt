@@ -1,5 +1,10 @@
 package com.fitnessquest.rpg.ui.components
 
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -15,9 +20,11 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -52,12 +59,30 @@ data class WeeklyCampaign(
     val isClaimed: Boolean
 )
 
+enum class DailyBountyTimerUrgency {
+    NORMAL,
+    APPROACHING,
+    URGENT
+}
+
+internal fun dailyBountyTimerUrgency(remainingMs: Long?): DailyBountyTimerUrgency = when {
+    remainingMs == null || remainingMs > 6 * 60 * 60 * 1000L -> DailyBountyTimerUrgency.NORMAL
+    remainingMs > 60 * 60 * 1000L -> DailyBountyTimerUrgency.APPROACHING
+    else -> DailyBountyTimerUrgency.URGENT
+}
+
+internal fun hasClaimableDailyBounty(bounties: List<Bounty>): Boolean =
+    bounties.any { it.isCompleted && !it.isClaimed }
+
 @Composable
 fun DailyBountyCard(
     bounties: List<Bounty>,
     resetLabel: String,
+    resetRemainingMs: Long? = null,
     onClaim: (Bounty) -> Unit,
     onLogProgress: (Bounty) -> Unit,
+    onOpenBattle: (() -> Unit)? = null,
+    onOpenSaga: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val haptic = LocalHapticFeedback.current
@@ -75,12 +100,15 @@ fun DailyBountyCard(
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black),
                     color = Gold
                 )
-                Text(
-                    text = resetLabel,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color.White.copy(alpha = 0.75f),
-                    maxLines = 1
-                )
+                Column(horizontalAlignment = Alignment.End) {
+                    DailyBountyResetTimer(
+                        resetLabel = resetLabel,
+                        remainingMs = resetRemainingMs
+                    )
+                    onOpenSaga?.let { openSaga ->
+                        TextButton(onClick = openSaga) { Text("OPEN SAGA") }
+                    }
+                }
             }
             Text(
                 "New mix each day — walk, hydrate, and move even on rest days.",
@@ -167,6 +195,17 @@ fun DailyBountyCard(
                                 )
                             }
                         }
+                        bounty.id == "b_battle" && onOpenBattle != null -> {
+                            OutlinedButton(
+                                onClick = onOpenBattle,
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text(
+                                    text = "GO TO BATTLE",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
+                                )
+                            }
+                        }
                         else -> {
                             Text(
                                 text = "IN PROGRESS",
@@ -179,6 +218,50 @@ fun DailyBountyCard(
             }
         }
     }
+}
+
+@Composable
+private fun DailyBountyResetTimer(resetLabel: String, remainingMs: Long?) {
+    val urgency = dailyBountyTimerUrgency(remainingMs)
+    val color = when (urgency) {
+        DailyBountyTimerUrgency.NORMAL -> Color(0xFF6FE39A)
+        DailyBountyTimerUrgency.APPROACHING -> Color(0xFFFFC857)
+        DailyBountyTimerUrgency.URGENT -> Color(0xFFFF6B6B)
+    }
+    val shouldPulse = urgency == DailyBountyTimerUrgency.URGENT &&
+        (remainingMs ?: Long.MAX_VALUE) <= 15 * 60 * 1000L &&
+        !LocalLowPowerUi.current
+
+    if (shouldPulse) {
+        val transition = rememberInfiniteTransition(label = "dailyBountyExpiry")
+        val timerAlpha = transition.animateFloat(
+            initialValue = 0.55f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(700),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "dailyBountyExpiryAlpha"
+        ).value
+        DailyBountyResetTimerText(resetLabel, color, Modifier.alpha(timerAlpha))
+    } else {
+        DailyBountyResetTimerText(resetLabel, color)
+    }
+}
+
+@Composable
+private fun DailyBountyResetTimerText(
+    resetLabel: String,
+    color: Color,
+    modifier: Modifier = Modifier
+) {
+    Text(
+        text = resetLabel,
+        modifier = modifier,
+        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+        color = color,
+        maxLines = 1
+    )
 }
 
 @Composable

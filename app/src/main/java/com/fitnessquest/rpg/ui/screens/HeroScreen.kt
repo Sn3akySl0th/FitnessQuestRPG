@@ -2,6 +2,7 @@ package com.fitnessquest.rpg.ui.screens
 
 import android.content.res.Configuration
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
@@ -21,14 +22,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -46,6 +46,8 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.fitnessquest.rpg.AppContainer
 import com.fitnessquest.rpg.FitQuestApp
 import com.fitnessquest.rpg.data.OwnedGear
+import com.fitnessquest.rpg.data.ai.RoutineRecommendation
+import com.fitnessquest.rpg.data.ai.WorkoutRecommendationEngine
 import com.fitnessquest.rpg.data.db.*
 import com.fitnessquest.rpg.data.export.AvatarExporter
 import com.fitnessquest.rpg.data.export.ExportFormat
@@ -83,7 +85,14 @@ data class HeroUiState(
     val ownedGear: List<OwnedGear> = emptyList(),
     val runes: List<ItemEntity> = emptyList(),
     val allClassProgress: List<ClassProgressEntity> = emptyList(),
-    val movementMastery: List<MovementMasteryEntity> = emptyList()
+    val movementMastery: List<MovementMasteryEntity> = emptyList(),
+    val questHub: QuestHubState? = null
+)
+
+private data class HeroQuestInputs(
+    val recommendation: RoutineRecommendation,
+    val exerciseCount: Int,
+    val activeSession: ActiveSessionWithDetails?
 )
 
 class HeroViewModel(private val container: AppContainer) : ViewModel() {
@@ -117,11 +126,55 @@ class HeroViewModel(private val container: AppContainer) : ViewModel() {
         )
     }
 
+    private val questInputs: Flow<HeroQuestInputs> = combine(
+        container.repository.workouts,
+        container.repository.workoutExercises,
+        container.repository.sessions,
+        container.prefs.soreMuscles,
+        container.prefs.wellRestedBuff
+    ) { workouts, exercises, sessions, soreMuscles, wellRested ->
+        val recommendation = WorkoutRecommendationEngine.recommendNextWorkout(
+            routines = workouts,
+            recentSessions = sessions,
+            soreMuscles = soreMuscles,
+            wellRestedBuffActive = wellRested
+        )
+        HeroQuestInputs(
+            recommendation = recommendation,
+            exerciseCount = recommendation.routine?.id?.let { workoutId ->
+                exercises.count { it.workoutId == workoutId }
+            } ?: 0,
+            activeSession = null
+        )
+    }.combine(container.repository.activeSession) { inputs, activeSession ->
+        inputs.copy(activeSession = activeSession)
+    }
+
     val uiState: StateFlow<HeroUiState> = combine(
         coreState,
-        container.repository.observeMovementMastery()
-    ) { core, masteryList ->
-        core.copy(movementMastery = masteryList)
+        container.repository.observeMovementMastery(),
+        questInputs
+    ) { core, masteryList, quest ->
+        val character = core.character
+        val questHub = character?.let {
+            val biome = Biome.fromName(it.currentBiome)
+            val encounters = MonsterCatalog.regularMonstersByBiome(biome)
+            val encounter = encounters[it.battlesWon.mod(encounters.size)]
+            buildQuestHubState(
+                recommendation = quest.recommendation,
+                activeQuest = quest.activeSession?.let { active ->
+                    ActiveQuestSnapshot(
+                        title = active.session.title,
+                        workoutId = active.session.workoutId,
+                        exerciseCount = active.exercises.size
+                    )
+                },
+                recommendedExerciseCount = quest.exerciseCount,
+                biome = biome,
+                encounter = encounter
+            )
+        }
+        core.copy(movementMastery = masteryList, questHub = questHub)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), HeroUiState())
 
     init {
@@ -249,10 +302,17 @@ class HeroViewModel(private val container: AppContainer) : ViewModel() {
         bList.any { it.isCompleted && !it.isClaimed } || cList.any { it.isCompleted && !it.isClaimed }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
-    val bountyResetLabel: StateFlow<String> = clockTick.map { now ->
+    val hasClaimableDailyBounty: StateFlow<Boolean> = bounties
+        .map(::hasClaimableDailyBounty)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val bountyResetRemainingMs: StateFlow<Long> = clockTick.map { now ->
         val zone = ZoneId.systemDefault()
         val tomorrow = LocalDate.now().plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
-        val diff = (tomorrow - now).coerceAtLeast(0)
+        (tomorrow - now).coerceAtLeast(0)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 24 * 60 * 60 * 1000L)
+
+    val bountyResetLabel: StateFlow<String> = bountyResetRemainingMs.map { diff ->
         val hours = diff / (1000 * 60 * 60)
         val mins = (diff / (1000 * 60)) % 60
         "Resets in ${hours}h ${mins}m"
@@ -406,8 +466,11 @@ class HeroViewModel(private val container: AppContainer) : ViewModel() {
 @Composable
 fun HeroScreen(
     viewModel: HeroViewModel = viewModel(factory = HeroViewModel.Factory),
-    onStartWorkout: () -> Unit = {}
+    initialTab: Int = 0,
+    onBack: () -> Unit = {},
+    onOpenHome: () -> Unit = {}
 ) {
+    BackHandler(onBack = onBack)
     val state by viewModel.uiState.collectAsState()
     val isPremium by viewModel.isPremium.collectAsState()
     val imperial by viewModel.imperial.collectAsState()
@@ -419,14 +482,12 @@ fun HeroScreen(
     val claimedTrophies by viewModel.claimedTrophies.collectAsState()
     val lifetimeCardioKm by viewModel.lifetimeCardioKm.collectAsState()
     val wear by viewModel.wearPresence.collectAsState()
-    val stepsToday by viewModel.stepsToday.collectAsState()
 
     HeroScreenContent(
         state = state,
         isPremium = isPremium,
         imperial = imperial,
         sagaReady = sagaReady,
-        stepsToday = stepsToday,
         bounties = bounties,
         bountyResetLabel = bountyResetLabel,
         campaigns = campaigns,
@@ -434,11 +495,11 @@ fun HeroScreen(
         claimedTrophies = claimedTrophies,
         lifetimeCardioKm = lifetimeCardioKm,
         wearLinked = wear.watchLinked,
+        initialTab = initialTab,
         actions = HeroActions(
             onRefreshCharacter = viewModel::refreshCharacter,
             onDruidFormChange = viewModel::setDruidForm,
             onClaimIdleRewards = viewModel::claimIdleRewards,
-            onLogWeight = viewModel::logWeight,
             onClaimTrophyReward = viewModel::claimTrophyReward,
             onSwitchJob = viewModel::switchJob,
             onAllocateStat = viewModel::allocateStat,
@@ -446,11 +507,9 @@ fun HeroScreen(
             onReforgeGear = viewModel::reforgeGear,
             onSocketRune = viewModel::socketRune,
             onClearRune = viewModel::clearRune,
-            onClaimBounty = viewModel::claimBounty,
-            onLogBountyProgress = viewModel::logBountyProgress,
             onClaimCampaign = viewModel::claimCampaign,
-            onRecordManualSteps = viewModel::recordManualSteps,
-            onStartWorkout = onStartWorkout,
+            onBack = onBack,
+            onOpenHome = onOpenHome,
             onSetGlamour = viewModel::setGlamour,
             onClearGlamour = viewModel::clearGlamour,
             updateAppearance = viewModel::updateAppearance
@@ -463,8 +522,6 @@ data class HeroActions(
     val onAvatarClick: () -> Unit = {},
     val onDruidFormChange: (String) -> Unit = {},
     val onClaimIdleRewards: ((RewardBatch?) -> Unit) -> Unit = {},
-    val onLogWeight: (Double) -> Unit = {},
-    val onRecordManualSteps: (Int) -> Unit = {},
     val onClaimTrophyReward: (Trophy) -> Unit = {},
     val onSwitchJob: (CharacterClass) -> Unit = {},
     val onAllocateStat: (String) -> Unit = {},
@@ -474,10 +531,9 @@ data class HeroActions(
     val onClearRune: (Long, Int) -> Unit = { _, _ -> },
     val onSetGlamour: (ItemSlot, Long?) -> Unit = { _, _ -> },
     val onClearGlamour: (ItemSlot) -> Unit = {},
-    val onClaimBounty: (Bounty) -> Unit = {},
-    val onLogBountyProgress: (Bounty) -> Unit = {},
     val onClaimCampaign: (WeeklyCampaign) -> Unit = {},
-    val onStartWorkout: () -> Unit = {},
+    val onBack: () -> Unit = {},
+    val onOpenHome: () -> Unit = {},
     val updateAppearance: (Long, Long, Long, Long, String, String, Long, String) -> Unit = { _, _, _, _, _, _, _, _ -> }
 )
 
@@ -487,7 +543,6 @@ fun HeroScreenContent(
     isPremium: Boolean,
     imperial: Boolean,
     sagaReady: Boolean,
-    stepsToday: Int = 0,
     bounties: List<Bounty>,
     bountyResetLabel: String,
     campaigns: List<WeeklyCampaign>,
@@ -495,16 +550,14 @@ fun HeroScreenContent(
     claimedTrophies: Set<String>,
     lifetimeCardioKm: Double,
     wearLinked: Boolean,
+    initialTab: Int = 0,
     actions: HeroActions
 ) {
     val character = state.character ?: return
-    var selectedTab by remember { mutableIntStateOf(0) }
+    var selectedTab by remember(initialTab) { mutableIntStateOf(initialTab.coerceIn(0, 3)) }
     var pickerSlot by remember { mutableStateOf<ItemSlot?>(null) }
     var showAvatarDialog by remember { mutableStateOf(false) }
     var rewardReveal by remember { mutableStateOf<RewardBatch?>(null) }
-    var showWeightDialog by remember { mutableStateOf(false) }
-    var showManualStepsDialog by remember { mutableStateOf(false) }
-    var showPedometerScanDialog by remember { mutableStateOf(false) }
 
     val cls = character.characterClass ?: run {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -520,44 +573,6 @@ fun HeroScreenContent(
                 actions.onClaimIdleRewards { batch ->
                     rewardReveal = batch
                 }
-            }
-        )
-    }
-
-    if (showWeightDialog) {
-        WeightLogDialog(
-            currentWeightKg = character.bodyWeightKg ?: 75.0,
-            imperial = imperial,
-            onDismiss = { showWeightDialog = false },
-            onSave = { weight: Double ->
-                actions.onLogWeight(weight)
-                showWeightDialog = false
-            }
-        )
-    }
-
-    if (showManualStepsDialog) {
-        ManualStepEntryDialog(
-            currentStepsToday = stepsToday,
-            onDismiss = { showManualStepsDialog = false },
-            onConfirm = { steps ->
-                actions.onRecordManualSteps(steps)
-                showManualStepsDialog = false
-            },
-            onLaunchScan = {
-                showManualStepsDialog = false
-                showPedometerScanDialog = true
-            }
-        )
-    }
-
-    if (showPedometerScanDialog) {
-        PedometerScanDialog(
-            currentStepsToday = stepsToday,
-            onDismiss = { showPedometerScanDialog = false },
-            onConfirm = { steps ->
-                actions.onRecordManualSteps(steps)
-                showPedometerScanDialog = false
             }
         )
     }
@@ -581,7 +596,6 @@ fun HeroScreenContent(
         )
     }
 
-    val snackbar = LocalSnackbarHostState.current
     val scope = rememberCoroutineScope()
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     val statsListState = rememberLazyListState()
@@ -618,13 +632,13 @@ fun HeroScreenContent(
                         equipAnimState = equipAnimState,
                         onAvatarClick = { showAvatarDialog = true },
                         onDruidFormChange = actions.onDruidFormChange,
-                        onAllocateClick = onAllocatePointsClick
+                        onAllocateClick = onAllocatePointsClick,
+                        onBack = actions.onBack
                     )
                     HeroCurrencyBarContent(character, wearLinked)
                     HeroNextObjectiveCard(
                         character = character,
                         onAllocateClick = onAllocatePointsClick,
-                        onStartWorkout = actions.onStartWorkout,
                         modifier = Modifier.padding(bottom = 8.dp)
                     )
                 }
@@ -673,9 +687,9 @@ fun HeroScreenContent(
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         when (selectedTab) {
-                            0 -> statsTabContent(this, character, cls, state, isPremium, snackbar, scope, actions)
+                            0 -> statsTabContent(this, character, cls, state, actions)
                             1 -> gearTab(this, state, cls, character, highestEquippedRarity, equipAnimState, onEquipClick = { pickerSlot = it })
-                            2 -> sagaTabContent(this, character, bounties, bountyResetLabel, campaigns, campaignResetLabel, claimedTrophies, lifetimeCardioKm, imperial, actions, onLogWeight = { showWeightDialog = true }, onLogSteps = { showManualStepsDialog = true })
+                            2 -> sagaTabContent(this, character, bounties, bountyResetLabel, campaigns, campaignResetLabel, claimedTrophies, lifetimeCardioKm, imperial, actions)
                             3 -> masteryTab(this, state.movementMastery, imperial)
                         }
                         item { Spacer(Modifier.height(24.dp)) }
@@ -692,15 +706,15 @@ fun HeroScreenContent(
                     equipAnimState = equipAnimState,
                     onAvatarClick = { showAvatarDialog = true },
                     onDruidFormChange = actions.onDruidFormChange,
-                    onAllocateClick = onAllocatePointsClick
+                    onAllocateClick = onAllocatePointsClick,
+                    onBack = actions.onBack
                 )
 
                 HeroCurrencyBarContent(character, wearLinked)
 
                 HeroNextObjectiveCard(
                     character = character,
-                    onAllocateClick = onAllocatePointsClick,
-                    onStartWorkout = actions.onStartWorkout
+                    onAllocateClick = onAllocatePointsClick
                 )
 
                 PrimaryTabRow(
@@ -740,9 +754,9 @@ fun HeroScreenContent(
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     when (selectedTab) {
-                        0 -> statsTabContent(this, character, cls, state, isPremium, snackbar, scope, actions)
+                        0 -> statsTabContent(this, character, cls, state, actions)
                         1 -> gearTab(this, state, cls, character, highestEquippedRarity, equipAnimState, onEquipClick = { pickerSlot = it })
-                        2 -> sagaTabContent(this, character, bounties, bountyResetLabel, campaigns, campaignResetLabel, claimedTrophies, lifetimeCardioKm, imperial, actions, onLogWeight = { showWeightDialog = true }, onLogSteps = { showManualStepsDialog = true })
+                        2 -> sagaTabContent(this, character, bounties, bountyResetLabel, campaigns, campaignResetLabel, claimedTrophies, lifetimeCardioKm, imperial, actions)
                         3 -> masteryTab(this, state.movementMastery, imperial)
                     }
                     item { Spacer(Modifier.height(80.dp)) }
@@ -783,7 +797,8 @@ private fun HeroHeaderBanner(
     equipAnimState: EquipAnimationState? = null,
     onAvatarClick: () -> Unit,
     onDruidFormChange: (String) -> Unit,
-    onAllocateClick: () -> Unit = {}
+    onAllocateClick: () -> Unit = {},
+    onBack: () -> Unit = {}
 ) {
     val biome = Biome.fromName(character.currentBiome)
     val colors = when (biome) {
@@ -1037,6 +1052,17 @@ private fun HeroHeaderBanner(
         Box(Modifier.align(Alignment.TopEnd).padding(8.dp)) {
             SettingsIconButton()
         }
+
+        IconButton(
+            onClick = onBack,
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .statusBarsPadding()
+                .padding(8.dp)
+                .background(Color.Black.copy(alpha = 0.35f), CircleShape)
+        ) {
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to Quest Hub", tint = Color.White)
+        }
         
         // Glowing XP Bar at the very bottom
         val nextXp = GameMath.xpToNextLevel(character.level)
@@ -1091,7 +1117,6 @@ private fun HeroCurrencyBarContent(character: CharacterEntity, wearLinked: Boole
 private fun HeroNextObjectiveCard(
     character: CharacterEntity,
     onAllocateClick: () -> Unit,
-    onStartWorkout: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     if (character.freeStatPoints <= 0) return
@@ -1158,62 +1183,9 @@ private fun statsTabContent(
     character: CharacterEntity,
     cls: CharacterClass,
     state: HeroUiState,
-    isPremium: Boolean,
-    snackbar: SnackbarHostState,
-    scope: CoroutineScope,
     actions: HeroActions
 ) {
     listScope.item { ReadinessCard(character = character) }
-
-    listScope.item {
-        FantasyCard {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text("Switch Job", style = MaterialTheme.typography.titleMedium, color = Gold)
-                Text("Retain level & gear", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.5f))
-            }
-            
-            val sortedJobs = CharacterClass.entries.sortedByDescending { cls ->
-                state.allClassProgress.find { it.clazz == cls }?.level ?: 0
-            }
-            
-            Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                sortedJobs.forEach { clsItem ->
-                    val progress = state.allClassProgress.find { it.clazz == clsItem }
-                    val level = progress?.level ?: 1
-                    val isActive = character.characterClass == clsItem
-                    val isLocked = clsItem.requiresPremium && !isPremium
-                    
-                    Surface(
-                        onClick = { 
-                            if (isLocked) {
-                                scope.launch {
-                                    snackbar.showSnackbar("✦ Unlock Premium to access the ${clsItem.label} job.")
-                                }
-                            } else {
-                                actions.onSwitchJob(clsItem) 
-                            }
-                        },
-                        color = if (isActive) Gold.copy(alpha = 0.2f) else Color.White.copy(alpha = 0.05f),
-                        shape = RoundedCornerShape(12.dp),
-                        border = if (isActive) BorderStroke(1.dp, Gold) else if (isLocked) BorderStroke(1.dp, Color.Gray.copy(alpha = 0.3f)) else null,
-                        modifier = Modifier.width(100.dp),
-                        enabled = !isActive
-                    ) {
-                        Column(modifier = Modifier.padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Box(contentAlignment = Alignment.BottomEnd) {
-                                Text(clsItem.emoji, fontSize = 24.sp, modifier = Modifier.scale(if (isLocked) 0.8f else 1f).then(if (isLocked) Modifier.alpha(0.5f) else Modifier))
-                                if (isLocked) {
-                                    Text("✦", color = Gold, fontSize = 12.sp, fontWeight = FontWeight.Black)
-                                }
-                            }
-                            Text(clsItem.label, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, maxLines = 1)
-                            Text(if (isLocked) "Premium" else "Lv $level", style = MaterialTheme.typography.labelMedium, color = if (isLocked) Color.Gray else Gold)
-                        }
-                    }
-                }
-            }
-        }
-    }
 
     listScope.item {
         FantasyCard {
@@ -1511,26 +1483,15 @@ private fun sagaTabContent(
     claimedTrophies: Set<String>,
     lifetimeCardioKm: Double,
     imperial: Boolean,
-    actions: HeroActions,
-    onLogWeight: () -> Unit,
-    onLogSteps: () -> Unit
+    actions: HeroActions
 ) {
     listScope.item {
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             if (bounties.isNotEmpty()) {
-                DailyBountyCard(
+                DailyQuestProgressCard(
                     bounties = bounties,
                     resetLabel = bountyResetLabel,
-                    onClaim = actions.onClaimBounty,
-                    onLogProgress = { bounty ->
-                        if (bounty.id == "b_weight") {
-                            onLogWeight()
-                        } else if (bounty.id == "b_steps") {
-                            onLogSteps()
-                        } else {
-                            actions.onLogBountyProgress(bounty)
-                        }
-                    }
+                    onOpenHome = actions.onOpenHome
                 )
             }
 
@@ -1554,6 +1515,62 @@ private fun sagaTabContent(
                 Text("Recent Adventures", style = MaterialTheme.typography.titleMedium, color = Gold)
                 Text("No adventures yet.", color = Color.White.copy(alpha = 0.5f))
             }
+        }
+    }
+}
+
+@Composable
+private fun DailyQuestProgressCard(
+    bounties: List<Bounty>,
+    resetLabel: String,
+    onOpenHome: () -> Unit
+) {
+    val completed = bounties.count { it.isCompleted || it.isClaimed }
+    val claimable = bounties.count { it.isCompleted && !it.isClaimed }
+    val progress = completed.toFloat() / bounties.size.coerceAtLeast(1)
+
+    FantasyCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onOpenHome)
+            .semantics { contentDescription = "Daily quests: $completed of ${bounties.size} complete. Open Home." }
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    "Today's Quests",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Black,
+                    color = Gold
+                )
+                Text(
+                    if (claimable > 0) "$claimable reward${if (claimable == 1) "" else "s"} ready to claim" else resetLabel,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.White.copy(alpha = 0.65f)
+                )
+            }
+            Text(
+                "$completed/${bounties.size}",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Black,
+                color = if (completed == bounties.size) Color(0xFF6BC96B) else Gold
+            )
+        }
+        LinearProgressIndicator(
+            progress = { progress },
+            modifier = Modifier.fillMaxWidth(),
+            color = Gold,
+            trackColor = Color.White.copy(alpha = 0.12f)
+        )
+        TextButton(
+            onClick = onOpenHome,
+            modifier = Modifier.align(Alignment.End)
+        ) {
+            Text("VIEW & LOG ON HOME")
         }
     }
 }

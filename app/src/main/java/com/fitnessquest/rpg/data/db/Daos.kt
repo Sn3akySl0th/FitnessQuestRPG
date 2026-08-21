@@ -56,6 +56,9 @@ interface WorkoutDao {
     @Query("SELECT * FROM workout_exercises WHERE workoutId = :workoutId ORDER BY sortOrder")
     fun observeExercisesFor(workoutId: Long): Flow<List<WorkoutExerciseEntity>>
 
+    @Query("SELECT * FROM workout_exercises ORDER BY workoutId, sortOrder")
+    fun observeAllExercises(): Flow<List<WorkoutExerciseEntity>>
+
     @Insert
     suspend fun insertWorkout(workout: WorkoutEntity): Long
 
