@@ -1,3 +1,12 @@
+0.13.0
+- Closed Beta Launch: Rebranded to Fitness Quest RPG with interactive 4-step welcome guide for all first-time pioneers.
+- 1-Tap Gear Upgrade Flow: Added quick-access upgrade banner on Quest Hub, direct route navigation, and slot comparison indicators.
+- Cloud Progress Sync: Durable sync and restoration of beta missions, feedback submissions, and exclusive Pioneer's Cache rewards.
+- Duplicate Reward Safeguards: Hardened database transactions to ensure durable rewards cannot be claimed multiple times across reinstalls.
+- Tester Feedback Hub: In-app feedback system with direct screenshot attachments and category routing.
+- Attribute Guide & Mechanics Polish: Added STR, END, AGI, WIL tooltip explanations, fixed WIL progress meter, and guaranteed starter gear on workout #1.
+- Combat Victory UI: Fixed progress loading animation wobble on victory screens for smooth presentation.
+
 0.12.0
 - Hunter Beastmaster Companions: Loyal companions (Dire Wolf, Hunting Falcon, Forest Bear) with animated avatars and active combat turn assists.
 - Level 50 Lifelong Progression Expansion: 6 skill tiers across all 12 classes with Level 50 Capstone Awakenings.

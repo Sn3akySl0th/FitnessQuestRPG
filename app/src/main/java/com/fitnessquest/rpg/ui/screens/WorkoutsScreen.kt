@@ -804,7 +804,7 @@ private fun SorenessCheckInDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    "Flag muscles that feel sore or fatigued. FitQuest will auto-adjust routine recommendations and warn against heavy movements.",
+                    "Flag muscles that feel sore or fatigued. Fitness Quest RPG will auto-adjust routine recommendations and warn against heavy movements.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

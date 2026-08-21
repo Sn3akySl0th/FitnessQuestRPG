@@ -188,7 +188,7 @@ private fun IdleScreen(
             modifier = Modifier.padding(top = 4.dp)
         ) {
             Text(
-                text = "FitQuest RPG",
+                text = "Fitness Quest RPG",
                 style = MaterialTheme.typography.title3,
                 fontWeight = FontWeight.Black,
                 color = Color(0xFFFFD700)

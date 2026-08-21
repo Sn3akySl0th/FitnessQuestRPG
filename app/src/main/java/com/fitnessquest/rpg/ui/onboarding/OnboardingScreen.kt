@@ -397,7 +397,7 @@ private fun WelcomeStep(onGetStarted: () -> Unit, onReturning: () -> Unit) {
         Modifier.fillMaxWidth().padding(top = 48.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("FitQuest", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
+        Text("Fitness Quest RPG", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(12.dp))
         Text(
             "Train harder. Level up in game and in real life.",
@@ -696,7 +696,7 @@ private fun TermsStep(busy: Boolean, onAccept: () -> Unit) {
     StepHeader("The Hero's Oath", "Before we begin, a few necessary scrolls.")
     FantasyCard {
         Text(
-            "I understand that FitQuest is a tool to assist my training and not a medical provider. I will listen to my body, use proper form, and consult a professional if I am new to exercise or have health concerns.",
+            "I understand that Fitness Quest RPG is a tool to assist my training and not a medical provider. I will listen to my body, use proper form, and consult a professional if I am new to exercise or have health concerns.",
             style = MaterialTheme.typography.bodyMedium
         )
     }
@@ -812,7 +812,7 @@ private fun WearStep(viewModel: OnboardingViewModel) {
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    "Open FitQuest on your Wear OS watch to sync.",
+                    "Open Fitness Quest RPG on your Wear OS watch to sync.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

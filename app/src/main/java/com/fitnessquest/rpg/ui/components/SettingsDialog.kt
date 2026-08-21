@@ -979,7 +979,7 @@ fun SettingsDialog(
                     HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
 
                     Text(
-                        text = "FitQuest v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+                        text = "Fitness Quest RPG v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                         modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = 4.dp)

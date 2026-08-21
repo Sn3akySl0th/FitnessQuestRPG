@@ -12,6 +12,18 @@ object WhatNewContent {
      */
     val releases = listOf(
         ChangeLog(
+            version = "0.13.0",
+            date = "August 2026",
+            changes = listOf(
+                "🛡️ Closed Beta Launch: Welcome to Fitness Quest RPG! A brand new interactive 4-step walkthrough introduces our first pioneer cohort to the core game loop.",
+                "⚔️ 1-Tap Gear Upgrade Notifications: High-visibility upgrade banner on Quest Hub and gear tab indicators allow you to equip stronger armor & weapons with zero unnecessary taps.",
+                "☁️ Cloud-Synced Beta Progress: All tester missions, feedback submissions, and exclusive Pioneer's Cache rewards are durably synced to the cloud and restored across reinstalls.",
+                "💬 Direct Feedback Hub: In-app tester feedback tool with direct screenshot attachments to easily report bugs, balance ideas, and feature requests.",
+                "📊 Attribute Guide & Display Fixes: Full tooltip breakdown for STR, END, AGI, and WIL, fixed WIL meter progress display, and guaranteed starter gear on workout #1.",
+                "🔄 Smooth Victory Animations: Optimized combat victory loading spinner for a clean, non-wobbling presentation."
+            )
+        ),
+        ChangeLog(
             version = "0.12.0",
             date = "August 2026",
             changes = listOf(

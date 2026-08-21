@@ -202,7 +202,7 @@ fun WorkoutImportDialog(
                     // Hevy API Tab
                     SectionCard {
                         Text(
-                            "Enter your Hevy API Key to pull routines into Training as FitQuest quest names and completed workouts into History.",
+                            "Enter your Hevy API Key to pull routines into Training as Fitness Quest RPG quest names and completed workouts into History.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

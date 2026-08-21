@@ -191,7 +191,7 @@ private fun StepWelcome() {
     ) {
         Text("🛡️", fontSize = 54.sp)
         Text(
-            text = "Welcome to FitQuest!",
+            text = "Welcome to Fitness Quest RPG!",
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Black,
             color = Gold,
@@ -354,7 +354,7 @@ private fun StepFeedback() {
     ) {
         Text("💬", fontSize = 48.sp)
         Text(
-            text = "Your Feedback Shapes FitQuest",
+            text = "Your Feedback Shapes Fitness Quest RPG",
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Black,
             color = Gold,

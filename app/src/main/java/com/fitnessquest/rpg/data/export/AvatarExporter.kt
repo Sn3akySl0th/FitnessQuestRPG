@@ -294,11 +294,11 @@ object AvatarExporter {
             // Save to Pictures Directory
             val picturesDir = File(
                 Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES),
-                "FitQuest"
+                "FitnessQuest"
             )
             if (!picturesDir.exists()) picturesDir.mkdirs()
 
-            val fileName = "FitQuest_Hero_${character.name}_${format.name.lowercase()}_${System.currentTimeMillis()}.png"
+            val fileName = "FitnessQuest_Hero_${character.name}_${format.name.lowercase()}_${System.currentTimeMillis()}.png"
             val outputFile = File(picturesDir, fileName)
 
             FileOutputStream(outputFile).use { out ->

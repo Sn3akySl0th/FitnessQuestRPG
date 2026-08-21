@@ -206,7 +206,7 @@ fun WorkoutDetailScreen(
                         viewModel.shareViaSystem { text ->
                             val intent = Intent(Intent.ACTION_SEND).apply {
                                 type = "text/plain"
-                                putExtra(Intent.EXTRA_SUBJECT, state.workout?.name ?: "FitQuest workout")
+                                putExtra(Intent.EXTRA_SUBJECT, state.workout?.name ?: "Fitness Quest RPG workout")
                                 putExtra(Intent.EXTRA_TEXT, text)
                             }
                             context.startActivity(Intent.createChooser(intent, "Share quest"))

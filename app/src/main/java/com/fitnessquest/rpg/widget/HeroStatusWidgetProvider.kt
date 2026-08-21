@@ -95,7 +95,7 @@ class HeroStatusWidgetProvider : AppWidgetProvider() {
             val xpProgress = if (xpToNext > 0) (character.xp.toFloat() / xpToNext * 100).toInt() else 0
 
             return RemoteViews(context.packageName, R.layout.widget_hero_status).apply {
-                setTextViewText(R.id.widgetTitle, character.name.ifBlank { "FitQuest Hero" })
+                setTextViewText(R.id.widgetTitle, character.name.ifBlank { "Fitness Quest Hero" })
                 setTextViewText(R.id.widgetLevel, "Level ${character.level} ${character.characterClass?.label ?: "Adventurer"}")
                 setTextViewText(R.id.widgetGold, "💰 ${character.gold}")
                 

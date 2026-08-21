@@ -20,7 +20,7 @@ fun WhatNewDialog(onDismiss: () -> Unit) {
         onDismissRequest = onDismiss,
         title = {
             Text(
-                "What's New in FitQuest ${latest.version}",
+                "What's New in Fitness Quest RPG ${latest.version}",
                 style = MaterialTheme.typography.headlineSmall
             )
         },

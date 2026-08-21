@@ -42,11 +42,11 @@ enum class LocalModelSource {
 object ModelCatalog {
     val HOSTED_MODEL = LocalModelSpec(
         id = "fitquest_recommended",
-        displayName = "FitQuest Recommended Offline AI",
+        displayName = "Fitness Quest RPG Recommended Offline AI",
         version = BuildConfig.FITQUEST_LLM_MODEL_VERSION,
         approxSizeMb = BuildConfig.FITQUEST_LLM_MODEL_SIZE_MB,
         downloadUrl = BuildConfig.FITQUEST_LLM_MODEL_URL,
-        description = "One-tap FitQuest-hosted model for quota-free workout names, coaching, battle narration, and import cleanup.",
+        description = "One-tap Fitness Quest RPG hosted model for quota-free workout names, coaching, battle narration, and import cleanup.",
         expectedBytes = BuildConfig.FITQUEST_LLM_MODEL_BYTES.takeIf { it > 0L },
         sha256 = BuildConfig.FITQUEST_LLM_MODEL_SHA256,
         source = LocalModelSource.FITQUEST_HOSTED,

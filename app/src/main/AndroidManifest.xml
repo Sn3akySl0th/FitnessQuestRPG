@@ -79,7 +79,7 @@
         <service
             android:name=".data.media.NotificationService"
             android:exported="true"
-            android:label="FitQuest Media Controller"
+            android:label="Fitness Quest RPG Media Controller"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
             <intent-filter>
                 <action android:name="android.service.notification.NotificationListenerService" />

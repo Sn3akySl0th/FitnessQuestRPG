@@ -274,7 +274,7 @@ fun BetaWalkthroughCard(
                         ) {
                             Text("✨", fontSize = 16.sp)
                             Text(
-                                "Pioneer's Amulet equipped / added to inventory. Thank you for testing FitQuest!",
+                                "Pioneer's Amulet equipped / added to inventory. Thank you for testing Fitness Quest RPG!",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = Gold
                             )
@@ -311,7 +311,7 @@ fun BetaWalkthroughCard(
                                 )
                             }
                             Text(
-                                "Your character progress is permanently preserved across all beta updates. Testers who complete the beta campaign will unlock Free Lifetime Premium when FitQuest officially launches!",
+                                "Your character progress is permanently preserved across all beta updates. Testers who complete the beta campaign will unlock Free Lifetime Premium when Fitness Quest RPG officially launches!",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = Color.White.copy(alpha = 0.8f)
                             )

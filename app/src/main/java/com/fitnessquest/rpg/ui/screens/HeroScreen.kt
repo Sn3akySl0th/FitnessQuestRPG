@@ -811,7 +811,7 @@ fun HeroExportSheet(
                             isExporting = false
                             res.fold(
                                 onSuccess = { uri ->
-                                    Toast.makeText(context, "✅ Wallpaper saved to Pictures/FitQuest gallery!", Toast.LENGTH_LONG).show()
+                                    Toast.makeText(context, "✅ Wallpaper saved to Pictures/FitnessQuest gallery!", Toast.LENGTH_LONG).show()
                                     AvatarExporter.launchSetWallpaperIntent(context, uri)
                                     onDismiss()
                                 },
