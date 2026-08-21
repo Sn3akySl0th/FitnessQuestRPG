@@ -78,4 +78,11 @@ interface ActiveSessionDao {
 
     @Query("UPDATE pending_sync_outbox SET retryCount = retryCount + 1 WHERE eventId = :eventId")
     suspend fun incrementOutboxEventRetry(eventId: String)
+
+    @Transaction
+    suspend fun clearAll() {
+        deleteActiveSetLogs(1L)
+        deleteActiveExercises(1L)
+        deleteActiveSession(1L)
+    }
 }

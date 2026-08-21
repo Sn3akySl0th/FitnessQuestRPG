@@ -506,7 +506,12 @@ fun HeroScreenContent(
     var showManualStepsDialog by remember { mutableStateOf(false) }
     var showPedometerScanDialog by remember { mutableStateOf(false) }
 
-    val cls = character.characterClass ?: return
+    val cls = character.characterClass ?: run {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator()
+        }
+        return
+    }
 
     if (character.idleKills > 0) {
         IdleRewardsModal(

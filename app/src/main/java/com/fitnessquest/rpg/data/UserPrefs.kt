@@ -52,6 +52,19 @@ class UserPrefs(context: Context) {
         _onboardingStep.value = step
     }
 
+    fun resetOnboarding() {
+        prefs.edit {
+            remove(KEY_ONBOARDING_COMPLETE)
+            remove(KEY_ONBOARDING_STEP)
+            remove(KEY_USERNAME_SET)
+            remove(KEY_USERNAME_KEY)
+        }
+        _onboardingComplete.value = false
+        _onboardingStep.value = null
+        _usernameSet.value = false
+        _usernameKey.value = null
+    }
+
     // ---- Profile & Progress (Synced to CharacterEntity) ----
 
     private val _fitnessGoal = MutableStateFlow(FitnessGoal.BUILD_MUSCLE)

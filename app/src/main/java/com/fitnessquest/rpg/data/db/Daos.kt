@@ -108,6 +108,12 @@ interface WorkoutDao {
             deleteWorkout(id)
         }
     }
+
+    @Query("DELETE FROM workouts")
+    suspend fun deleteAllWorkouts()
+
+    @Query("DELETE FROM workout_exercises")
+    suspend fun deleteAllWorkoutExercises()
 }
 
 @Dao
@@ -275,6 +281,9 @@ interface BiomeProgressDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(progress: BiomeProgressEntity)
+
+    @Query("DELETE FROM biome_progress")
+    suspend fun deleteAll()
 }
 
 @Dao
@@ -290,6 +299,9 @@ interface ClassProgressDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(progress: ClassProgressEntity)
+
+    @Query("DELETE FROM class_progress")
+    suspend fun deleteAll()
 }
 
 

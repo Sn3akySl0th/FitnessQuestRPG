@@ -662,9 +662,11 @@ class SyncService(
             val character = db.characterDao().get() ?: CharacterEntity()
             userDoc(uid).set(
                 mapOf(
-                    "schema" to 2,
+                    "schema" to 4,
                     "updatedAt" to System.currentTimeMillis(),
                     "character" to characterToMap(character),
+                    "classProgress" to emptyList<Map<String, Any?>>(),
+                    "movementMastery" to emptyList<Map<String, Any?>>(),
                     "stacks" to emptyMap<String, Int>(),
                     "consumables" to emptyMap<String, Int>(),
                     "gearInstances" to emptyList<Map<String, Any?>>()

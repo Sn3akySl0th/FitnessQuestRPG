@@ -18,6 +18,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.SetOptions
+import com.google.firebase.firestore.Source
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -157,10 +158,13 @@ class PartyService(
     fun start() {
         scope.launch {
             repository.character
-                .map { it.partyId }
+                .map { Triple(it.partyId, it.characterClass, it.level) }
                 .distinctUntilChanged()
-                .collectLatest { partyId ->
+                .collectLatest { (partyId, _, _) ->
                     _partyId.value = partyId
+                    if (partyId != null && auth.state.value.signedIn) {
+                        refreshMemberCard()
+                    }
                 }
         }
         scope.launch {
@@ -623,19 +627,34 @@ class PartyService(
         val card = memberCard()
         runCatching {
             val membersColl = partyDoc(partyId).collection("members")
+            // Update my own card
             membersColl.document(uid).set(card, SetOptions.merge()).await()
+
             val heroName = card["name"] as? String ?: ""
             if (heroName.isNotBlank()) {
-                val snap = membersColl.get().await()
-                for (doc in snap.documents) {
-                    if (doc.id != uid) {
-                        val docName = doc.getString("name").orEmpty()
-                        if (docName.trim().equals(heroName.trim(), ignoreCase = true)) {
-                            membersColl.document(doc.id).delete().await()
-                        }
+                // Force a fresh fetch from the server to find ghosts
+                val snap = membersColl.get(Source.SERVER).await()
+
+                val allDocs = snap.documents
+                val myGhosts = allDocs.filter {
+                    it.id != uid && it.getString("name")?.trim().equals(heroName.trim(), ignoreCase = true)
+                }
+
+                if (myGhosts.isNotEmpty()) {
+                    Log.i("PartyService", "Cleaning up ${myGhosts.size} ghost members for $heroName")
+                    myGhosts.forEach { ghost ->
+                        membersColl.document(ghost.id).delete().await()
                     }
                 }
+
+                // Recalculate the REAL member count based on unique UIDs remaining
+                val remainingDocs = membersColl.get(Source.SERVER).await()
+                val realCount = remainingDocs.size()
+                partyDoc(partyId).update("memberCount", realCount.toLong()).await()
+                Log.i("PartyService", "Party member count synchronized to $realCount")
             }
+        }.onFailure {
+            Log.e("PartyService", "Failed to refresh member card or clean ghosts", it)
         }
     }
 

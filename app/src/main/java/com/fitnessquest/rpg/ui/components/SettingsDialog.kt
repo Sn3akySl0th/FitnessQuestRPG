@@ -255,6 +255,14 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
+    fun recalculateMasteries() {
+        viewModelScope.launch {
+            _resetMessage.value = "Recalculating masteries from history..."
+            val count = container.repository.recalculateAllMovementMasteriesFromHistory()
+            _resetMessage.value = "Success! Rebuilt $count masteries from your workout chronicle."
+        }
+    }
+
     fun clearDevMessage() {
         _devMessage.value = null
     }
@@ -372,8 +380,13 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
 
     fun signOut() {
         viewModelScope.launch {
+            // Leave party while still authenticated
+            runCatching { container.party.leaveParty() }
+
+            // Wipe local data to prevent leakage into next signed-in account
+            container.repository.resetLiveProgress()
             container.auth.signOut()
-            _authMessage.value = "Signed out. Playing as guest."
+            _authMessage.value = "Signed out. Playing as a fresh guest."
         }
     }
 
@@ -469,6 +482,7 @@ fun SettingsDialog(
     }
 
     var confirmFreshStart by remember { mutableStateOf(false) }
+    var confirmSignOut by remember { mutableStateOf(false) }
     var confirmDeleteAccount by remember { mutableStateOf(false) }
     var deletePassword by remember { mutableStateOf("") }
     var titleTaps by remember { mutableIntStateOf(0) }
@@ -590,7 +604,7 @@ fun SettingsDialog(
                     )
                     Row {
                         TextButton(onClick = viewModel::forceSync) { Text("Sync Now") }
-                        TextButton(onClick = viewModel::signOut) { Text("Sign out") }
+                        TextButton(onClick = { confirmSignOut = true }) { Text("Sign out") }
                     }
                     TextButton(onClick = { confirmFreshStart = true }) {
                         Text("Start fresh (reset live hero)")
@@ -600,6 +614,12 @@ fun SettingsDialog(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text("Repair duplicate gear")
+                    }
+                    OutlinedButton(
+                        onClick = viewModel::recalculateMasteries,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Recalculate masteries from history")
                     }
                     TextButton(onClick = { confirmDeleteAccount = true }) {
                         Text(
@@ -650,6 +670,12 @@ fun SettingsDialog(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text("Repair duplicate gear")
+                    }
+                    OutlinedButton(
+                        onClick = viewModel::recalculateMasteries,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Recalculate masteries from history")
                     }
                 }
                 authMessage?.let { msg ->
@@ -869,6 +895,28 @@ fun SettingsDialog(
             },
             dismissButton = {
                 TextButton(onClick = { confirmFreshStart = false }) { Text("Cancel") }
+            }
+        )
+    }
+
+    if (confirmSignOut) {
+        AlertDialog(
+            onDismissRequest = { confirmSignOut = false },
+            title = { Text("Sign out?") },
+            text = {
+                Text(
+                    "Signing out will wipe local character progress to ensure your accounts stay isolated. " +
+                        "Your data is safe in the cloud and will be restored when you sign back in."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmSignOut = false
+                    viewModel.signOut()
+                }) { Text("Sign out and wipe local") }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmSignOut = false }) { Text("Cancel") }
             }
         )
     }

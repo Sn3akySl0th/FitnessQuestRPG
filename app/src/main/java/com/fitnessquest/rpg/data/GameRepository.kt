@@ -2542,11 +2542,21 @@ class GameRepository(
     }
 
     suspend fun resetLiveProgress() {
-        db.sessionDao().deleteAllSetLogs()
-        db.sessionDao().deleteAllSessions()
-        db.gearInstanceDao().deleteAll()
-        db.itemDao().clearOwnership()
-        db.characterDao().upsert(CharacterEntity())
+        db.withTransaction {
+            db.sessionDao().deleteAllSetLogs()
+            db.sessionDao().deleteAllSessions()
+            db.gearInstanceDao().deleteAll()
+            db.itemDao().clearOwnership()
+            db.movementMasteryDao().deleteAllForCharacter()
+            db.classProgressDao().deleteAll()
+            db.biomeProgressDao().deleteAll()
+            db.bodyMetricDao().deleteAll()
+            db.workoutDao().deleteAllWorkoutExercises()
+            db.workoutDao().deleteAllWorkouts()
+            db.activeSessionDao().clearAll()
+            db.characterDao().upsert(CharacterEntity())
+            prefs?.resetOnboarding()
+        }
     }
 
     suspend fun repairDuplicateGearInstances(): GearInventoryRepairResult {
