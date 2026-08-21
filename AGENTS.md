@@ -16,6 +16,27 @@ Never claim the working tree is clean if `git status --short` has output.
 
 Never commit, merge, rebase, push, tag, delete a branch, or create a release unless the user explicitly asks for that action in the current conversation.
 
+## Closed Beta focus guardrail
+
+This section remains in force until the user explicitly states that the Closed Beta candidate has been promoted. Do not infer promotion from a branch, tag, build, Play track, milestone state, or prior discussion.
+
+The current product priority is GitHub issue `#48`, **Make the next workout the player's next quest**, unless the user explicitly replaces or completes that task.
+
+When the user introduces a new product idea while this guardrail is active:
+
+1. Capture it as a short **Idea Garden** note in the response or in an existing user-designated idea tracker.
+2. State whether it would replace, support, or remain separate from the current task, with a concise reason.
+3. Do not expand it into a specification, implementation plan, GitHub issue, roadmap change, code change, design change, branch, or persistent document unless the user explicitly says **"promote this idea"** or otherwise clearly authorizes that expansion.
+4. Do not interpret enthusiasm, brainstorming, questions, or requests for evaluation as permission to implement the idea.
+5. After capturing and classifying the idea, return attention to the current task.
+
+Bug reports follow the same focus rule:
+
+- **P0/P1:** A crash, data loss, duplicate durable rewards or inventory, privacy/security failure, blocked workout completion, or broken core progression may interrupt the current task. Diagnose it and clearly explain why it qualifies before changing scope.
+- **P2/P3:** Capture the bug for later triage. Do not interrupt or expand the current task unless the user explicitly promotes it.
+
+Closed Beta roadmap issue `#57` is the scope reference, but its existence is not blanket authorization to implement every linked issue. Keep at most one user-selected product task active at a time, preserve unrelated ideas in the Idea Garden, and require explicit user direction before changing the active task.
+
 ## Branch purposes
 
 | Branch or ref | Purpose | Rules |
