@@ -12,6 +12,17 @@ object WhatNewContent {
      */
     val releases = listOf(
         ChangeLog(
+            version = "0.12.0",
+            date = "August 2026",
+            changes = listOf(
+                "🏰 Quest Hub Redesign (Issue #48): A brand new home screen that centralizes your next workout, active bounties, and current biome encounter in one sleek, glanceable view.",
+                "🔒 Account Isolation: Local data is now automatically wiped upon sign-out to prevent account overlap and ensure account privacy.",
+                "🥋 Mastery Recovery: New tool in Settings > Account to restore lost mastery levels and XP directly from your workout history.",
+                "🧹 Party Ghost Cleanup: Automatic removal of duplicate party members and synchronized member count tracking.",
+                "🏗️ Stability Fix: Improved the account switching flow and fixed onboarding issues that could cause a blank screen."
+            )
+        ),
+        ChangeLog(
             version = "0.10.0",
             date = "August 2026",
             changes = listOf(
