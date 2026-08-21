@@ -69,12 +69,13 @@ class HeroStatusWidgetProvider : AppWidgetProvider() {
                     val character = db.characterDao().get() ?: CharacterEntity()
                     val container = (context.applicationContext as FitQuestApp).container
                     val gear = container.repository.equippedGear(character)
-                    
+                    val maxEnergy = container.repository.getMaxEnergy()
+
                     val readiness = readinessFor(character)
                     val avatarBitmap = renderAvatar(context, character, gear)
-                    
+
                     widgetIds.forEach { widgetId ->
-                        manager.updateAppWidget(widgetId, remoteViews(context, character, readiness, avatarBitmap))
+                        manager.updateAppWidget(widgetId, remoteViews(context, character, readiness, avatarBitmap, maxEnergy))
                     }
                 } catch (e: Exception) {
                     // silent fail
@@ -86,9 +87,10 @@ class HeroStatusWidgetProvider : AppWidgetProvider() {
             context: Context,
             character: CharacterEntity,
             readiness: WidgetReadiness,
-            avatar: Bitmap?
+            avatar: Bitmap?,
+            maxEnergy: Int = GameMath.MAX_ENERGY
         ): RemoteViews {
-            val energy = character.energy.coerceIn(0, GameMath.MAX_ENERGY)
+            val energy = character.energy.coerceIn(0, maxEnergy)
             val xpToNext = GameMath.xpToNextLevel(character.level)
             val xpProgress = if (xpToNext > 0) (character.xp.toFloat() / xpToNext * 100).toInt() else 0
 
@@ -98,7 +100,7 @@ class HeroStatusWidgetProvider : AppWidgetProvider() {
                 setTextViewText(R.id.widgetGold, "💰 ${character.gold}")
                 
                 setProgressBar(R.id.widgetXpBar, 100, xpProgress.coerceIn(0, 100), false)
-                setProgressBar(R.id.widgetEnergyBar, GameMath.MAX_ENERGY, energy, false)
+                setProgressBar(R.id.widgetEnergyBar, maxEnergy, energy, false)
                 
                 setTextViewText(R.id.widgetStreak, "🔥 ${character.streak}d Streak")
                 

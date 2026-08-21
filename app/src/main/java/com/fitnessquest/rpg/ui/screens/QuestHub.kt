@@ -393,7 +393,7 @@ private fun CompactQuestHeroHeader(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         CompactHeaderToken(emoji = "💰", text = character.gold.toString())
-                        CompactHeaderToken(emoji = "⚡", text = "${character.energy}/${GameMath.MAX_ENERGY}")
+                        CompactHeaderToken(emoji = "⚡", text = "${character.energy}/${state.maxEnergy}")
                     }
                     Row(
                         modifier = Modifier.fillMaxWidth(),

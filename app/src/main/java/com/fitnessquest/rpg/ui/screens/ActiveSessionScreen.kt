@@ -111,6 +111,7 @@ import com.fitnessquest.rpg.domain.ExerciseTrackingType
 import com.fitnessquest.rpg.domain.GameMath
 import com.fitnessquest.rpg.domain.MomentTrigger
 import com.fitnessquest.rpg.domain.MonsterCatalog
+import com.fitnessquest.rpg.domain.mastery.MasteryPerks
 import com.fitnessquest.rpg.data.db.ActiveSetLogEntity
 import com.fitnessquest.rpg.domain.PrKind
 import com.fitnessquest.rpg.domain.RewardBatch
@@ -1287,8 +1288,19 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
             try {
                 if (demoMode) {
                     val character = container.repository.getCharacter()
+                    val masteries = container.repository.getAllMovementMastery()
+                    val masteryBonus = MasteryPerks.calculateTotalBonus(masteries)
                     val withXp = logs.map { it.copy(xp = if (it.xp > 0) it.xp else GameMath.xpForSet(it)) }
-                    val preview = GameMath.applySession(character, withXp, System.currentTimeMillis() - startedAt, emptySet(), 1, 3)
+                    val preview = GameMath.applySession(
+                        character = character,
+                        logs = withXp,
+                        durationMs = System.currentTimeMillis() - startedAt,
+                        musclesWorked = emptySet(),
+                        weeklyWorkoutsDone = 1,
+                        weeklyWorkoutsGoal = 3,
+                        masteryBonus = masteryBonus,
+                        maxEnergy = GameMath.MAX_ENERGY + masteryBonus.flatMaxEnergy
+                    )
                     _uiState.update { it.copy(finish = SessionFinish(result = preview.copy(updatedCharacter = character), isDemo = true)) }
                     wearBridge.unbind()
                     workoutNotification.cancel()

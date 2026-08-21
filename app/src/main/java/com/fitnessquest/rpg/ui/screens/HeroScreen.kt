@@ -63,6 +63,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import com.fitnessquest.rpg.domain.mastery.CanonicalMovement
 import com.fitnessquest.rpg.domain.mastery.MasteryProgression
+import com.fitnessquest.rpg.domain.mastery.MasteryPerks
 import kotlin.math.roundToInt
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
@@ -86,7 +87,8 @@ data class HeroUiState(
     val runes: List<ItemEntity> = emptyList(),
     val allClassProgress: List<ClassProgressEntity> = emptyList(),
     val movementMastery: List<MovementMasteryEntity> = emptyList(),
-    val questHub: QuestHubState? = null
+    val questHub: QuestHubState? = null,
+    val maxEnergy: Int = GameMath.MAX_ENERGY
 )
 
 private data class HeroQuestInputs(
@@ -125,6 +127,8 @@ class HeroViewModel(private val container: AppContainer) : ViewModel() {
             runes = runes,
             allClassProgress = allProgress
         )
+    }.combine(container.repository.observeMovementMastery()) { state, masteries ->
+        state.copy(movementMastery = masteries)
     }
 
     private val questInputs: Flow<HeroQuestInputs> = combine(
@@ -156,8 +160,9 @@ class HeroViewModel(private val container: AppContainer) : ViewModel() {
     val uiState: StateFlow<HeroUiState> = combine(
         coreState,
         container.repository.observeMovementMastery(),
-        questInputs
-    ) { core, masteryList, quest ->
+        questInputs,
+        container.repository.observeMaxEnergy()
+    ) { core, masteryList, quest, maxEnergy ->
         val character = core.character
         val questHub = character?.let {
             val biome = Biome.fromName(it.currentBiome)
@@ -185,7 +190,7 @@ class HeroViewModel(private val container: AppContainer) : ViewModel() {
                 boss = boss
             )
         }
-        core.copy(movementMastery = masteryList, questHub = questHub)
+        core.copy(movementMastery = masteryList, questHub = questHub, maxEnergy = maxEnergy)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), HeroUiState())
 
     init {
@@ -646,7 +651,7 @@ fun HeroScreenContent(
                         onAllocateClick = onAllocatePointsClick,
                         onBack = actions.onBack
                     )
-                    HeroCurrencyBarContent(character, wearLinked)
+                    HeroCurrencyBarContent(character, wearLinked, state.maxEnergy)
                     HeroNextObjectiveCard(
                         character = character,
                         onAllocateClick = onAllocatePointsClick,
@@ -721,7 +726,7 @@ fun HeroScreenContent(
                     onBack = actions.onBack
                 )
 
-                HeroCurrencyBarContent(character, wearLinked)
+                HeroCurrencyBarContent(character, wearLinked, state.maxEnergy)
 
                 HeroNextObjectiveCard(
                     character = character,
@@ -1096,7 +1101,7 @@ private fun HeroHeaderBanner(
 }
 
 @Composable
-private fun HeroCurrencyBarContent(character: CharacterEntity, wearLinked: Boolean) {
+private fun HeroCurrencyBarContent(character: CharacterEntity, wearLinked: Boolean, maxEnergy: Int = GameMath.MAX_ENERGY) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -1108,9 +1113,9 @@ private fun HeroCurrencyBarContent(character: CharacterEntity, wearLinked: Boole
     ) {
         FantasyToken(emoji = "💰", text = character.gold.toString())
         FantasyToken(
-            emoji = "⚡", 
-            text = "${character.energy}/${GameMath.MAX_ENERGY}",
-            color = if (character.energy < GameMath.MAX_ENERGY) Gold else Color.White
+            emoji = "⚡",
+            text = "${character.energy}/$maxEnergy",
+            color = if (character.energy < maxEnergy) Gold else Color.White
         )
         if (character.streak > 0) {
             FantasyToken(emoji = "🔥", text = "${character.streak}d")
@@ -2158,6 +2163,52 @@ private fun masteryTab(
                         }
                         if (entity.highest1RmKg > 0.0) {
                             HeroGearPill("1RM: ${Units.toDisplay(entity.highest1RmKg, imperial).roundToInt()} ${if (imperial) "lbs" else "kg"}")
+                        }
+                    }
+
+                    // --- Perks Section ---
+                    val perks = MasteryPerks.map[entity.canonicalKey].orEmpty()
+                    if (perks.isNotEmpty()) {
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 4.dp),
+                            color = Color.White.copy(alpha = 0.05f)
+                        )
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(
+                                "Passive Perks",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Gold.copy(alpha = 0.8f),
+                                fontWeight = FontWeight.Bold
+                            )
+                            perks.forEach { perk ->
+                                val unlocked = entity.level >= perk.level
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        Icon(
+                                            imageVector = if (unlocked) Icons.Default.CheckCircle else Icons.Default.Lock,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(12.dp),
+                                            tint = if (unlocked) StaminaGreen else Color.White.copy(alpha = 0.3f)
+                                        )
+                                        Text(
+                                            text = "Lv ${perk.level}: ${perk.name}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = if (unlocked) Color.White else Color.White.copy(alpha = 0.4f),
+                                            fontWeight = if (unlocked) FontWeight.Bold else FontWeight.Normal
+                                        )
+                                    }
+                                    Text(
+                                        text = perk.description,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = if (unlocked) Gold else Color.White.copy(alpha = 0.3f),
+                                        fontWeight = if (unlocked) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                }
+                            }
                         }
                     }
                 }

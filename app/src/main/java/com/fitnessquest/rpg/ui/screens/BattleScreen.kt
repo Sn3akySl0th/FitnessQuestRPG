@@ -66,16 +66,13 @@ import kotlin.time.Duration.Companion.minutes
 class BattleSelectViewModel(private val container: AppContainer) : ViewModel() {
     val battleState: StateFlow<BattleSelectUiState> = combine(
         container.repository.character,
-        container.repository.ownedGear,
-        container.repository.items,
-    ) { character, owned, items ->
-        val runeMap = items.asSequence().filter { it.slot == ItemSlot.RUNE }.associateBy { it.id }
-        val gear = character.equippedIds().mapNotNull { (slot, id) ->
-            owned.find { it.instance.id == id }?.asEquippedItem(runeMap)?.let { slot to it }
-        }.toMap()
+        container.repository.observeMovementMastery(),
+        container.repository.observeMaxEnergy()
+    ) { character, _, maxEnergy ->
         BattleSelectUiState(
             character = character,
-            combat = GameMath.combatStats(character, gear.values.toList()),
+            combat = container.repository.combatStatsFor(character),
+            maxEnergy = maxEnergy
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), BattleSelectUiState())
 
@@ -144,6 +141,7 @@ class BattleSelectViewModel(private val container: AppContainer) : ViewModel() {
 data class BattleSelectUiState(
     val character: CharacterEntity? = null,
     val combat: CombatStats? = null,
+    val maxEnergy: Int = GameMath.MAX_ENERGY
 )
 
 @Composable
@@ -274,7 +272,7 @@ fun BattleScreenContent(
                         ResourceChip("\u26A1", "${c.energy} energy")
                         ResourceChip("\u2694\uFE0F", "costs ${GameMath.BATTLE_ENERGY_COST} per battle")
                     }
-                    if (c.energy < GameMath.MAX_ENERGY) {
+                    if (c.energy < state.maxEnergy) {
                         Text(
                             "✨ Resting... +1⚡ every 12m",
                             style = MaterialTheme.typography.labelSmall,

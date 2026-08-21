@@ -23,6 +23,7 @@ import com.fitnessquest.rpg.data.db.SetLogEntity
 import com.fitnessquest.rpg.domain.SetType
 import com.fitnessquest.rpg.domain.mastery.MovementMasteryCatalog
 import com.fitnessquest.rpg.domain.mastery.MasteryProgression
+import com.fitnessquest.rpg.domain.mastery.MasteryPerks
 import com.fitnessquest.rpg.data.db.WorkoutEntity
 import com.fitnessquest.rpg.data.db.WorkoutExerciseEntity
 import com.fitnessquest.rpg.data.db.isEquippable
@@ -43,6 +44,7 @@ import com.fitnessquest.rpg.domain.GameMath
 import com.fitnessquest.rpg.domain.GearRarity
 import com.fitnessquest.rpg.domain.GearSockets
 import com.fitnessquest.rpg.domain.GearTrait
+import com.fitnessquest.rpg.domain.MasteryStatBonus
 import com.fitnessquest.rpg.domain.ProceduralStatEngine
 import com.fitnessquest.rpg.domain.ItemCatalog
 import com.fitnessquest.rpg.domain.LootChests
@@ -135,6 +137,28 @@ class GameRepository(
 
     val allClassProgress: Flow<List<ClassProgressEntity>> = db.classProgressDao().observeAll()
     val allBiomeProgress: Flow<List<BiomeProgressEntity>> = db.biomeProgressDao().observeAll()
+
+    fun observeMovementMastery(characterId: Long = 1L): Flow<List<MovementMasteryEntity>> =
+        db.movementMasteryDao().observeAll(characterId)
+
+    suspend fun getAllMovementMastery(characterId: Long = 1L): List<MovementMasteryEntity> =
+        db.movementMasteryDao().getAll(characterId)
+
+    suspend fun getMasteryBonus(characterId: Long = 1L): MasteryStatBonus {
+        val masteries = getAllMovementMastery(characterId)
+        return MasteryPerks.calculateTotalBonus(masteries)
+    }
+
+    fun observeMasteryBonus(characterId: Long = 1L): Flow<MasteryStatBonus> =
+        observeMovementMastery(characterId).map { masteries ->
+            MasteryPerks.calculateTotalBonus(masteries)
+        }
+
+    suspend fun getMaxEnergy(characterId: Long = 1L): Int =
+        GameMath.MAX_ENERGY + getMasteryBonus(characterId).flatMaxEnergy
+
+    fun observeMaxEnergy(characterId: Long = 1L): Flow<Int> =
+        observeMasteryBonus(characterId).map { GameMath.MAX_ENERGY + it.flatMaxEnergy }
 
     fun getBiomeRequirement(biome: Biome): Flow<ProgressionRules.BiomeRequirement> =
         allBiomeProgress.map { allProgress ->
@@ -1167,6 +1191,9 @@ class GameRepository(
             val bonusXp = character.pendingXpBoost + (prs.count { it.isNew } * GameMath.PR_BONUS_XP)
             val isWellRested = GameMath.isWellRested(character.lastWorkoutDay)
             
+            val masteries = db.movementMasteryDao().getAll(1L)
+            val masteryBonus = MasteryPerks.calculateTotalBonus(masteries)
+
             var res = GameMath.applySession(
                 character = character,
                 logs = withXp,
@@ -1176,6 +1203,8 @@ class GameRepository(
                 weeklyWorkoutsGoal = weeklyGoal,
                 bonusXp = bonusXp,
                 isWellRested = isWellRested,
+                masteryBonus = masteryBonus,
+                maxEnergy = GameMath.MAX_ENERGY + masteryBonus.flatMaxEnergy,
                 caloriesKcal = caloriesKcal,
                 avgHr = avgHr,
                 maxHr = maxHr,
@@ -1478,23 +1507,24 @@ class GameRepository(
             if (bountyId != null) {
                 val claimed = c.claimedBounties.split(",").filter { it.isNotBlank() }.toSet()
                 if (bountyId in claimed) return@withTransaction false
-                
-                val newClaimed = (claimed + bountyId).joinToString(",")
+                              val newClaimed = (claimed + bountyId).joinToString(",")
+                val maxEnergy = getMaxEnergy()
                 db.characterDao().upsert(
                     c.copy(
                         gold = c.gold + gold,
                         pendingXpBoost = c.pendingXpBoost + xpBoost,
-                        energy = (c.energy + energy).coerceAtMost(GameMath.MAX_ENERGY),
+                        energy = (c.energy + energy).coerceAtMost(maxEnergy),
                         lastEnergyUpdate = System.currentTimeMillis(),
                         claimedBounties = newClaimed
                     )
                 )
             } else {
+                val maxEnergy = getMaxEnergy()
                 db.characterDao().upsert(
                     c.copy(
                         gold = c.gold + gold,
                         pendingXpBoost = c.pendingXpBoost + xpBoost,
-                        energy = (c.energy + energy).coerceAtMost(GameMath.MAX_ENERGY),
+                        energy = (c.energy + energy).coerceAtMost(maxEnergy),
                         lastEnergyUpdate = System.currentTimeMillis()
                     )
                 )
@@ -2106,7 +2136,16 @@ class GameRepository(
                 }
             }
         }
-        return GameMath.combatStats(character, equipped, runeSpd = spd, runeCrit = crit, siphonHeal = siphon)
+        val masteries = db.movementMasteryDao().getAll(1L)
+        val masteryBonus = MasteryPerks.calculateTotalBonus(masteries)
+        return GameMath.combatStats(
+            character,
+            equipped,
+            runeSpd = spd,
+            runeCrit = crit,
+            siphonHeal = siphon,
+            masteryBonus = masteryBonus
+        )
     }
 
     suspend fun equippedTraits(character: CharacterEntity): List<com.fitnessquest.rpg.domain.GearTrait> {
@@ -2148,7 +2187,8 @@ class GameRepository(
 
     private suspend fun applyLootToCharacter(character: CharacterEntity, loot: LootResult): CharacterEntity {
         var gold = character.gold + loot.goldBonus
-        var energy = (character.energy + loot.energyBonus).coerceAtMost(GameMath.MAX_ENERGY)
+        val maxEnergy = getMaxEnergy()
+        var energy = (character.energy + loot.energyBonus).coerceAtMost(maxEnergy)
         var xpBoost = character.pendingXpBoost + loot.xpBoostBonus
 
         for (g in loot.grants) {
@@ -2159,7 +2199,10 @@ class GameRepository(
                     db.itemDao().update(row.copy(owned = true, quantity = row.quantity + g.quantity))
                 }
                 is LootGrant.Gold -> gold += g.amount
-                is LootGrant.Energy -> energy = (energy + g.amount).coerceAtMost(GameMath.MAX_ENERGY)
+                is LootGrant.Energy -> {
+                    val me = getMaxEnergy()
+                    energy = (energy + g.amount).coerceAtMost(me)
+                }
                 is LootGrant.XpBoost -> xpBoost += g.amount
                 is LootGrant.ChestOpened -> {
                     for (c in g.contents) {
@@ -2170,7 +2213,10 @@ class GameRepository(
                                 db.itemDao().update(row.copy(owned = true, quantity = row.quantity + c.quantity))
                             }
                             is LootGrant.Gold -> gold += c.amount
-                            is LootGrant.Energy -> energy = (energy + c.amount).coerceAtMost(GameMath.MAX_ENERGY)
+                            is LootGrant.Energy -> {
+                        val me = getMaxEnergy()
+                        energy = (energy + c.amount).coerceAtMost(me)
+                    }
                             is LootGrant.XpBoost -> xpBoost += c.amount
                             is LootGrant.ChestOpened -> Unit
                         }
@@ -2387,9 +2433,10 @@ class GameRepository(
         val c = getCharacter()
         val today = LocalDate.now().toEpochDay()
         if (c.lastWellnessDay == today) return
+        val me = getMaxEnergy()
         db.characterDao().upsert(
             c.copy(
-                energy = (c.energy + 20).coerceAtMost(GameMath.MAX_ENERGY),
+                energy = (c.energy + 20).coerceAtMost(me),
                 lastWellnessDay = today,
                 lastEnergyUpdate = System.currentTimeMillis()
             )
@@ -2452,7 +2499,8 @@ class GameRepository(
         var updated = applyLootToCharacter(afterBattle, loot)
         val siphon = combatStatsFor(character).siphonHeal
         if (siphon > 0) {
-            updated = updated.copy(energy = (updated.energy + siphon / 4).coerceAtMost(GameMath.MAX_ENERGY))
+            val me = getMaxEnergy()
+            updated = updated.copy(energy = (updated.energy + siphon / 4).coerceAtMost(me))
         }
         db.characterDao().upsert(updated)
 
@@ -2531,7 +2579,8 @@ class GameRepository(
 
     suspend fun debugFillEnergy() {
         val c = getCharacter()
-        db.characterDao().upsert(c.copy(energy = GameMath.MAX_ENERGY, lastEnergyUpdate = System.currentTimeMillis()))
+        val me = getMaxEnergy()
+        db.characterDao().upsert(c.copy(energy = me, lastEnergyUpdate = System.currentTimeMillis()))
     }
 
     suspend fun debugStartSandboxHero() {
@@ -2542,7 +2591,7 @@ class GameRepository(
                 name = if (c.name.isBlank() || (c.name == "Hero")) "Dev Hero" else c.name,
                 characterClass = c.characterClass,
                 gold = 500,
-                energy = GameMath.MAX_ENERGY
+                energy = getMaxEnergy()
             )
         )
     }
@@ -2728,14 +2777,6 @@ class GameRepository(
 
     // ---- Movement Mastery ----
 
-    fun observeMovementMastery(characterId: Long = 1L): Flow<List<MovementMasteryEntity>> =
-        db.movementMasteryDao().observeAll(characterId)
-
-    @Suppress("unused")
-    suspend fun getAllMovementMastery(characterId: Long = 1L): List<MovementMasteryEntity> =
-        db.movementMasteryDao().getAll(characterId)
-
-    @Suppress("unused")
     suspend fun getMasteryByCanonicalKey(key: String, characterId: Long = 1L): MovementMasteryEntity? =
         db.movementMasteryDao().getByCanonicalKey(key, characterId)
 
