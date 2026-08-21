@@ -502,11 +502,25 @@ fun SettingsDialog(
     var titleTaps by remember { mutableIntStateOf(0) }
     var titleTapWindowStart by remember { mutableLongStateOf(0L) }
     var showEmailAuth by remember { mutableStateOf(false) }
+    var showFeedbackDialog by remember { mutableStateOf(false) }
+    val character by viewModel.character.collectAsState()
+    val context = androidx.compose.ui.platform.LocalContext.current
     val sandbox by viewModel.developerSandbox.collectAsState()
     val isPremium by viewModel.isPremium.collectAsState()
     val toolsUnlocked by viewModel.developerToolsUnlocked.collectAsState()
     val showDeveloperSection =
         viewModel.developerToolsAvailable && (toolsUnlocked || sandbox)
+
+    if (showFeedbackDialog) {
+        BetaFeedbackDialog(
+            character = character,
+            onDismiss = { showFeedbackDialog = false },
+            onFeedbackSubmitted = {
+                noteBetaFeedbackSubmitted(context)
+                showFeedbackDialog = false
+            }
+        )
+    }
 
     Dialog(
         onDismissRequest = ::close,
@@ -569,6 +583,14 @@ fun SettingsDialog(
                         .verticalScroll(rememberScrollState())
                         .padding(horizontal = 16.dp, vertical = 12.dp)
                 ) {
+                    OutlinedButton(
+                        onClick = { showFeedbackDialog = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Gold)
+                    ) {
+                        Text("💬 Send Beta Feedback & Bug Reports", color = Gold, fontWeight = FontWeight.SemiBold)
+                    }
+
                     if (showDeveloperSection) {
                         Text(
                             "Developer",

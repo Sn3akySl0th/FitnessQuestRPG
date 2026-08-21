@@ -37,6 +37,8 @@ import com.fitnessquest.rpg.domain.GameMath
 import com.fitnessquest.rpg.domain.Monster
 import com.fitnessquest.rpg.ui.components.AvatarCustomizationDialog
 import com.fitnessquest.rpg.ui.components.AvatarExpression
+import com.fitnessquest.rpg.ui.components.BetaFeedbackDialog
+import com.fitnessquest.rpg.ui.components.BetaWalkthroughCard
 import com.fitnessquest.rpg.ui.components.DailyBountyCard
 import com.fitnessquest.rpg.ui.components.EmbersOverlay
 import com.fitnessquest.rpg.ui.components.HeroPaperDoll
@@ -44,6 +46,7 @@ import com.fitnessquest.rpg.ui.components.ManualStepEntryDialog
 import com.fitnessquest.rpg.ui.components.PedometerScanDialog
 import com.fitnessquest.rpg.ui.components.SettingsIconButton
 import com.fitnessquest.rpg.ui.components.WeightLogDialog
+import com.fitnessquest.rpg.ui.components.noteBetaFeedbackSubmitted
 import com.fitnessquest.rpg.ui.components.toAppearance
 import com.fitnessquest.rpg.ui.rememberDockContentPadding
 import com.fitnessquest.rpg.ui.theme.Gold
@@ -188,8 +191,21 @@ fun QuestHubScreen(
     var showJobSwitcher by remember { mutableStateOf(false) }
     var showMorphSwitcher by remember { mutableStateOf(false) }
     var showAvatarDialog by remember { mutableStateOf(false) }
+    var showFeedbackDialog by remember { mutableStateOf(false) }
+    val context = androidx.compose.ui.platform.LocalContext.current
     val character = screenState.character
     val heroClass = character?.characterClass
+
+    if (showFeedbackDialog) {
+        BetaFeedbackDialog(
+            character = character,
+            onDismiss = { showFeedbackDialog = false },
+            onFeedbackSubmitted = {
+                noteBetaFeedbackSubmitted(context)
+                showFeedbackDialog = false
+            }
+        )
+    }
 
     if (character == null || heroClass == null) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -310,6 +326,15 @@ fun QuestHubScreen(
                         }
                     )
                 }
+            }
+
+            item {
+                BetaWalkthroughCard(
+                    character = screenState.character,
+                    onOpenFeedback = { showFeedbackDialog = true },
+                    onClaimPioneerReward = { viewModel.claimBetaPioneerReward() },
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                )
             }
 
             item {

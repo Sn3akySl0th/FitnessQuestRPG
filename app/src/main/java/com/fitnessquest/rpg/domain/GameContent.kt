@@ -309,7 +309,9 @@ object ItemCatalog {
         ItemEntity(Consumables.IRONHIDE_SALVE, "Ironhide Salve", "🛡️", ItemSlot.CONSUMABLE, 2, 110,
             description = "Apply in combat: strengthens Defense by +30 for 3 turns."),
 
-        // ---- Unique Boss Signature Relics (Trophies) ----
+        // ---- Unique Boss Signature Relics (Trophies) & Beta Exclusives ----
+        ItemEntity(1205, "Pioneer's Amulet", "🌟", ItemSlot.TRINKET, 3, 1000, atk = 12, def = 12, hp = 30,
+            description = "Exclusive relic awarded to Closed Beta pioneers. Emits an aura of ancient determination.", style = ItemStyle.LIGHT),
         ItemEntity(1201, "Boar's Slumber Girdle", "🐗", ItemSlot.TRINKET, 2, 350, def = 6, hp = 25,
             description = "Trophy of the Lazy Boar. Embraces restorative rest: catching breath on Defend restores +15 bonus HP."),
         ItemEntity(1202, "Spotter's Ribcage Aegis", "💀", ItemSlot.TRINKET, 3, 500, atk = 4, def = 10, hp = 30,

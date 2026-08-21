@@ -83,7 +83,8 @@ fun TrophyVaultCard(
             ),
             Trophy("3", "Consistency King", "🔥", "Maintain a 7-Day Workout Streak", character.streak, 7, 200),
             Trophy("4", "Slayer of Beasts", "⚔️", "Win 10 Turn-Based Battles", character.battlesWon, 10, 250),
-            Trophy("5", "Realm Champion", "👑", "Reach Hero Level 10", character.level, 10, 500)
+            Trophy("5", "Realm Champion", "👑", "Reach Hero Level 10", character.level, 10, 500),
+            Trophy("beta_pioneer", "Closed Beta Pioneer", "🌟", "Complete the 4 Closed Beta tester missions", if (character.sessionsCompleted >= 3 && character.battlesWon >= 1) 4 else character.sessionsCompleted, 4, 500)
         )
     }
 

@@ -1568,6 +1568,52 @@ class GameRepository(
         }
     }
 
+    suspend fun grantBetaPioneerReward(): Boolean {
+        return db.withTransaction {
+            val c = getCharacter()
+            val existingFreeze = db.itemDao().get(Consumables.STREAK_FREEZE)
+            if (existingFreeze != null) {
+                db.itemDao().setQuantity(Consumables.STREAK_FREEZE, existingFreeze.quantity + 3)
+            } else {
+                db.itemDao().insertAll(
+                    listOf(
+                        ItemEntity(
+                            id = Consumables.STREAK_FREEZE,
+                            name = "Streak Freeze",
+                            emoji = "❄️",
+                            slot = ItemSlot.CONSUMABLE,
+                            tier = 1,
+                            price = 250,
+                            quantity = 3,
+                            owned = true,
+                            description = "Protects your workout streak for one missed day. Used automatically when you need it."
+                        )
+                    )
+                )
+            }
+            val amuletInstanceId = db.gearInstanceDao().insert(
+                GearInstanceEntity(
+                    catalogId = 1205L,
+                    atk = 12,
+                    def = 12,
+                    hp = 30,
+                    rarity = "EPIC",
+                    originBiome = "Closed Beta"
+                )
+            )
+            val newTrinket = if (c.trinketId == null) amuletInstanceId else c.trinketId
+            db.characterDao().upsert(
+                c.copy(
+                    gold = c.gold + 500,
+                    pendingXpBoost = c.pendingXpBoost + 500,
+                    trinketId = newTrinket
+                )
+            )
+            true
+        }
+    }
+
+
     suspend fun grantGuildRaidReward(topContributor: Boolean): RewardBatch {
         val character = getCharacter()
         val tier = lootTierFor(

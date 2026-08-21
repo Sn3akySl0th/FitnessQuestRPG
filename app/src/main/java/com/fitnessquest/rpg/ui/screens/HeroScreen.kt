@@ -402,6 +402,12 @@ class HeroViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
+    fun claimBetaPioneerReward() {
+        viewModelScope.launch {
+            container.repository.grantBetaPioneerReward()
+        }
+    }
+
     fun claimIdleRewards(onResult: (RewardBatch?) -> Unit) {
         viewModelScope.launch {
             onResult(container.repository.claimIdleRewards())
