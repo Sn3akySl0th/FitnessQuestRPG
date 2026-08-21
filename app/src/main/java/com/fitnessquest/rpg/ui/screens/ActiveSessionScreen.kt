@@ -2621,7 +2621,12 @@ private fun ExerciseLogCard(
                     IconButton(onClick = onSwap, modifier = Modifier.size(32.dp)) { Icon(Icons.Default.Bolt, "Swap", modifier = Modifier.size(18.dp)) }
                     if (isCardio) {
                         IconButton(onClick = { showAdvanced = !showAdvanced }, modifier = Modifier.size(32.dp)) {
-                            Icon(if (showAdvanced) Icons.Default.KeyboardArrowUp else Icons.Default.Tune, "Advanced", modifier = Modifier.size(18.dp), tint = if (showAdvanced) Gold else MaterialTheme.colorScheme.primary)
+                            Icon(
+                                Icons.Default.Tune,
+                                contentDescription = "Advanced cardio settings",
+                                modifier = Modifier.size(18.dp),
+                                tint = if (showAdvanced) Gold else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     }
                     IconButton(onClick = onRemove, enabled = canRemove, modifier = Modifier.size(32.dp)) { Icon(Icons.Filled.Delete, "Remove", modifier = Modifier.size(18.dp), tint = if (canRemove) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.outline) }
@@ -2650,14 +2655,16 @@ private fun ExerciseLogCard(
                         Text("Set", Modifier.width(24.dp), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
                         Text("Previous", Modifier.weight(1.2f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
                         if (isCardio) {
-                            Text("Dist", Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
-                            Text("Time", Modifier.weight(1.5f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
+                            Text("Dist", Modifier.weight(1.2f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
+                            Text("Time", Modifier.weight(1.8f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
                         } else {
                             val c1 = if (isTimed) "Min" else "Weight"
                             val c2 = if (isTimed) "Sec" else "Reps"
-                            Text(c1, Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
-                            Text(c2, Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
-                            Text(effortMethod.label, Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
+                            Text(c1, Modifier.weight(if (effortApplies) 1f else 1.2f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
+                            Text(c2, Modifier.weight(if (effortApplies) 1f else 1.2f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
+                            if (effortApplies) {
+                                Text(effortMethod.label, Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
+                            }
                         }
                         Spacer(Modifier.width(36.dp))
                     }
@@ -2680,13 +2687,15 @@ private fun ExerciseLogCard(
                         val p = previousSets.getOrNull(i); Text(if (p != null) setSummary(p, imperial) else "—", Modifier.weight(1.2f), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
                         
                         if (isCardio) {
-                            Text(Units.trimmed(Units.kmToDisplay(set.distanceKm, imperial)), Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
-                            Text(Units.formatTimeMinutes(set.durationMin), Modifier.weight(1.5f), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+                            Text(Units.trimmed(Units.kmToDisplay(set.distanceKm, imperial)), Modifier.weight(1.2f), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+                            Text(Units.formatTimeMinutes(set.durationMin), Modifier.weight(1.8f), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
                         } else {
                             val totalSecs = Math.round(set.durationMin * 60.0).toInt()
-                            Text(if (isTimed) (totalSecs / 60).toString() else Units.formatWeight(set.weightKg, imperial), Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
-                            Text(if (isTimed) (totalSecs % 60).toString() else set.reps.toString(), Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
-                            Text(set.rir?.let { effortMethod.display(it) } ?: "—", Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+                            Text(if (isTimed) (totalSecs / 60).toString() else Units.formatWeight(set.weightKg, imperial), Modifier.weight(if (effortApplies) 1f else 1.2f), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+                            Text(if (isTimed) (totalSecs % 60).toString() else set.reps.toString(), Modifier.weight(if (effortApplies) 1f else 1.2f), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+                            if (effortApplies) {
+                                Text(set.rir?.let { effortMethod.display(it) } ?: "—", Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+                            }
                         }
                         Icon(Icons.Default.Check, null, tint = Color(0xFF4CAF50), modifier = Modifier.size(36.dp).padding(8.dp))
                     }
@@ -2748,9 +2757,15 @@ private fun ExerciseLogCard(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     CompactNumberField(durationMin, { durationMin = it }, Modifier.weight(1f))
-                                    Text(":", style = MaterialTheme.typography.bodyMedium)
+                                    Text(
+                                        ":",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
+                                    )
                                     CompactNumberField(durationSec, { durationSec = it }, Modifier.weight(1f))
                                 }
+                                Spacer(Modifier.width(36.dp))
                             }
                         } else {
                             // Strength / Bodyweight / Timed Row
@@ -2792,22 +2807,25 @@ private fun ExerciseLogCard(
                                     color = MaterialTheme.colorScheme.outline,
                                     textAlign = TextAlign.Center
                                 )
-                                CompactNumberField(if (isTimed) durationMin else weight, { if (isTimed) durationMin = it else weight = it }, Modifier.weight(1f))
-                                CompactNumberField(if (isTimed) durationSec else reps, { if (isTimed) durationSec = it else reps = it }, Modifier.weight(1f))
-                                Box(Modifier.weight(1f)) {
-                                    var exp by remember { mutableStateOf(false) }
-                                    Text(
-                                        effort?.let { effortMethod.display(it) } ?: "—",
-                                        Modifier.fillMaxWidth().clickable { exp = true }.padding(4.dp),
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        textAlign = TextAlign.Center,
-                                        color = if (effort == null) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.primary
-                                    )
-                                    DropdownMenu(exp, { exp = false }) {
-                                        val ops = if (effortMethod == EffortMethod.RPE) listOf(null to "—", 4 to "6", 3 to "7", 2 to "8", 1 to "9", 0 to "10") else listOf(null to "—", 0 to "0", 1 to "1", 2 to "2", 3 to "3", 4 to "4", 5 to "5+")
-                                        ops.forEach { (v, l) -> DropdownMenuItem(text = { Text(l) }, onClick = { effort = v; exp = false }) }
+                                CompactNumberField(if (isTimed) durationMin else weight, { if (isTimed) durationMin = it else weight = it }, Modifier.weight(if (effortApplies) 1f else 1.2f))
+                                CompactNumberField(if (isTimed) durationSec else reps, { if (isTimed) durationSec = it else reps = it }, Modifier.weight(if (effortApplies) 1f else 1.2f))
+                                if (effortApplies) {
+                                    Box(Modifier.weight(1f)) {
+                                        var exp by remember { mutableStateOf(false) }
+                                        Text(
+                                            effort?.let { effortMethod.display(it) } ?: "—",
+                                            Modifier.fillMaxWidth().clickable { exp = true }.padding(4.dp),
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            textAlign = TextAlign.Center,
+                                            color = if (effort == null) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.primary
+                                        )
+                                        DropdownMenu(exp, { exp = false }) {
+                                            val ops = if (effortMethod == EffortMethod.RPE) listOf(null to "—", 4 to "6", 3 to "7", 2 to "8", 1 to "9", 0 to "10") else listOf(null to "—", 0 to "0", 1 to "1", 2 to "2", 3 to "3", 4 to "4", 5 to "5+")
+                                            ops.forEach { (v, l) -> DropdownMenuItem(text = { Text(l) }, onClick = { effort = v; exp = false }) }
+                                        }
                                     }
                                 }
+                                Spacer(Modifier.width(36.dp))
                             }
                         }
 

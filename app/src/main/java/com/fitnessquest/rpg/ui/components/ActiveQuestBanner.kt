@@ -111,8 +111,11 @@ fun ActiveQuestBanner(
         color = MaterialTheme.colorScheme.primaryContainer,
         contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
         tonalElevation = 8.dp,
-        shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
-        modifier = modifier.fillMaxWidth()
+        shadowElevation = 4.dp,
+        shape = RoundedCornerShape(16.dp),
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 4.dp)
     ) {
         Row(
             modifier = Modifier

@@ -8,8 +8,10 @@ import androidx.compose.foundation.layout.Box
 
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.Groups
@@ -443,14 +445,9 @@ fun FitQuestNav() {
 
             Column(
                 modifier = Modifier
-                    .align(
-                        when {
-                            !isLandscape -> Alignment.BottomCenter
-                            leftHanded -> Alignment.BottomEnd
-                            else -> Alignment.BottomStart
-                        }
-                    )
-                    .navigationBarsPadding()
+                    .fillMaxWidth()
+                    .align(Alignment.TopCenter)
+                    .statusBarsPadding()
             ) {
                 val hideBanners = currentRoute == Routes.HERO ||
                     currentRoute == Routes.SESSION ||
