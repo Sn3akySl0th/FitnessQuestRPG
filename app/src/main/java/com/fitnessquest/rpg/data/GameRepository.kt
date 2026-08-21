@@ -124,6 +124,7 @@ class GameRepository(
 
     val character: Flow<CharacterEntity> = db.characterDao().observe().filterNotNull()
     val workouts: Flow<List<WorkoutEntity>> = db.workoutDao().observeAll()
+    val workoutExercises: Flow<List<WorkoutExerciseEntity>> = db.workoutDao().observeAllExercises()
     val sessions: Flow<List<SessionEntity>> = db.sessionDao().observeAll()
     val items: Flow<List<ItemEntity>> = db.itemDao().observeAll()
     val gearInstances: Flow<List<GearInstanceEntity>> = db.gearInstanceDao().observeAll()

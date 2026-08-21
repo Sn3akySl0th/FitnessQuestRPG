@@ -13,7 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.Groups
-import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.SportsMma
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.runtime.Composable
@@ -25,6 +25,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.foundation.layout.Column
 import com.fitnessquest.rpg.data.db.ActiveSessionWithDetails
 import kotlinx.coroutines.launch
@@ -52,6 +53,8 @@ import com.fitnessquest.rpg.ui.screens.BattleScreen
 import com.fitnessquest.rpg.ui.screens.ExerciseLibraryScreen
 import com.fitnessquest.rpg.ui.screens.FightScreen
 import com.fitnessquest.rpg.ui.screens.HeroScreen
+import com.fitnessquest.rpg.ui.screens.HeroViewModel
+import com.fitnessquest.rpg.ui.screens.QuestHubScreen
 import com.fitnessquest.rpg.ui.screens.HistoryScreen
 import com.fitnessquest.rpg.ui.screens.RivalsScreen
 import com.fitnessquest.rpg.ui.screens.ShopScreen
@@ -72,6 +75,8 @@ import com.fitnessquest.rpg.ui.screens.SessionDetailScreen
 
 object Routes {
     const val HERO = "hero"
+    const val HERO_DETAILS = "hero/details"
+    const val HERO_SAGA = "hero/details/saga"
     const val TRAIN = "train"
     const val BATTLE = "battle"
     const val ALLIES = "allies"
@@ -119,7 +124,7 @@ fun rememberDockContentPadding(
 }
 
 private val tabs = listOf(
-    DockTab(Routes.HERO, "Hero", Icons.Filled.Shield),
+    DockTab(Routes.HERO, "Home", Icons.Filled.Home),
     DockTab(Routes.TRAIN, "Train", Icons.Filled.FitnessCenter),
     DockTab(Routes.BATTLE, "Battle", Icons.Filled.SportsMma),
     DockTab(Routes.ALLIES, "Allies", Icons.Filled.Groups),
@@ -220,11 +225,15 @@ fun FitQuestNav() {
 
 
     val navController = rememberNavController()
+    val heroViewModel: HeroViewModel = viewModel(factory = HeroViewModel.Factory)
+    val hasClaimableDailyBounty by heroViewModel.hasClaimableDailyBounty.collectAsState()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
 
     val isLandscape = androidx.compose.ui.platform.LocalConfiguration.current.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
-    val showBottomBar = currentRoute in tabs.map { it.route }
+    val heroDetailRoutes = setOf(Routes.HERO_DETAILS, Routes.HERO_SAGA)
+    val showBottomBar = currentRoute in tabs.map { it.route } || currentRoute in heroDetailRoutes
+    val selectedDockRoute = if (currentRoute in heroDetailRoutes) Routes.HERO else currentRoute
     val dockInset = if (showBottomBar && !isLandscape) DockClearance else 0.dp
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -243,14 +252,76 @@ fun FitQuestNav() {
                     .padding(start = if (showBottomBar && isLandscape) 68.dp else 0.dp)
             ) {
                 composable(Routes.HERO) {
-                    HeroScreen(
-                        onStartWorkout = {
+                    QuestHubScreen(
+                        viewModel = heroViewModel,
+                        onOpenHero = { navController.navigate(Routes.HERO_DETAILS) },
+                        onOpenSaga = { navController.navigate(Routes.HERO_SAGA) },
+                        onOpenTraining = {
                             navController.navigate(Routes.TRAIN) {
                                 popUpTo(navController.graph.findStartDestination().id) {
                                     saveState = true
                                 }
                                 launchSingleTop = true
                                 restoreState = true
+                            }
+                        },
+                        onOpenBattle = {
+                            navController.navigate(Routes.BATTLE) {
+                                popUpTo(navController.graph.findStartDestination().id) {
+                                    saveState = true
+                                }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        },
+                        onStartWorkout = { workoutId ->
+                            navController.navigate(Routes.session(workoutId))
+                        }
+                    )
+                }
+                composable(Routes.HERO_DETAILS) {
+                    HeroScreen(
+                        viewModel = heroViewModel,
+                        onOpenHome = {
+                            navController.navigate(Routes.HERO) {
+                                popUpTo(navController.graph.findStartDestination().id) {
+                                    inclusive = true
+                                }
+                                launchSingleTop = true
+                            }
+                        },
+                        onBack = {
+                            if (!navController.popBackStack()) {
+                                navController.navigate(Routes.HERO) {
+                                    popUpTo(navController.graph.findStartDestination().id) {
+                                        inclusive = true
+                                    }
+                                    launchSingleTop = true
+                                }
+                            }
+                        }
+                    )
+                }
+                composable(Routes.HERO_SAGA) {
+                    HeroScreen(
+                        viewModel = heroViewModel,
+                        initialTab = 2,
+                        onOpenHome = {
+                            navController.navigate(Routes.HERO) {
+                                popUpTo(navController.graph.findStartDestination().id) {
+                                    inclusive = true
+                                }
+                                launchSingleTop = true
+                            }
+                        },
+                        onBack = {
+                            if (!navController.popBackStack()) {
+                                navController.navigate(Routes.HERO) {
+                                    popUpTo(navController.graph.findStartDestination().id) {
+                                        inclusive = true
+                                    }
+                                    launchSingleTop = true
+                                }
                             }
                         }
                     )
@@ -372,7 +443,9 @@ fun FitQuestNav() {
                     .navigationBarsPadding()
                     .padding(bottom = if (showBottomBar && !isLandscape) DockClearance else 0.dp)
             ) {
-                val hideBanners = currentRoute == Routes.SESSION || currentRoute?.startsWith("battle/fight") == true
+                val hideBanners = currentRoute == Routes.HERO ||
+                    currentRoute == Routes.SESSION ||
+                    currentRoute?.startsWith("battle/fight") == true
                 
                 if (!hideBanners) {
                     if (updateStatus is InAppUpdateStatus.Downloaded) {
@@ -408,8 +481,10 @@ fun FitQuestNav() {
 
             if (showBottomBar) {
                 FloatingGameDock(
-                    tabs = tabs,
-                    currentRoute = currentRoute,
+                    tabs = tabs.map { tab ->
+                        if (tab.route == Routes.HERO) tab.copy(hasBadge = hasClaimableDailyBounty) else tab
+                    },
+                    currentRoute = selectedDockRoute,
                     onTabClick = { route ->
                         navController.navigate(route) {
                             popUpTo(navController.graph.findStartDestination().id) {
