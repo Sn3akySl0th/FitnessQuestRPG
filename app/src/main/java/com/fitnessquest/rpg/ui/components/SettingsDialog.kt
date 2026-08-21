@@ -138,6 +138,12 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
             else -> "Guest"
         }
 
+    fun recordBetaFeedbackSubmitted() {
+        viewModelScope.launch {
+            repository.recordBetaFeedbackSubmitted()
+        }
+    }
+
     /** Debug builds only — never true in release. */
     val developerToolsAvailable: Boolean = BuildConfig.DEBUG
 
@@ -517,6 +523,7 @@ fun SettingsDialog(
             onDismiss = { showFeedbackDialog = false },
             onFeedbackSubmitted = {
                 noteBetaFeedbackSubmitted(context)
+                viewModel.recordBetaFeedbackSubmitted()
                 showFeedbackDialog = false
             }
         )

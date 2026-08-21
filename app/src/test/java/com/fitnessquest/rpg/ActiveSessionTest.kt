@@ -18,7 +18,10 @@ import com.fitnessquest.rpg.data.db.CharacterEntity
 import com.fitnessquest.rpg.data.db.ClassProgressDao
 import com.fitnessquest.rpg.data.db.ExerciseCategory
 import com.fitnessquest.rpg.data.db.GearInstanceDao
+import com.fitnessquest.rpg.data.db.GearInstanceEntity
 import com.fitnessquest.rpg.data.db.ItemDao
+import com.fitnessquest.rpg.data.db.ItemEntity
+import com.fitnessquest.rpg.data.db.isStackable
 import com.fitnessquest.rpg.data.db.MovementMasteryDao
 import com.fitnessquest.rpg.data.db.MovementMasteryEntity
 import com.fitnessquest.rpg.data.db.PendingSyncEntity
@@ -351,13 +354,90 @@ class ActiveSessionTest {
             }
         } as MovementMasteryDao
 
+        val gearInstances = mutableMapOf<Long, GearInstanceEntity>()
+        var nextGearInstanceId = 1L
+        val gearInstancesFlow = MutableStateFlow<List<GearInstanceEntity>>(emptyList())
+        val gearInstanceDaoProxy = Proxy.newProxyInstance(
+            GearInstanceDao::class.java.classLoader,
+            arrayOf(GearInstanceDao::class.java)
+        ) { _, method, args ->
+            when (method.name) {
+                "insert" -> {
+                    val entity = args[0] as GearInstanceEntity
+                    val id = if (entity.id > 0) entity.id else nextGearInstanceId++
+                    val saved = entity.copy(id = id)
+                    gearInstances[id] = saved
+                    gearInstancesFlow.value = gearInstances.values.toList()
+                    id
+                }
+                "get" -> gearInstances[args[0] as Long]
+                "getAll" -> gearInstances.values.toList()
+                "observeAll" -> gearInstancesFlow
+                "update" -> {
+                    val entity = args[0] as GearInstanceEntity
+                    gearInstances[entity.id] = entity
+                    gearInstancesFlow.value = gearInstances.values.toList()
+                    null
+                }
+                "delete" -> {
+                    gearInstances.remove(args[0] as Long)
+                    gearInstancesFlow.value = gearInstances.values.toList()
+                    null
+                }
+                "deleteAll" -> {
+                    gearInstances.clear()
+                    gearInstancesFlow.value = emptyList()
+                    null
+                }
+                else -> null
+            }
+        } as GearInstanceDao
+
+        val itemsMap = mutableMapOf<Long, ItemEntity>()
+        val itemsFlow = MutableStateFlow<List<ItemEntity>>(emptyList())
+        val itemDaoProxy = Proxy.newProxyInstance(
+            ItemDao::class.java.classLoader,
+            arrayOf(ItemDao::class.java)
+        ) { _, method, args ->
+            when (method.name) {
+                "get" -> itemsMap[args[0] as Long]
+                "getAll" -> itemsMap.values.toList()
+                "observeAll" -> itemsFlow
+                "observeOwned" -> itemsFlow
+                "gearTemplatesUpToTier" -> {
+                    val maxTier = args[0] as Int
+                    itemsMap.values.filter { !it.slot.isStackable() && it.tier <= maxTier }
+                }
+                "bySlotUpToTier" -> {
+                    val slot = args[0] as String
+                    val maxTier = args[1] as Int
+                    itemsMap.values.filter { it.slot.name == slot && it.tier <= maxTier }
+                }
+                "count" -> itemsMap.size
+                "update" -> {
+                    val item = args[0] as ItemEntity
+                    itemsMap[item.id] = item
+                    itemsFlow.value = itemsMap.values.toList()
+                    null
+                }
+                "insertAll" -> {
+                    @Suppress("UNCHECKED_CAST")
+                    val list = args[0] as List<ItemEntity>
+                    list.forEach { itemsMap.putIfAbsent(it.id, it) }
+                    itemsFlow.value = itemsMap.values.toList()
+                    null
+                }
+                else -> null
+            }
+        } as ItemDao
+
         override fun activeSessionDao(): ActiveSessionDao = activeSessionDaoProxy
         override fun sessionDao(): SessionDao = sessionDaoProxy
         override fun characterDao(): CharacterDao = characterDaoProxy
         override fun movementMasteryDao(): MovementMasteryDao = movementMasteryDaoProxy
         override fun workoutDao(): WorkoutDao = createDummyProxy()
-        override fun itemDao(): ItemDao = createDummyProxy()
-        override fun gearInstanceDao(): GearInstanceDao = createDummyProxy()
+        override fun itemDao(): ItemDao = itemDaoProxy
+        override fun gearInstanceDao(): GearInstanceDao = gearInstanceDaoProxy
         override fun biomeProgressDao(): BiomeProgressDao = createDummyProxy()
         override fun classProgressDao(): ClassProgressDao = createDummyProxy()
         override fun bodyMetricDao(): BodyMetricDao = createDummyProxy()

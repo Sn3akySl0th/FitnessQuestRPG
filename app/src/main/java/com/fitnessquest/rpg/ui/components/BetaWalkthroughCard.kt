@@ -28,6 +28,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -64,20 +65,26 @@ fun BetaWalkthroughCard(
     character: CharacterEntity?,
     onOpenFeedback: () -> Unit,
     onClaimPioneerReward: suspend () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onOpenGear: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val prefs = remember { context.getSharedPreferences("fitnessrpg_user_prefs", Context.MODE_PRIVATE) }
 
     var expanded by remember { mutableStateOf(true) }
-    var rewardClaimed by remember { mutableStateOf(prefs.getBoolean(PREF_BETA_REWARD_CLAIMED, false)) }
-    val feedbackGiven by remember { mutableStateOf(prefs.getBoolean(PREF_BETA_FEEDBACK_GIVEN, false)) }
+    var localRewardClaimed by remember { mutableStateOf(false) }
+
+    val claimedTrophiesSet = remember(character?.claimedTrophies) {
+        character?.claimedTrophies?.split(",")?.filter { it.isNotBlank() }?.toSet() ?: emptySet()
+    }
+    val rewardClaimed = localRewardClaimed || prefs.getBoolean(PREF_BETA_REWARD_CLAIMED, false) || "BETA_PIONEER_REWARD" in claimedTrophiesSet
+    val feedbackGiven = prefs.getBoolean(PREF_BETA_FEEDBACK_GIVEN, false) || "BETA_FEEDBACK_SUBMITTED" in claimedTrophiesSet
 
     if (character == null) return
 
     val m1Completed = character.sessionsCompleted >= 1
-    val m2Completed = character.weaponId != null || character.chestId != null || character.headId != null || character.trinketId != null
+    val m2Completed = character.equippedIds().values.any { it != null } || character.weaponId != null || character.chestId != null || character.headId != null || character.handsId != null || character.legsId != null || character.feetId != null || character.trinketId != null
     val m3Completed = character.battlesWon >= 1 && character.sessionsCompleted >= 3
     val m4Completed = feedbackGiven
 
@@ -90,6 +97,12 @@ fun BetaWalkthroughCard(
             Color(0xFF281F3E)
         )
     )
+
+    var showGuideDialog by remember { mutableStateOf(false) }
+
+    if (showGuideDialog) {
+        BetaWelcomeDialog(onDismiss = { showGuideDialog = false })
+    }
 
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -114,7 +127,8 @@ fun BetaWalkthroughCard(
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.weight(1f)
                 ) {
                     Text("🛡️", fontSize = 22.sp)
                     Column {
@@ -131,11 +145,19 @@ fun BetaWalkthroughCard(
                         )
                     }
                 }
-                Icon(
-                    imageVector = if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
-                    contentDescription = if (expanded) "Collapse" else "Expand",
-                    tint = Color.White.copy(alpha = 0.7f)
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = { showGuideDialog = true },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Text("🧭", fontSize = 16.sp)
+                    }
+                    Icon(
+                        imageVector = if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                        contentDescription = if (expanded) "Collapse" else "Expand",
+                        tint = Color.White.copy(alpha = 0.7f)
+                    )
+                }
             }
 
             AnimatedVisibility(visible = expanded) {
@@ -150,11 +172,27 @@ fun BetaWalkthroughCard(
                     )
 
                     // Mission 2
-                    MissionRow(
-                        title = "2. Gear Up",
-                        description = "Equip rewarded gear onto your Hero avatar",
-                        completed = m2Completed
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            MissionRow(
+                                title = "2. Gear Up",
+                                description = "Equip rewarded gear onto your Hero avatar",
+                                completed = m2Completed
+                            )
+                        }
+                        if (!m2Completed && onOpenGear != null) {
+                            OutlinedButton(
+                                onClick = onOpenGear,
+                                modifier = Modifier.padding(start = 8.dp)
+                            ) {
+                                Text("Gear Up ⚔️", style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
+                    }
 
                     // Mission 3
                     MissionRow(
@@ -218,7 +256,7 @@ fun BetaWalkthroughCard(
                                         scope.launch {
                                             onClaimPioneerReward()
                                             prefs.edit().putBoolean(PREF_BETA_REWARD_CLAIMED, true).apply()
-                                            rewardClaimed = true
+                                            localRewardClaimed = true
                                             AudioEffects.playLevelUp()
                                         }
                                     },

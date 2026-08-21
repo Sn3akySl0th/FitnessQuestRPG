@@ -27,6 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.fitnessquest.rpg.data.ai.RoutineRecommendation
 import com.fitnessquest.rpg.domain.Biome
@@ -173,6 +174,7 @@ internal fun buildQuestHubState(
 fun QuestHubScreen(
     viewModel: HeroViewModel = viewModel(factory = HeroViewModel.Factory),
     onOpenHero: () -> Unit = {},
+    onOpenHeroGear: () -> Unit = {},
     onOpenSaga: () -> Unit = {},
     onOpenTraining: () -> Unit = {},
     onOpenBattle: () -> Unit = {},
@@ -202,6 +204,7 @@ fun QuestHubScreen(
             onDismiss = { showFeedbackDialog = false },
             onFeedbackSubmitted = {
                 noteBetaFeedbackSubmitted(context)
+                viewModel.recordBetaFeedbackSubmitted()
                 showFeedbackDialog = false
             }
         )
@@ -308,8 +311,65 @@ fun QuestHubScreen(
                     onOpenJobSwitcher = { showJobSwitcher = true },
                     onOpenMorphSwitcher = { showMorphSwitcher = true },
                     onSettingsClick = {},
-                    onOpenHero = onOpenHero
+                    onOpenHero = onOpenHero,
+                    onOpenHeroGear = onOpenHeroGear
                 )
+            }
+
+            if (screenState.hasGearUpgrade()) {
+                item {
+                    Surface(
+                        onClick = onOpenHeroGear,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 2.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        color = Color(0xFF142B1A),
+                        border = BorderStroke(1.dp, Color(0xFF4CAF50).copy(alpha = 0.8f))
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("⚔️", fontSize = 22.sp)
+                                Column {
+                                    Text(
+                                        "Gear Upgrade Available",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF81C784)
+                                    )
+                                    Text(
+                                        "Stronger equipment ready in your bag · Tap to equip",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = Color.White.copy(alpha = 0.75f)
+                                    )
+                                }
+                            }
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = Color(0xFF2E7D32),
+                                border = BorderStroke(1.dp, Color(0xFF81C784))
+                            ) {
+                                Text(
+                                    "Equip ➔",
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            }
+                        }
+                    }
+                }
             }
 
             item {
@@ -333,6 +393,7 @@ fun QuestHubScreen(
                     character = screenState.character,
                     onOpenFeedback = { showFeedbackDialog = true },
                     onClaimPioneerReward = { viewModel.claimBetaPioneerReward() },
+                    onOpenGear = onOpenHeroGear,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
                 )
             }

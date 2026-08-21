@@ -1273,7 +1273,7 @@ class GameRepository(
                 character = updated,
                 contentTier = (updated.level / 3) + 1
             )
-            val loot = LootTables.rollWorkoutLoot(
+            val rawLoot = LootTables.rollWorkoutLoot(
                 level = updated.level,
                 setCount = withXp.size,
                 prCount = prs.count { it.isNew },
@@ -1281,7 +1281,21 @@ class GameRepository(
                 stackPool = stackTemplates(),
                 maxTier = workoutTier
             )
-            updated = applyLootToCharacter(updated, loot)
+            // Guarantee at least 1 piece of equippable starter gear on the hero's first completed workout
+            val isFirstWorkout = !character.firstWorkoutDone || updated.sessionsCompleted <= 1
+            val loot = if (isFirstWorkout && rawLoot.grants.none { it is LootGrant.Gear }) {
+                val starterGear = eligibleGearTemplates(updated, workoutTier).firstOrNull()
+                    ?: ItemCatalog.all.firstOrNull { it.slot.isEquippable() && it.tier == 1 }
+                if (starterGear != null) {
+                    val guaranteedGear = LootGrant.Gear(starterGear, GearRarity.UNCOMMON, emptyList())
+                    rawLoot.copy(grants = rawLoot.grants + guaranteedGear)
+                } else {
+                    rawLoot
+                }
+            } else {
+                rawLoot
+            }
+            updated = applyLootToCharacter(updated.copy(firstWorkoutDone = true), loot)
             
             val allRewards = mutableListOf<Reward>()
             allRewards.add(Reward.Xp(res.xp))
@@ -1571,6 +1585,9 @@ class GameRepository(
     suspend fun grantBetaPioneerReward(): Boolean {
         return db.withTransaction {
             val c = getCharacter()
+            val claimed = c.claimedTrophies.split(",").filter { it.isNotBlank() }.toSet()
+            if ("BETA_PIONEER_REWARD" in claimed) return@withTransaction false
+
             val existingFreeze = db.itemDao().get(Consumables.STREAK_FREEZE)
             if (existingFreeze != null) {
                 db.itemDao().setQuantity(Consumables.STREAK_FREEZE, existingFreeze.quantity + 3)
@@ -1602,12 +1619,27 @@ class GameRepository(
                 )
             )
             val newTrinket = if (c.trinketId == null) amuletInstanceId else c.trinketId
+            val newClaimed = (claimed + "BETA_PIONEER_REWARD").joinToString(",")
             db.characterDao().upsert(
                 c.copy(
                     gold = c.gold + 500,
                     pendingXpBoost = c.pendingXpBoost + 500,
-                    trinketId = newTrinket
+                    trinketId = newTrinket,
+                    claimedTrophies = newClaimed
                 )
+            )
+            true
+        }
+    }
+
+    suspend fun recordBetaFeedbackSubmitted(): Boolean {
+        return db.withTransaction {
+            val c = getCharacter()
+            val claimed = c.claimedTrophies.split(",").filter { it.isNotBlank() }.toSet()
+            if ("BETA_FEEDBACK_SUBMITTED" in claimed) return@withTransaction false
+            val newClaimed = (claimed + "BETA_FEEDBACK_SUBMITTED").joinToString(",")
+            db.characterDao().upsert(
+                c.copy(claimedTrophies = newClaimed)
             )
             true
         }
@@ -2221,7 +2253,8 @@ class GameRepository(
     }
 
     private suspend fun gearTemplates(maxTier: Int): List<ItemEntity> =
-        db.itemDao().gearTemplatesUpToTier(maxTier.coerceAtLeast(1))
+        (db.itemDao().gearTemplatesUpToTier(maxTier.coerceAtLeast(1)) ?: emptyList())
+            .ifEmpty { ItemCatalog.all.filter { !it.slot.isStackable() && it.tier <= maxTier.coerceAtLeast(1) } }
 
     private suspend fun eligibleGearTemplates(character: CharacterEntity, maxTier: Int): List<ItemEntity> =
         ProgressionRules.filterGearPool(gearTemplates(maxTier), maxTier, character)

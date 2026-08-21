@@ -69,6 +69,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalDensity
 import androidx.core.content.ContextCompat
 import com.fitnessquest.rpg.data.update.InAppUpdateStatus
+import com.fitnessquest.rpg.ui.components.BetaWelcomeDialog
+import com.fitnessquest.rpg.ui.components.PREF_BETA_WELCOME_SHOWN
 import com.fitnessquest.rpg.ui.components.InAppUpdateBanner
 import com.fitnessquest.rpg.ui.components.WhatNewDialog
 import com.fitnessquest.rpg.ui.onboarding.PermissionsConsolidator
@@ -78,6 +80,7 @@ import com.fitnessquest.rpg.ui.screens.SessionDetailScreen
 object Routes {
     const val HERO = "hero"
     const val HERO_DETAILS = "hero/details"
+    const val HERO_GEAR = "hero/details/gear"
     const val HERO_SAGA = "hero/details/saga"
     const val TRAIN = "train"
     const val BATTLE = "battle"
@@ -188,7 +191,15 @@ fun FitQuestNav() {
         }
     }
 
-    if (showWhatNew) {
+    var showBetaWelcome by remember {
+        mutableStateOf(!context.getSharedPreferences("fitnessrpg_user_prefs", android.content.Context.MODE_PRIVATE).getBoolean(PREF_BETA_WELCOME_SHOWN, false))
+    }
+
+    if (showBetaWelcome) {
+        BetaWelcomeDialog(onDismiss = { showBetaWelcome = false })
+    }
+
+    if (showWhatNew && !showBetaWelcome) {
         WhatNewDialog(onDismiss = { showWhatNew = false })
     }
 
@@ -261,6 +272,7 @@ fun FitQuestNav() {
                     QuestHubScreen(
                         viewModel = heroViewModel,
                         onOpenHero = { navController.navigate(Routes.HERO_DETAILS) },
+                        onOpenHeroGear = { navController.navigate(Routes.HERO_GEAR) },
                         onOpenSaga = { navController.navigate(Routes.HERO_SAGA) },
                         onOpenTraining = {
                             navController.navigate(Routes.TRAIN) {
@@ -288,6 +300,30 @@ fun FitQuestNav() {
                 composable(Routes.HERO_DETAILS) {
                     HeroScreen(
                         viewModel = heroViewModel,
+                        onOpenHome = {
+                            navController.navigate(Routes.HERO) {
+                                popUpTo(navController.graph.findStartDestination().id) {
+                                    inclusive = true
+                                }
+                                launchSingleTop = true
+                            }
+                        },
+                        onBack = {
+                            if (!navController.popBackStack()) {
+                                navController.navigate(Routes.HERO) {
+                                    popUpTo(navController.graph.findStartDestination().id) {
+                                        inclusive = true
+                                    }
+                                    launchSingleTop = true
+                                }
+                            }
+                        }
+                    )
+                }
+                composable(Routes.HERO_GEAR) {
+                    HeroScreen(
+                        viewModel = heroViewModel,
+                        initialTab = 1,
                         onOpenHome = {
                             navController.navigate(Routes.HERO) {
                                 popUpTo(navController.graph.findStartDestination().id) {

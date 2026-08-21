@@ -93,6 +93,10 @@ object SessionReceiptCodec {
             is Reward.Gear -> {
                 obj.put("type", "GEAR")
                 obj.put("item", serializeItem(reward.item))
+                obj.put("rarity", reward.rarity.name)
+                val traitsArr = JSONArray()
+                reward.traits.forEach { traitsArr.put(it.id) }
+                obj.put("traits", traitsArr)
             }
             is Reward.Stackable -> {
                 obj.put("type", "STACKABLE")
@@ -285,7 +289,17 @@ object SessionReceiptCodec {
             "XP" -> Reward.Xp(obj.getInt("amount"))
             "GOLD" -> Reward.Gold(obj.getInt("amount"))
             "ENERGY" -> Reward.Energy(obj.getInt("amount"))
-            "GEAR" -> Reward.Gear(deserializeItem(obj.getJSONObject("item")))
+            "GEAR" -> {
+                val item = deserializeItem(obj.getJSONObject("item"))
+                val rarity = obj.optString("rarity").takeIf { it.isNotBlank() }?.let { GearRarity.fromName(it) } ?: GearRarity.COMMON
+                val traits = mutableListOf<GearTrait>()
+                obj.optJSONArray("traits")?.let { arr ->
+                    for (i in 0 until arr.length()) {
+                        GearTrait.fromId(arr.getString(i))?.let { traits.add(it) }
+                    }
+                }
+                Reward.Gear(item, rarity, traits)
+            }
             "STACKABLE" -> Reward.Stackable(deserializeItem(obj.getJSONObject("item")), obj.getInt("quantity"))
             "LEVEL_UP" -> Reward.LevelUp(obj.getInt("newLevel"))
             "NEW_PR" -> Reward.NewPr(deserializePr(obj.getJSONObject("pr")))

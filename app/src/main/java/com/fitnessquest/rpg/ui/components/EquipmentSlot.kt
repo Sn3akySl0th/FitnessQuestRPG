@@ -5,6 +5,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -68,6 +69,7 @@ fun EquipmentSlot(
     upgradeLevel: Int = 0,
     isSelected: Boolean = false,
     isEquipped: Boolean = false,
+    hasUpgrade: Boolean = false,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     compact: Boolean = false
@@ -81,6 +83,7 @@ fun EquipmentSlot(
         } else {
             append("Empty")
         }
+        if (hasUpgrade) append(", better gear available to equip")
     }
 
     if (compact) {
@@ -91,6 +94,7 @@ fun EquipmentSlot(
             upgradeLevel = upgradeLevel,
             isSelected = isSelected,
             isEquipped = isEquipped,
+            hasUpgrade = hasUpgrade,
             description = description,
             onClick = onClick,
             modifier = modifier
@@ -103,6 +107,7 @@ fun EquipmentSlot(
             upgradeLevel = upgradeLevel,
             isSelected = isSelected,
             isEquipped = isEquipped,
+            hasUpgrade = hasUpgrade,
             description = description,
             onClick = onClick,
             modifier = modifier
@@ -142,6 +147,7 @@ private fun CompactEquipmentSlot(
     upgradeLevel: Int,
     isSelected: Boolean,
     isEquipped: Boolean,
+    hasUpgrade: Boolean,
     description: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -233,6 +239,24 @@ private fun CompactEquipmentSlot(
                 )
             }
         }
+
+        // Upgrade indicator dot for compact layout
+        if (hasUpgrade) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .offset(x = (-3).dp, y = (-3).dp)
+                    .size(16.dp)
+                    .background(
+                        Brush.linearGradient(listOf(Color(0xFF4CAF50), Color(0xFF2E7D32))),
+                        CircleShape
+                    )
+                    .border(1.5.dp, NightSurface, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("▲", fontSize = 8.sp, color = Color.White, fontWeight = FontWeight.Black)
+            }
+        }
     }
 }
 
@@ -247,6 +271,7 @@ private fun DetailedEquipmentSlot(
     upgradeLevel: Int,
     isSelected: Boolean,
     isEquipped: Boolean,
+    hasUpgrade: Boolean,
     description: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -302,6 +327,23 @@ private fun DetailedEquipmentSlot(
                             fontWeight = FontWeight.Black,
                             color = Color.Black
                         )
+                    }
+                }
+
+                if (hasUpgrade) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .offset(x = (-3).dp, y = (-3).dp)
+                            .size(16.dp)
+                            .background(
+                                Brush.linearGradient(listOf(Color(0xFF4CAF50), Color(0xFF2E7D32))),
+                                CircleShape
+                            )
+                            .border(1.5.dp, NightSurface, CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("▲", fontSize = 8.sp, color = Color.White, fontWeight = FontWeight.Black)
                     }
                 }
             }
@@ -375,13 +417,58 @@ private fun DetailedEquipmentSlot(
                             )
                         }
                     }
+
+                    if (hasUpgrade) {
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = Color(0xFF1B5E20).copy(alpha = 0.35f),
+                            border = BorderStroke(1.dp, Color(0xFF4CAF50).copy(alpha = 0.75f)),
+                            modifier = Modifier.padding(top = 2.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                            ) {
+                                Text("⬆️", fontSize = 9.sp)
+                                Text(
+                                    text = "Upgrade Available",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF81C784)
+                                )
+                            }
+                        }
+                    }
                 }
             } else {
-                Text(
-                    text = "Tap to Equip",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color.White.copy(alpha = 0.4f)
-                )
+                if (hasUpgrade) {
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = Gold.copy(alpha = 0.15f),
+                        border = BorderStroke(1.dp, Gold.copy(alpha = 0.6f))
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                        ) {
+                            Text("✨", fontSize = 10.sp)
+                            Text(
+                                text = "Gear Ready · Tap to Equip",
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                fontWeight = FontWeight.Bold,
+                                color = Gold
+                            )
+                        }
+                    }
+                } else {
+                    Text(
+                        text = "Tap to Equip",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White.copy(alpha = 0.4f)
+                    )
+                }
             }
         }
     }

@@ -739,7 +739,11 @@ private fun VictoryOverlay(state: FightUiState, onDismiss: () -> Unit) {
                     }
                     state.narrationPending -> {
                         Spacer(Modifier.height(12.dp))
-                        CircularProgressIndicator(Modifier.width(24.dp), strokeWidth = 2.dp)
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            color = Gold,
+                            strokeWidth = 2.dp
+                        )
                     }
                 }
                 var showRewards by remember { mutableStateOf(false) }
@@ -822,7 +826,12 @@ private fun BattleEndDialog(state: FightUiState, onDismiss: () -> Unit) {
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    state.narrationPending -> Box(Modifier.padding(4.dp)) { CircularProgressIndicator() }
+                    state.narrationPending -> Box(Modifier.padding(4.dp)) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            strokeWidth = 2.dp
+                        )
+                    }
                 }
             }
         },

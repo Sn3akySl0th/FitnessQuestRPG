@@ -91,7 +91,38 @@ data class HeroUiState(
     val questHub: QuestHubState? = null,
     val maxEnergy: Int = GameMath.MAX_ENERGY,
     val wearPresence: WearPresenceState = WearPresenceState()
-)
+) {
+    fun hasGearUpgrade(): Boolean {
+        val equippable = listOf(
+            ItemSlot.WEAPON,
+            ItemSlot.HEAD,
+            ItemSlot.CHEST,
+            ItemSlot.HANDS,
+            ItemSlot.LEGS,
+            ItemSlot.FEET,
+            ItemSlot.TRINKET
+        )
+        return equippable.any { slot ->
+            val equippedItem = gear[slot]
+            val instance = ownedGear.find { it.instance.id == equippedItem?.id }?.instance
+            val equippedPower = if (instance != null) {
+                instance.atk + instance.def + instance.hp + (instance.upgradeLevel * 5)
+            } else if (equippedItem != null) {
+                equippedItem.atk + equippedItem.def + equippedItem.hp
+            } else -1
+
+            val ownedInSlot = ownedGear.filter { it.catalog.slot == slot && it.instance.id != instance?.id }
+            if (equippedItem == null) {
+                ownedInSlot.isNotEmpty()
+            } else {
+                ownedInSlot.any { candidate ->
+                    val candidatePower = candidate.instance.atk + candidate.instance.def + candidate.instance.hp + (candidate.instance.upgradeLevel * 5)
+                    candidatePower > equippedPower
+                }
+            }
+        }
+    }
+}
 
 private data class HeroQuestInputs(
     val recommendation: RoutineRecommendation,
@@ -405,6 +436,12 @@ class HeroViewModel(private val container: AppContainer) : ViewModel() {
     fun claimBetaPioneerReward() {
         viewModelScope.launch {
             container.repository.grantBetaPioneerReward()
+        }
+    }
+
+    fun recordBetaFeedbackSubmitted() {
+        viewModelScope.launch {
+            container.repository.recordBetaFeedbackSubmitted()
         }
     }
 
@@ -875,6 +912,7 @@ fun UnifiedHeroHeader(
     onSettingsClick: () -> Unit,
     onBackClick: () -> Unit = {},
     onOpenHero: () -> Unit = {},
+    onOpenHeroGear: () -> Unit = {},
     onExportClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
@@ -989,9 +1027,34 @@ fun UnifiedHeroHeader(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         if (isQuestHub) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("View Hero", style = MaterialTheme.typography.labelMedium, color = Color.White)
-                                Icon(Icons.Default.ChevronRight, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                            val hasUpgrade = state.hasGearUpgrade()
+                            if (hasUpgrade) {
+                                Surface(
+                                    onClick = onOpenHeroGear,
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = Color(0xFF1B5E20).copy(alpha = 0.85f),
+                                    border = BorderStroke(1.dp, Color(0xFF81C784))
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(3.dp),
+                                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
+                                    ) {
+                                        Text("⚔️", fontSize = 10.sp)
+                                        Text(
+                                            text = "Gear Upgrade",
+                                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                        Icon(Icons.Default.ChevronRight, contentDescription = null, tint = Color.White, modifier = Modifier.size(12.dp))
+                                    }
+                                }
+                            } else {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text("View Hero", style = MaterialTheme.typography.labelMedium, color = Color.White)
+                                    Icon(Icons.Default.ChevronRight, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                                }
                             }
                         } else {
                             Spacer(Modifier.weight(1f))
@@ -1271,6 +1334,11 @@ fun HeroScreenContent(
     var showJobSwitcher by remember { mutableStateOf(false) }
     var showMorphSwitcher by remember { mutableStateOf(false) }
     var showExportSheet by remember { mutableStateOf(false) }
+    var showAttributeInfo by remember { mutableStateOf(false) }
+
+    if (showAttributeInfo) {
+        AttributeInfoDialog(onDismiss = { showAttributeInfo = false })
+    }
 
     val cls = character.characterClass ?: run {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -1417,10 +1485,30 @@ fun HeroScreenContent(
                     divider = { HorizontalDivider(color = Color.White.copy(alpha = 0.1f)) }
                 ) {
                     Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }) {
-                        Text("🛡️ Stats", modifier = Modifier.padding(12.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("🛡️ Stats", modifier = Modifier.padding(12.dp))
+                            if (character.freeStatPoints > 0) {
+                                Box(
+                                    Modifier
+                                        .size(8.dp)
+                                        .background(Gold, CircleShape)
+                                        .offset(x = (-4).dp, y = (-8).dp)
+                                )
+                            }
+                        }
                     }
                     Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }) {
-                        Text("⚔️ Gear", modifier = Modifier.padding(12.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("⚔️ Gear", modifier = Modifier.padding(12.dp))
+                            if (state.hasGearUpgrade()) {
+                                Box(
+                                    Modifier
+                                        .size(8.dp)
+                                        .background(Color(0xFF4CAF50), CircleShape)
+                                        .offset(x = (-4).dp, y = (-8).dp)
+                                )
+                            }
+                        }
                     }
                     Tab(selected = selectedTab == 2, onClick = { selectedTab = 2 }) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1447,7 +1535,7 @@ fun HeroScreenContent(
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     when (selectedTab) {
-                        0 -> statsTabContent(this, character, cls, state, actions)
+                        0 -> statsTabContent(this, character, cls, state, actions, onOpenAttributeInfo = { showAttributeInfo = true })
                         1 -> gearTab(this, state, cls, character, highestEquippedRarity, equipAnimState, onEquipClick = { pickerSlot = it })
                         2 -> sagaTabContent(this, character, bounties, bountyResetLabel, campaigns, campaignResetLabel, claimedTrophies, lifetimeCardioKm, imperial, actions)
                         3 -> masteryTab(this, state.movementMastery, imperial)
@@ -1518,7 +1606,8 @@ private fun statsTabContent(
     character: CharacterEntity,
     cls: CharacterClass,
     state: HeroUiState,
-    actions: HeroActions
+    actions: HeroActions,
+    onOpenAttributeInfo: () -> Unit = {}
 ) {
     listScope.item { ReadinessCard(character = character) }
 
@@ -1529,7 +1618,19 @@ private fun statsTabContent(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Attributes", style = MaterialTheme.typography.titleMedium, color = Gold)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.clickable { onOpenAttributeInfo() }
+                ) {
+                    Text("Attributes", style = MaterialTheme.typography.titleMedium, color = Gold)
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = "Attribute details",
+                        tint = Gold.copy(alpha = 0.8f),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
                 if (character.freeStatPoints > 0) {
                     Surface(
                         shape = RoundedCornerShape(12.dp),
@@ -1559,7 +1660,8 @@ private fun statsTabContent(
                 progress = (character.strProgress.toFloat() / GameMath.statThreshold(character.strength).coerceAtLeast(1)).coerceIn(0f, 1f),
                 color = StatStr,
                 showAdd = character.freeStatPoints > 0,
-                onAdd = { actions.onAllocateStat("STR") }
+                onAdd = { actions.onAllocateStat("STR") },
+                onInfoClick = onOpenAttributeInfo
             )
             StatMeterRow(
                 label = "END ${character.endurance}",
@@ -1567,7 +1669,8 @@ private fun statsTabContent(
                 progress = (character.endProgress.toFloat() / GameMath.statThreshold(character.endurance).coerceAtLeast(1)).coerceIn(0f, 1f),
                 color = StatEnd,
                 showAdd = character.freeStatPoints > 0,
-                onAdd = { actions.onAllocateStat("END") }
+                onAdd = { actions.onAllocateStat("END") },
+                onInfoClick = onOpenAttributeInfo
             )
             StatMeterRow(
                 label = "AGI ${character.agility}",
@@ -1575,15 +1678,17 @@ private fun statsTabContent(
                 progress = (character.agiProgress.toFloat() / GameMath.statThreshold(character.agility).coerceAtLeast(1)).coerceIn(0f, 1f),
                 color = StatAgi,
                 showAdd = character.freeStatPoints > 0,
-                onAdd = { actions.onAllocateStat("AGI") }
+                onAdd = { actions.onAllocateStat("AGI") },
+                onInfoClick = onOpenAttributeInfo
             )
             StatMeterRow(
                 label = "WIL ${character.willpower}",
-                valueText = character.willpower.toString(),
-                progress = (character.willpower.toFloat() / GameMath.statThreshold(character.willpower).coerceAtLeast(1)).coerceIn(0f, 1f),
+                valueText = "${character.wilProgress}/${GameMath.statThreshold(character.willpower)}",
+                progress = (character.wilProgress.toFloat() / GameMath.statThreshold(character.willpower).coerceAtLeast(1)).coerceIn(0f, 1f),
                 color = StatWil,
                 showAdd = character.freeStatPoints > 0,
-                onAdd = { actions.onAllocateStat("WIL") }
+                onAdd = { actions.onAllocateStat("WIL") },
+                onInfoClick = onOpenAttributeInfo
             )
         }
     }
@@ -1643,20 +1748,107 @@ private fun statsTabContent(
 }
 
 @Composable
+fun AttributeInfoDialog(onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text("✨", fontSize = 22.sp)
+                Text("Hero Attributes Guide", fontWeight = FontWeight.Bold, color = Gold)
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Text(
+                    "Your attributes grow with every real workout you log and whenever you spend free attribute points earned from leveling up.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White.copy(alpha = 0.85f)
+                )
+
+                AttributeExplainerRow(
+                    emoji = "🏋️",
+                    name = "STR (Strength)",
+                    color = StatStr,
+                    description = "Powers physical Attack (ATK), melee skill damage, and weight lifting scaling. Trained by weightlifting & heavy resistance exercises."
+                )
+
+                AttributeExplainerRow(
+                    emoji = "🛡️",
+                    name = "END (Endurance)",
+                    color = StatEnd,
+                    description = "Powers Max Health (HP), physical Defense (DEF), and stamina. Trained by total workout volume, high reps, and cardio duration."
+                )
+
+                AttributeExplainerRow(
+                    emoji = "⚡",
+                    name = "AGI (Agility)",
+                    color = StatAgi,
+                    description = "Powers Turn Speed (SPD), critical strike chance, and evasion rate. Trained by bodyweight movements, HIIT, and fast aerobic pacing."
+                )
+
+                AttributeExplainerRow(
+                    emoji = "🔮",
+                    name = "WIL (Willpower)",
+                    color = StatWil,
+                    description = "Powers skill/spell potency, status debuff resistance, and energy recovery rate. Trained by workout consistency, meditation, and leveling."
+                )
+            }
+        },
+        confirmButton = {
+            Button(onClick = onDismiss) {
+                Text("Got it")
+            }
+        }
+    )
+}
+
+@Composable
+private fun AttributeExplainerRow(
+    emoji: String,
+    name: String,
+    color: Color,
+    description: String
+) {
+    Row(
+        verticalAlignment = Alignment.Top,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Text(emoji, fontSize = 22.sp)
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(name, fontWeight = FontWeight.Bold, color = color, style = MaterialTheme.typography.titleSmall)
+            Text(description, style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.75f))
+        }
+    }
+}
+
+@Composable
 private fun StatMeterRow(
     label: String,
     valueText: String,
     progress: Float,
     color: Color,
     showAdd: Boolean,
-    onAdd: () -> Unit
+    onAdd: () -> Unit,
+    onInfoClick: (() -> Unit)? = null
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Box(modifier = Modifier.weight(1f)) {
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .then(if (onInfoClick != null) Modifier.clickable(onClick = onInfoClick) else Modifier)
+        ) {
             BarMeter(label, valueText, progress, color)
         }
         if (showAdd) {
@@ -1764,12 +1956,30 @@ private fun gearTab(
                     val item = state.gear[slot]
                     val instance = state.ownedGear.find { it.instance.id == item?.id }?.instance
                     val rarity = instance?.rarity?.let { GearRarity.fromName(it) } ?: GearRarity.COMMON
+
+                    val equippedPower = if (instance != null) {
+                        instance.atk + instance.def + instance.hp + (instance.upgradeLevel * 5)
+                    } else if (item != null) {
+                        item.atk + item.def + item.hp
+                    } else -1
+
+                    val ownedInSlot = state.ownedGear.filter { it.catalog.slot == slot && it.instance.id != instance?.id }
+                    val hasUpgrade = if (item == null) {
+                        ownedInSlot.isNotEmpty()
+                    } else {
+                        ownedInSlot.any { candidate ->
+                            val candidatePower = candidate.instance.atk + candidate.instance.def + candidate.instance.hp + (candidate.instance.upgradeLevel * 5)
+                            candidatePower > equippedPower
+                        }
+                    }
+
                     EquipmentSlot(
                         slot = slot,
                         item = item,
                         rarity = rarity,
                         upgradeLevel = instance?.upgradeLevel ?: 0,
                         isEquipped = item != null,
+                        hasUpgrade = hasUpgrade,
                         onClick = { onEquipClick(slot) }
                     )
                 }
