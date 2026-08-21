@@ -124,6 +124,21 @@ private fun DrawScope.drawHeadIcon(f: IconFrame) {
                 drawCircle(g.copy(alpha = 0.7f), radius = 32.5f * f.u, center = f.p(50f, 50f), style = Stroke(width = 2f * f.u))
             }
         }
+        HeadgearShape.CROWN -> {
+            val crown = Path().apply {
+                moveTo(15f * f.u, 70f * f.u)
+                lineTo(15f * f.u, 27f * f.u)
+                lineTo(34f * f.u, 47f * f.u)
+                lineTo(50f * f.u, 10f * f.u)
+                lineTo(66f * f.u, 47f * f.u)
+                lineTo(85f * f.u, 27f * f.u)
+                lineTo(85f * f.u, 70f * f.u)
+                close()
+            }
+            drawPath(crown, pal.main)
+            drawRect(pal.dark, topLeft = f.p(15f, 63f), size = f.s(70f, 10f))
+            drawCircle(pal.glow ?: Color(0xFFF59E0B), radius = 7f * f.u, center = f.p(50f, 55f))
+        }
         HeadgearShape.CAP -> {
             drawOval(pal.main, topLeft = f.p(24f, 26f), size = f.s(52f, 22f))
             drawRect(pal.dark, topLeft = f.p(17f, 42f), size = f.s(66f, 9f))
@@ -135,6 +150,42 @@ private fun DrawScope.drawHeadIcon(f: IconFrame) {
 
 private fun DrawScope.drawChestIcon(f: IconFrame) {
     val pal = f.pal
+    when (com.fitnessquest.rpg.domain.visuals.EquipmentVisualRegistry.resolveVisualDescriptor(f.item).archetype) {
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.ARMOR_MAIL -> {
+            drawRoundRect(pal.main, topLeft = f.p(22f, 12f), size = f.s(56f, 72f), cornerRadius = CornerRadius(8f * f.u))
+            drawRect(pal.dark, topLeft = f.p(22f, 76f), size = f.s(56f, 8f))
+            val ring = (pal.glow ?: pal.dark).copy(alpha = 0.75f)
+            for (row in 0..6) for (column in 0..5) {
+                val x = 29f + column * 9f + if (row % 2 == 0) 0f else 4.5f
+                val y = 22f + row * 8f
+                drawCircle(ring, 2.4f * f.u, f.p(x, y), style = Stroke(width = 1.2f * f.u))
+            }
+            return
+        }
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.ARMOR_CLOAK -> {
+            val cloak = Path().apply {
+                moveTo(25f * f.u, 16f * f.u)
+                quadraticTo(50f * f.u, 4f * f.u, 75f * f.u, 16f * f.u)
+                lineTo(86f * f.u, 90f * f.u)
+                quadraticTo(50f * f.u, 98f * f.u, 14f * f.u, 90f * f.u)
+                close()
+            }
+            drawPath(cloak, pal.main)
+            drawLine(pal.dark, f.p(50f, 16f), f.p(50f, 91f), 3f * f.u)
+            drawCircle(pal.glow ?: Color(0xFFF59E0B), 5f * f.u, f.p(50f, 20f))
+            return
+        }
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.ARMOR_PAULDRONS -> {
+            drawRoundRect(pal.main, topLeft = f.p(25f, 20f), size = f.s(50f, 65f), cornerRadius = CornerRadius(8f * f.u))
+            drawRoundRect(pal.dark, topLeft = f.p(4f, 12f), size = f.s(31f, 25f), cornerRadius = CornerRadius(9f * f.u))
+            drawRoundRect(pal.main, topLeft = f.p(8f, 15f), size = f.s(27f, 18f), cornerRadius = CornerRadius(7f * f.u))
+            drawRoundRect(pal.dark, topLeft = f.p(65f, 12f), size = f.s(31f, 25f), cornerRadius = CornerRadius(9f * f.u))
+            drawRoundRect(pal.main, topLeft = f.p(65f, 15f), size = f.s(27f, 18f), cornerRadius = CornerRadius(7f * f.u))
+            drawRect(pal.dark, topLeft = f.p(25f, 68f), size = f.s(50f, 9f))
+            return
+        }
+        else -> Unit
+    }
     when (f.item.style) {
         ItemStyle.ROBE -> {
             val robe = Path().apply {
@@ -276,10 +327,27 @@ private fun DrawScope.drawTrinketIcon(f: IconFrame) {
 private fun DrawScope.drawWeaponIcon(f: IconFrame) {
     val tier = f.item.tier
     val legendary = tier >= 4
+    val descriptor = com.fitnessquest.rpg.domain.visuals.EquipmentVisualRegistry.resolveVisualDescriptor(f.item)
     val necroStaff = ((f.item.style == ItemStyle.STAFF) || (f.item.style == ItemStyle.WAND)) &&
         (f.item.classAffinity == CharacterClass.NECROMANCER)
     if (necroStaff) {
         drawSkullStaffIcon(f, tier)
+        return
+    }
+    if (descriptor.archetype in setOf(
+            com.fitnessquest.rpg.domain.visuals.VisualArchetype.SPEAR_GENERIC,
+            com.fitnessquest.rpg.domain.visuals.VisualArchetype.UNARMED_WRAP,
+            com.fitnessquest.rpg.domain.visuals.VisualArchetype.TONFA,
+            com.fitnessquest.rpg.domain.visuals.VisualArchetype.INSTRUMENT,
+            com.fitnessquest.rpg.domain.visuals.VisualArchetype.AXE,
+            com.fitnessquest.rpg.domain.visuals.VisualArchetype.SCYTHE,
+            com.fitnessquest.rpg.domain.visuals.VisualArchetype.HAMMER,
+            com.fitnessquest.rpg.domain.visuals.VisualArchetype.CLUB,
+            com.fitnessquest.rpg.domain.visuals.VisualArchetype.SCEPTER,
+            com.fitnessquest.rpg.domain.visuals.VisualArchetype.ARCANE_FOCUS,
+        )
+    ) {
+        drawSemanticWeaponIcon(f, descriptor)
         return
     }
     when (f.item.style) {
@@ -368,6 +436,111 @@ private fun DrawScope.drawWeaponIcon(f: IconFrame) {
             drawRoundRect(Wood, topLeft = f.p(46.8f, 67f), size = f.s(6.4f, 18f), cornerRadius = CornerRadius(3.2f * f.u))
             drawCircle(GuardGold, radius = 4.4f * f.u, center = f.p(50f, 88f))
         }
+    }
+}
+
+private fun DrawScope.drawSemanticWeaponIcon(
+    f: IconFrame,
+    descriptor: com.fitnessquest.rpg.domain.visuals.EquipmentVisualDescriptor,
+) {
+    val accent = descriptor.accentColor ?: Color(0xFFD97706)
+    when (descriptor.archetype) {
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.SPEAR_GENERIC -> {
+            drawRoundRect(descriptor.primaryColor, f.p(47f, 25f), f.s(6f, 67f), CornerRadius(3f * f.u))
+            val head = Path().apply {
+                moveTo(50f * f.u, 5f * f.u)
+                lineTo(61f * f.u, 26f * f.u)
+                lineTo(50f * f.u, 37f * f.u)
+                lineTo(39f * f.u, 26f * f.u)
+                close()
+            }
+            drawPath(head, descriptor.secondaryColor)
+            drawPath(head, accent, style = Stroke(width = 2f * f.u))
+        }
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.UNARMED_WRAP -> {
+            drawCircle(descriptor.primaryColor, 23f * f.u, f.p(50f, 52f))
+            for (y in listOf(39f, 49f, 59f, 69f)) drawLine(accent, f.p(30f, y), f.p(70f, y), 3f * f.u)
+        }
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.TONFA -> {
+            drawRoundRect(descriptor.primaryColor, f.p(44f, 10f), f.s(12f, 82f), CornerRadius(5f * f.u))
+            drawRoundRect(descriptor.secondaryColor, f.p(20f, 48f), f.s(30f, 10f), CornerRadius(4f * f.u))
+        }
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.INSTRUMENT -> {
+            val name = f.item.name.lowercase()
+            if (name.contains("lute")) {
+                drawOval(descriptor.primaryColor, f.p(28f, 49f), f.s(44f, 43f))
+                drawRoundRect(descriptor.secondaryColor, f.p(46f, 10f), f.s(8f, 47f), CornerRadius(4f * f.u))
+                drawCircle(accent, 8f * f.u, f.p(50f, 69f))
+            } else if (name.contains("flute")) {
+                drawRoundRect(descriptor.primaryColor, f.p(45f, 10f), f.s(10f, 82f), CornerRadius(5f * f.u))
+                for (y in listOf(28f, 44f, 60f, 76f)) drawCircle(accent, 2.5f * f.u, f.p(50f, y))
+            } else {
+                val horn = Path().apply {
+                    moveTo(30f * f.u, 82f * f.u)
+                    quadraticTo(82f * f.u, 57f * f.u, 60f * f.u, 13f * f.u)
+                    lineTo(48f * f.u, 19f * f.u)
+                    quadraticTo(64f * f.u, 55f * f.u, 22f * f.u, 69f * f.u)
+                    close()
+                }
+                drawPath(horn, accent)
+            }
+        }
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.AXE -> {
+            drawRoundRect(descriptor.primaryColor, f.p(47f, 23f), f.s(6f, 70f), CornerRadius(3f * f.u))
+            val head = Path().apply {
+                moveTo(50f * f.u, 17f * f.u)
+                quadraticTo(18f * f.u, 14f * f.u, 17f * f.u, 48f * f.u)
+                lineTo(50f * f.u, 38f * f.u)
+                lineTo(70f * f.u, 45f * f.u)
+                lineTo(65f * f.u, 17f * f.u)
+                close()
+            }
+            drawPath(head, descriptor.secondaryColor)
+        }
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.SCYTHE -> {
+            drawRoundRect(descriptor.primaryColor, f.p(47f, 24f), f.s(6f, 70f), CornerRadius(3f * f.u))
+            val blade = Path().apply {
+                moveTo(50f * f.u, 27f * f.u)
+                quadraticTo(28f * f.u, 2f * f.u, 4f * f.u, 17f * f.u)
+                quadraticTo(28f * f.u, 13f * f.u, 48f * f.u, 38f * f.u)
+                close()
+            }
+            drawPath(blade, descriptor.secondaryColor)
+        }
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.HAMMER -> {
+            drawRoundRect(descriptor.primaryColor, f.p(46f, 30f), f.s(8f, 63f), CornerRadius(4f * f.u))
+            drawRoundRect(descriptor.secondaryColor, f.p(19f, 10f), f.s(62f, 27f), CornerRadius(6f * f.u))
+            drawRect(accent, f.p(16f, 17f), f.s(68f, 7f))
+        }
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.CLUB -> {
+            val club = Path().apply {
+                moveTo(44f * f.u, 92f * f.u)
+                lineTo(34f * f.u, 27f * f.u)
+                quadraticTo(50f * f.u, 2f * f.u, 66f * f.u, 27f * f.u)
+                lineTo(56f * f.u, 92f * f.u)
+                close()
+            }
+            drawPath(club, descriptor.primaryColor)
+            drawPath(club, descriptor.secondaryColor, style = Stroke(width = 2f * f.u))
+        }
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.SCEPTER -> {
+            drawRoundRect(descriptor.primaryColor, f.p(46f, 31f), f.s(8f, 61f), CornerRadius(4f * f.u))
+            drawCircle(accent.copy(alpha = 0.3f), 21f * f.u, f.p(50f, 22f))
+            drawCircle(accent, 12f * f.u, f.p(50f, 22f))
+        }
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.ARCANE_FOCUS -> {
+            drawCircle(accent.copy(alpha = 0.25f), 31f * f.u, f.p(50f, 50f))
+            val crystal = Path().apply {
+                moveTo(50f * f.u, 12f * f.u)
+                lineTo(75f * f.u, 50f * f.u)
+                lineTo(50f * f.u, 88f * f.u)
+                lineTo(25f * f.u, 50f * f.u)
+                close()
+            }
+            drawPath(crystal, accent)
+            drawPath(crystal, Color.White.copy(alpha = 0.65f), style = Stroke(width = 2f * f.u))
+        }
+        else -> Unit
     }
 }
 

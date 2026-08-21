@@ -4,50 +4,171 @@
     android:viewportWidth="500"
     android:viewportHeight="600">
 
-    <!-- Tier 4: Celestial Wings (Back layer Z: 02, Expansive Mythic Wings) -->
-    <!-- Outer Wing Aura / Energy Halo -->
-    <path
-        android:fillColor="#38BDF8"
-        android:fillAlpha="0.25"
-        android:pathData="M250,220 L160,110 L40,160 L70,270 L110,380 L180,440 L250,330 L320,440 L390,380 L430,270 L460,160 L340,110 Z" />
-
-    <!-- Left Wing Primary Feather Spans -->
+    <!-- Tier 4: Celestial Wings (Articulated wings constructed from individually sculpted flight feather blades) -->
+    <!-- === LEFT WING INDIVIDUAL FEATHER BLADES === -->
+    <!-- Feather 1: Upper Primary Pinion -->
     <path
         android:fillColor="#F59E0B"
-        android:pathData="M245,225 L165,125 L55,175 L80,275 L120,375 L180,430 L235,320 Z" />
-    <path
-        android:fillColor="#FBBF24"
-        android:pathData="M240,228 L170,135 L75,185 L98,278 L135,368 L185,420 L230,315 Z" />
-    <path
-        android:fillColor="#FDE047"
-        android:pathData="M235,232 L175,148 L95,198 L115,282 L150,360 L195,410 L225,310 Z" />
+        android:pathData="M205,230 Q145,100 45,130 Q85,175 190,245 Z" />
     <path
         android:fillColor="#FEF08A"
-        android:pathData="M230,236 L180,160 L115,210 L130,285 L165,350 L205,395 L220,305 Z" />
+        android:pathData="M200,232 Q145,108 55,135 Q90,172 185,242 Z" />
+    <!-- Feather 1 Quill Spine -->
+    <path
+        android:strokeColor="#FBBF24"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M205,230 Q145,105 48,132" />
 
-    <!-- Right Wing Primary Feather Spans -->
+    <!-- Feather 2: Mid-Upper Primary -->
     <path
         android:fillColor="#F59E0B"
-        android:pathData="M255,225 L335,125 L445,175 L420,275 L380,375 L320,430 L265,320 Z" />
-    <path
-        android:fillColor="#FBBF24"
-        android:pathData="M260,228 L330,135 L425,185 L402,278 L365,368 L315,420 L270,315 Z" />
+        android:pathData="M200,240 Q130,140 55,205 Q100,235 185,260 Z" />
     <path
         android:fillColor="#FDE047"
-        android:pathData="M265,232 L325,148 L405,198 L385,282 L350,360 L305,410 L275,310 Z" />
+        android:pathData="M195,242 Q130,148 65,208 Q102,232 180,258 Z" />
+    <!-- Feather 2 Quill Spine -->
+    <path
+        android:strokeColor="#FBBF24"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M200,240 Q130,145 58,206" />
+
+    <!-- Feather 3: Central Flight Feather -->
+    <path
+        android:fillColor="#F59E0B"
+        android:pathData="M195,250 Q125,205 75,285 Q120,295 180,275 Z" />
     <path
         android:fillColor="#FEF08A"
-        android:pathData="M270,236 L320,160 L385,210 L370,285 L335,350 L295,395 L280,305 Z" />
+        android:pathData="M190,252 Q125,212 85,285 Q122,290 175,272 Z" />
+    <!-- Feather 3 Quill Spine -->
+    <path
+        android:strokeColor="#FBBF24"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M195,250 Q125,210 78,285" />
 
-    <!-- Radiant Cyan Energy Ribs / Astral Core -->
+    <!-- Feather 4: Lower Primary -->
+    <path
+        android:fillColor="#F59E0B"
+        android:pathData="M190,260 Q135,270 105,365 Q145,350 178,290 Z" />
+    <path
+        android:fillColor="#FDE047"
+        android:pathData="M185,262 Q135,275 115,360 Q145,345 174,288 Z" />
+    <!-- Feather 4 Quill Spine -->
+    <path
+        android:strokeColor="#FBBF24"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M190,260 Q135,272 108,363" />
+
+    <!-- Feather 5: Bottom Secondary Covert -->
+    <path
+        android:fillColor="#F59E0B"
+        android:pathData="M185,270 Q145,330 140,425 Q170,390 180,305 Z" />
+    <path
+        android:fillColor="#FEF08A"
+        android:pathData="M180,272 Q145,335 145,418 Q168,385 175,302 Z" />
+    <!-- Feather 5 Quill Spine -->
+    <path
+        android:strokeColor="#FBBF24"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M185,270 Q145,332 142,422" />
+
+    <!-- === RIGHT WING INDIVIDUAL FEATHER BLADES === -->
+    <!-- Feather 1: Upper Primary Pinion -->
+    <path
+        android:fillColor="#F59E0B"
+        android:pathData="M295,230 Q355,100 455,130 Q415,175 310,245 Z" />
+    <path
+        android:fillColor="#FEF08A"
+        android:pathData="M300,232 Q355,108 445,135 Q410,172 315,242 Z" />
+    <!-- Feather 1 Quill Spine -->
+    <path
+        android:strokeColor="#FBBF24"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M295,230 Q355,105 452,132" />
+
+    <!-- Feather 2: Mid-Upper Primary -->
+    <path
+        android:fillColor="#F59E0B"
+        android:pathData="M300,240 Q370,140 445,205 Q400,235 315,260 Z" />
+    <path
+        android:fillColor="#FDE047"
+        android:pathData="M305,242 Q370,148 435,208 Q398,232 320,258 Z" />
+    <!-- Feather 2 Quill Spine -->
+    <path
+        android:strokeColor="#FBBF24"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M300,240 Q370,145 442,206" />
+
+    <!-- Feather 3: Central Flight Feather -->
+    <path
+        android:fillColor="#F59E0B"
+        android:pathData="M305,250 Q375,205 425,285 Q380,295 320,275 Z" />
+    <path
+        android:fillColor="#FEF08A"
+        android:pathData="M310,252 Q375,212 415,285 Q378,290 325,272 Z" />
+    <!-- Feather 3 Quill Spine -->
+    <path
+        android:strokeColor="#FBBF24"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M305,250 Q375,210 422,285" />
+
+    <!-- Feather 4: Lower Primary -->
+    <path
+        android:fillColor="#F59E0B"
+        android:pathData="M310,260 Q365,270 395,365 Q355,350 322,290 Z" />
+    <path
+        android:fillColor="#FDE047"
+        android:pathData="M315,262 Q365,275 385,360 Q355,345 326,288 Z" />
+    <!-- Feather 4 Quill Spine -->
+    <path
+        android:strokeColor="#FBBF24"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M310,260 Q365,272 392,363" />
+
+    <!-- Feather 5: Bottom Secondary Covert -->
+    <path
+        android:fillColor="#F59E0B"
+        android:pathData="M315,270 Q355,330 360,425 Q330,390 320,305 Z" />
+    <path
+        android:fillColor="#FEF08A"
+        android:pathData="M320,272 Q355,335 355,418 Q332,385 325,302 Z" />
+    <!-- Feather 5 Quill Spine -->
+    <path
+        android:strokeColor="#FBBF24"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M315,270 Q355,332 358,422" />
+
+    <!-- Radiant Cyan Astral Core Ribs -->
     <path
         android:strokeColor="#67E8F9"
-        android:strokeWidth="3.5"
+        android:strokeWidth="3.2"
         android:strokeLineCap="round"
-        android:pathData="M245,230 L165,128 L60,178 M240,240 L130,285 L85,275 M235,250 L170,355 L125,375 M255,230 L335,128 L440,178 M260,240 L370,285 L415,275 M265,250 L330,355 L375,375" />
+        android:pathData="M205,230 Q145,105 70,140 M200,240 Q130,150 85,220 M295,230 Q355,105 430,140 M300,240 Q370,150 415,220" />
 
-    <!-- Center Wing Anchor Crest -->
+    <!-- Lower central back plate: hidden by the torso in front view, visible
+         from behind so both wings share a clear physical attachment without
+         resembling a neck collar. -->
     <path
-        android:fillColor="#E11D48"
-        android:pathData="M242,225 L258,225 L250,245 Z" />
+        android:strokeColor="#F59E0B"
+        android:strokeWidth="8"
+        android:strokeLineCap="round"
+        android:pathData="M205,240 L232,315 M295,240 L268,315" />
+    <path
+        android:fillColor="#F59E0B"
+        android:pathData="M225,300 Q250,285 275,300 L270,335 Q250,350 230,335 Z" />
+    <path
+        android:fillColor="#FEF08A"
+        android:pathData="M235,305 Q250,297 265,305 L262,328 Q250,337 238,328 Z" />
+    <path
+        android:fillColor="#67E8F9"
+        android:pathData="M250,315 m-7,0 a7,7 0 1,0 14,0 a7,7 0 1,0 -14,0" />
 </vector>

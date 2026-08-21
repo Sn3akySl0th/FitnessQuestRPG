@@ -1,0 +1,48 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="500dp"
+    android:height="600dp"
+    android:viewportWidth="500"
+    android:viewportHeight="600">
+
+    <!-- Tier 1: Worn Trousers, rear view. Keep the front asset's bounds and palette. -->
+    <path
+        android:fillColor="#3E2723"
+        android:pathData="M180,360 L320,360 L318,420 L312,506 L262,506 L264,424 Q250,428 236,424 L238,506 L188,506 L182,420 Z" />
+
+    <!-- Rear legs -->
+    <path
+        android:fillColor="#4E342E"
+        android:pathData="M184,400 L234,408 L238,506 L188,506 Z M316,400 L266,408 L262,506 L312,506 Z" />
+
+    <!-- Seat and thigh wear panels -->
+    <path
+        android:fillColor="#5D4037"
+        android:pathData="M186,384 L246,384 L244,424 Q234,430 226,438 L190,432 Z M314,384 L254,384 L256,424 Q266,430 274,438 L310,432 Z" />
+
+    <!-- Matching knee patches -->
+    <path
+        android:fillColor="#6D4C41"
+        android:pathData="M188,446 L230,448 L232,476 L190,476 Z M312,446 L270,448 L268,476 L310,476 Z" />
+
+    <!-- Patch stitching and worn rear creases -->
+    <path
+        android:strokeColor="#A1887F"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:pathData="M186,444 L232,446 M188,478 L234,476 M314,444 L268,446 M312,478 L266,476 M200,488 L222,492 M300,488 L278,492 M198,420 L224,424 M302,420 L276,424" />
+
+    <!-- Rear center seam -->
+    <path
+        android:strokeColor="#271105"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:pathData="M250,376 L250,416 M250,416 Q244,424 238,426 M250,416 Q256,424 262,426" />
+
+    <!-- Same leather belt; rear keeper replaces the front buckle. -->
+    <path
+        android:fillColor="#271105"
+        android:pathData="M180,360 L320,360 L318,376 L182,376 Z" />
+    <path
+        android:fillColor="#4E342E"
+        android:pathData="M244,358 L256,358 L256,378 L244,378 Z" />
+</vector>

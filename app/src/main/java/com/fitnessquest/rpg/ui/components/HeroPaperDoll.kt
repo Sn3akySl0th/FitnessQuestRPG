@@ -29,10 +29,92 @@ import com.fitnessquest.rpg.data.db.ItemSlot
 import com.fitnessquest.rpg.domain.CharacterClass
 import com.fitnessquest.rpg.domain.GearRarity
 import com.fitnessquest.rpg.domain.ItemCatalog
+import com.fitnessquest.rpg.domain.ItemStyle
 import com.fitnessquest.rpg.ui.theme.FitQuestTheme
 import com.fitnessquest.rpg.ui.theme.Gold
+import com.fitnessquest.rpg.domain.CharacterRace
 import androidx.compose.ui.tooling.preview.Preview
+import com.fitnessquest.rpg.domain.visuals.AvatarOrientation
 import kotlinx.coroutines.launch
+import kotlin.math.abs
+import kotlin.math.cos
+
+/**
+ * State holder for the avatar turnaround transition.
+ * Manages cancellable 3D compression, midpoint orientation swapping,
+ * and rapid tap reversal.
+ */
+@Stable
+class AvatarTurnaroundState(
+    initialFacingBack: Boolean = false,
+    val isReducedMotion: Boolean = false
+) {
+    // Continuous turnaround angle in degrees: 0f = Front, 180f = Back
+    val angleAnimatable = Animatable(if (initialFacingBack) 180f else 0f)
+
+    val currentAngle: Float get() = angleAnimatable.value
+
+    // Horizontal scale: compresses to 0 at 90 degrees (midpoint), expands to 1 at 0 and 180
+    val scaleX: Float
+        get() {
+            if (isReducedMotion) return 1f
+            val rad = Math.toRadians(currentAngle.toDouble()).toFloat()
+            return abs(cos(rad)).coerceIn(0.01f, 1f)
+        }
+
+    // Midpoint orientation swap: changes rendered facing at angle = 90 degrees
+    val renderedOrientation: AvatarOrientation
+        get() = if (currentAngle >= 90f) AvatarOrientation.BACK else AvatarOrientation.FRONT
+
+    val renderedFacingBack: Boolean
+        get() = renderedOrientation.isFacingBack
+
+    suspend fun animateTo(targetFacingBack: Boolean) {
+        val targetAngle = if (targetFacingBack) 180f else 0f
+        if (isReducedMotion) {
+            angleAnimatable.snapTo(targetAngle)
+        } else {
+            angleAnimatable.animateTo(
+                targetValue = targetAngle,
+                animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing)
+            )
+        }
+    }
+}
+
+/**
+ * Respects system motion duration scale / reduced motion accessibility preferences.
+ */
+@Composable
+fun rememberIsReducedMotion(overrideReducedMotion: Boolean = false): Boolean {
+    if (overrideReducedMotion) return true
+    val context = androidx.compose.ui.platform.LocalContext.current
+    return remember(context) {
+        try {
+            val scale = android.provider.Settings.Global.getFloat(
+                context.contentResolver,
+                android.provider.Settings.Global.ANIMATOR_DURATION_SCALE,
+                1f
+            )
+            scale == 0f
+        } catch (_: Throwable) {
+            false
+        }
+    }
+}
+
+@Composable
+fun rememberAvatarTurnaroundState(
+    initialFacingBack: Boolean = false,
+    reducedMotion: Boolean = rememberIsReducedMotion()
+): AvatarTurnaroundState {
+    return remember(reducedMotion) {
+        AvatarTurnaroundState(
+            initialFacingBack = initialFacingBack,
+            isReducedMotion = reducedMotion
+        )
+    }
+}
 
 /**
  * Centered hero paper doll character showcase with magical pedestal,
@@ -58,15 +140,18 @@ fun HeroPaperDoll(
     val tapSquash = remember { Animatable(1f) }
     val tapStretch = remember { Animatable(1f) }
 
+    val isReducedMotion = rememberIsReducedMotion()
     var internalFacingBack by remember { mutableStateOf(false) }
-    val isFacingBack = facingBack ?: internalFacingBack
+    val effectiveTargetFacing = facingBack ?: internalFacingBack
 
-    // Smooth turn-around rotation angle
-    val rotationAngle by animateFloatAsState(
-        targetValue = if (isFacingBack) 180f else 0f,
-        animationSpec = tween(durationMillis = 350, easing = FastOutSlowInEasing),
-        label = "avatarTurnaround"
+    val turnaroundState = rememberAvatarTurnaroundState(
+        initialFacingBack = effectiveTargetFacing,
+        reducedMotion = isReducedMotion
     )
+
+    LaunchedEffect(effectiveTargetFacing) {
+        turnaroundState.animateTo(effectiveTargetFacing)
+    }
 
     val baseScale = equipAnimationState?.avatarScale?.value ?: 1f
 
@@ -75,7 +160,7 @@ fun HeroPaperDoll(
             .fillMaxWidth()
             .heightIn(min = 260.dp, max = 320.dp)
             .semantics {
-                contentDescription = "${clazz.label} avatar with ${gear.size} gear pieces equipped, ${if (isFacingBack) "facing back" else "facing front"}"
+                contentDescription = "${clazz.label} avatar with ${gear.size} gear pieces equipped, ${if (effectiveTargetFacing) "facing back" else "facing front"}"
             },
         contentAlignment = Alignment.Center
     ) {
@@ -90,12 +175,15 @@ fun HeroPaperDoll(
             )
         }
 
-        // 3. Layered Character Paper Doll (5:6 unified canvas with Squash & Stretch Tap Physics + Turnaround)
+        // 3. Layered Character Paper Doll (5:6 unified canvas with Squash & Stretch Tap Physics + Horizontal Turnaround)
         Box(
             modifier = Modifier
                 .fillMaxHeight()
                 .aspectRatio(500f / 600f)
-                .scale(scaleX = baseScale * tapStretch.value, scaleY = baseScale * tapSquash.value)
+                .scale(
+                    scaleX = baseScale * tapStretch.value * turnaroundState.scaleX,
+                    scaleY = baseScale * tapSquash.value
+                )
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
@@ -141,7 +229,7 @@ fun HeroPaperDoll(
                 modifier = Modifier.fillMaxSize(),
                 animation = animation,
                 expression = expression,
-                facingBack = isFacingBack,
+                facingBack = turnaroundState.renderedFacingBack,
                 equipAnimationState = equipAnimationState
             )
         }
@@ -171,21 +259,23 @@ fun HeroPaperDoll(
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
-                        onClickLabel = if (isFacingBack) "View front of hero" else "View back of hero"
+                        onClickLabel = if (effectiveTargetFacing) "View front of hero" else "View back of hero"
                     ) {
-                        val newFacing = !isFacingBack
-                        internalFacingBack = newFacing
-                        onRotateToggle?.invoke(newFacing)
+                        val nextFacing = !effectiveTargetFacing
+                        if (facingBack == null) {
+                            internalFacingBack = nextFacing
+                        }
+                        onRotateToggle?.invoke(nextFacing)
                     },
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Default.Refresh,
-                    contentDescription = if (isFacingBack) "Rotate to front" else "Rotate to back",
+                    contentDescription = if (effectiveTargetFacing) "Rotate to front" else "Rotate to back",
                     tint = Gold,
                     modifier = Modifier
                         .size(20.dp)
-                        .graphicsLayer(rotationZ = rotationAngle)
+                        .graphicsLayer(rotationZ = turnaroundState.currentAngle)
                 )
             }
         }
@@ -419,6 +509,226 @@ fun HeroPaperDollSummonerShivaPreview() {
                 highestRarity = GearRarity.RARE,
                 expression = AvatarExpression.CALM,
                 modifier = Modifier.height(300.dp)
+            )
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Checkpoint 2 Visual QA Paired Front/Back Previews
+// ---------------------------------------------------------------------------
+
+@Preview(name = "QA 1: Human Warrior - Plate + Shield (Front & Back)", showBackground = true, backgroundColor = 0xFF12131F, widthDp = 420, heightDp = 320)
+@Composable
+fun HeroPaperDollPlateAndShieldPreview() {
+    val gear = mapOf(
+        ItemSlot.WEAPON to (ItemCatalog.all.find { it.name == "Knight's Blade" }
+            ?: ItemEntity(id = 1193, name = "Knight's Blade", slot = ItemSlot.WEAPON, style = ItemStyle.SWORD, tier = 3, emoji = "⚔️", price = 250)),
+        ItemSlot.CHEST to (ItemCatalog.all.find { it.name == "Steel Plate" }
+            ?: ItemEntity(id = 1194, name = "Steel Plate", slot = ItemSlot.CHEST, style = ItemStyle.PLATE, tier = 3, emoji = "🛡️", price = 250)),
+        ItemSlot.HEAD to (ItemCatalog.all.find { it.name == "Iron Greathelm" }
+            ?: ItemEntity(id = 1195, name = "Iron Greathelm", slot = ItemSlot.HEAD, style = ItemStyle.PLATE, tier = 2, emoji = "🪖", price = 150)),
+        ItemSlot.LEGS to (ItemCatalog.all.find { it.name == "Steel Greaves" }
+            ?: ItemEntity(id = 1191, name = "Steel Greaves", slot = ItemSlot.LEGS, style = ItemStyle.PLATE, tier = 3, emoji = "🦿", price = 180)),
+        ItemSlot.FEET to (ItemCatalog.all.find { it.name == "Steel Sabatons" }
+            ?: ItemEntity(id = 1192, name = "Steel Sabatons", slot = ItemSlot.FEET, style = ItemStyle.PLATE, tier = 3, emoji = "🥾", price = 140)),
+        ItemSlot.TRINKET to (ItemCatalog.all.find { it.name == "Iron Back Shield" }
+            ?: ItemEntity(id = 1196, name = "Iron Back Shield", slot = ItemSlot.TRINKET, style = "shield", tier = 2, emoji = "🛡️", price = 150))
+    )
+
+    FitQuestTheme {
+        Row(modifier = Modifier.padding(16.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            HeroPaperDoll(
+                clazz = CharacterClass.WARRIOR,
+                gear = gear,
+                appearance = AvatarAppearance(race = CharacterRace.HUMAN),
+                expression = AvatarExpression.BATTLE_READY,
+                facingBack = false,
+                showRotateButton = false,
+                modifier = Modifier.weight(1f).height(280.dp)
+            )
+            HeroPaperDoll(
+                clazz = CharacterClass.WARRIOR,
+                gear = gear,
+                appearance = AvatarAppearance(race = CharacterRace.HUMAN),
+                expression = AvatarExpression.BATTLE_READY,
+                facingBack = true,
+                showRotateButton = false,
+                modifier = Modifier.weight(1f).height(280.dp)
+            )
+        }
+    }
+}
+
+@Preview(name = "QA 2: Elf Ranger - Leather + Quiver (Front & Back)", showBackground = true, backgroundColor = 0xFF12131F, widthDp = 420, heightDp = 320)
+@Composable
+fun HeroPaperDollLeatherAndQuiverPreview() {
+    val gear = mapOf(
+        ItemSlot.WEAPON to (ItemCatalog.all.find { it.name == "Training Shortbow" }
+            ?: ItemEntity(id = 1181, name = "Training Shortbow", slot = ItemSlot.WEAPON, style = ItemStyle.BOW, tier = 1, emoji = "🏹", price = 50)),
+        ItemSlot.CHEST to (ItemCatalog.all.find { it.name == "Supple Leathers" }
+            ?: ItemEntity(id = 1182, name = "Supple Leathers", slot = ItemSlot.CHEST, style = ItemStyle.LIGHT, tier = 2, emoji = "🥋", price = 100)),
+        ItemSlot.HEAD to (ItemCatalog.all.find { it.name == "Adventurer's Hood" }
+            ?: ItemEntity(id = 1183, name = "Adventurer's Hood", slot = ItemSlot.HEAD, style = ItemStyle.LIGHT, classAffinity = CharacterClass.RANGER, tier = 2, emoji = "🏹", price = 100)),
+        ItemSlot.LEGS to ItemEntity(id = 1184, name = "Supple Leathers Trousers", slot = ItemSlot.LEGS, style = ItemStyle.LIGHT, tier = 2, emoji = "👖", price = 80),
+        ItemSlot.FEET to ItemEntity(id = 1185, name = "Supple Leathers Boots", slot = ItemSlot.FEET, style = ItemStyle.LIGHT, tier = 2, emoji = "🥾", price = 70),
+        ItemSlot.TRINKET to ItemEntity(id = 1197, name = "Hunter's Quiver", slot = ItemSlot.TRINKET, style = "quiver", tier = 1, emoji = "🏹", price = 90)
+    )
+
+    FitQuestTheme {
+        Row(modifier = Modifier.padding(16.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            HeroPaperDoll(
+                clazz = CharacterClass.RANGER,
+                gear = gear,
+                appearance = AvatarAppearance(race = CharacterRace.ELF),
+                expression = AvatarExpression.FOCUSED,
+                facingBack = false,
+                showRotateButton = false,
+                modifier = Modifier.weight(1f).height(280.dp)
+            )
+            HeroPaperDoll(
+                clazz = CharacterClass.RANGER,
+                gear = gear,
+                appearance = AvatarAppearance(race = CharacterRace.ELF),
+                expression = AvatarExpression.FOCUSED,
+                facingBack = true,
+                showRotateButton = false,
+                modifier = Modifier.weight(1f).height(280.dp)
+            )
+        }
+    }
+}
+
+@Preview(name = "QA 3: Undead Mage - Robe + Cape (Front & Back)", showBackground = true, backgroundColor = 0xFF12131F, widthDp = 420, heightDp = 320)
+@Composable
+fun HeroPaperDollRobeAndCapePreview() {
+    val gear = mapOf(
+        ItemSlot.WEAPON to (ItemCatalog.all.find { it.name == "Apprentice Wand" }
+            ?: ItemEntity(id = 1186, name = "Apprentice Wand", slot = ItemSlot.WEAPON, style = ItemStyle.WAND, classAffinity = CharacterClass.MAGE, tier = 1, emoji = "🪄", price = 40)),
+        ItemSlot.CHEST to (ItemCatalog.all.find { it.name == "Runeweave Robe" }
+            ?: ItemEntity(id = 1187, name = "Runeweave Robe", slot = ItemSlot.CHEST, style = ItemStyle.ROBE, classAffinity = CharacterClass.MAGE, tier = 3, emoji = "🥋", price = 300)),
+        ItemSlot.TRINKET to ItemEntity(id = 1198, name = "Velvet Cape", slot = ItemSlot.TRINKET, style = "cape", tier = 3, emoji = "🧣", price = 200)
+    )
+
+    FitQuestTheme {
+        Row(modifier = Modifier.padding(16.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            HeroPaperDoll(
+                clazz = CharacterClass.MAGE,
+                gear = gear,
+                appearance = AvatarAppearance(race = CharacterRace.UNDEAD),
+                expression = AvatarExpression.CALM,
+                facingBack = false,
+                showRotateButton = false,
+                modifier = Modifier.weight(1f).height(280.dp)
+            )
+            HeroPaperDoll(
+                clazz = CharacterClass.MAGE,
+                gear = gear,
+                appearance = AvatarAppearance(race = CharacterRace.UNDEAD),
+                expression = AvatarExpression.CALM,
+                facingBack = true,
+                showRotateButton = false,
+                modifier = Modifier.weight(1f).height(280.dp)
+            )
+        }
+    }
+}
+
+@Preview(name = "QA 4: Dwarf Paladin - Robe + Wings (Front & Back)", showBackground = true, backgroundColor = 0xFF12131F, widthDp = 420, heightDp = 320)
+@Composable
+fun HeroPaperDollRobeAndWingsPreview() {
+    val gear = mapOf(
+        ItemSlot.WEAPON to (ItemCatalog.all.find { it.name == "Knight's Blade" } ?: ItemCatalog.all.first()),
+        ItemSlot.CHEST to (ItemCatalog.all.find { it.name == "Apprentice Robes" } ?: ItemCatalog.all.first()),
+        ItemSlot.TRINKET to ItemEntity(id = 1199, name = "Celestial Wings", slot = ItemSlot.TRINKET, style = "wings", tier = 4, emoji = "🪽", price = 1000)
+    )
+
+    FitQuestTheme {
+        Row(modifier = Modifier.padding(16.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            HeroPaperDoll(
+                clazz = CharacterClass.PALADIN,
+                gear = gear,
+                appearance = AvatarAppearance(race = CharacterRace.DWARF),
+                expression = AvatarExpression.VICTORIOUS,
+                facingBack = false,
+                showRotateButton = false,
+                modifier = Modifier.weight(1f).height(280.dp)
+            )
+            HeroPaperDoll(
+                clazz = CharacterClass.PALADIN,
+                gear = gear,
+                appearance = AvatarAppearance(race = CharacterRace.DWARF),
+                expression = AvatarExpression.VICTORIOUS,
+                facingBack = true,
+                showRotateButton = false,
+                modifier = Modifier.weight(1f).height(280.dp)
+            )
+        }
+    }
+}
+
+@Preview(name = "QA 5: Orc Barbarian - Mixed Gear (Front & Back)", showBackground = true, backgroundColor = 0xFF12131F, widthDp = 420, heightDp = 320)
+@Composable
+fun HeroPaperDollMixedGearOrcPreview() {
+    val gear = mapOf(
+        ItemSlot.WEAPON to (ItemCatalog.all.find { it.name == "Dragonfang Greatsword" } ?: ItemCatalog.all.first()),
+        ItemSlot.CHEST to (ItemCatalog.all.find { it.name == "Padded Vest" } ?: ItemCatalog.all.first()),
+        ItemSlot.HEAD to (ItemCatalog.all.find { it.name == "Leather Cap" } ?: ItemCatalog.all.first { it.slot == ItemSlot.HEAD }),
+        ItemSlot.LEGS to (ItemCatalog.all.find { it.name == "Veteran's Greaves" } ?: ItemCatalog.all.first()),
+        ItemSlot.FEET to (ItemCatalog.all.find { it.name == "Old Boots" } ?: ItemCatalog.all.first())
+    )
+
+    FitQuestTheme {
+        Row(modifier = Modifier.padding(16.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            HeroPaperDoll(
+                clazz = CharacterClass.WARRIOR,
+                gear = gear,
+                appearance = AvatarAppearance(race = CharacterRace.ORC),
+                expression = AvatarExpression.BATTLE_READY,
+                facingBack = false,
+                showRotateButton = false,
+                modifier = Modifier.weight(1f).height(280.dp)
+            )
+            HeroPaperDoll(
+                clazz = CharacterClass.WARRIOR,
+                gear = gear,
+                appearance = AvatarAppearance(race = CharacterRace.ORC),
+                expression = AvatarExpression.BATTLE_READY,
+                facingBack = true,
+                showRotateButton = false,
+                modifier = Modifier.weight(1f).height(280.dp)
+            )
+        }
+    }
+}
+
+@Preview(name = "QA 6: Druid Transformed Bear Form (Equipment Suppressed)", showBackground = true, backgroundColor = 0xFF12131F, widthDp = 420, heightDp = 320)
+@Composable
+fun HeroPaperDollDruidBearPreview() {
+    val gear = mapOf(
+        ItemSlot.WEAPON to (ItemCatalog.all.find { it.name == "Dragonfang Greatsword" } ?: ItemCatalog.all.first()),
+        ItemSlot.CHEST to (ItemCatalog.all.find { it.name == "Steel Plate" } ?: ItemCatalog.all.first())
+    )
+
+    FitQuestTheme {
+        Row(modifier = Modifier.padding(16.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            HeroPaperDoll(
+                clazz = CharacterClass.DRUID,
+                gear = gear,
+                appearance = AvatarAppearance(druidForm = "BEAR"),
+                expression = AvatarExpression.BATTLE_READY,
+                facingBack = false,
+                showRotateButton = false,
+                modifier = Modifier.weight(1f).height(280.dp)
+            )
+            HeroPaperDoll(
+                clazz = CharacterClass.DRUID,
+                gear = gear,
+                appearance = AvatarAppearance(druidForm = "BEAR"),
+                expression = AvatarExpression.BATTLE_READY,
+                facingBack = true,
+                showRotateButton = false,
+                modifier = Modifier.weight(1f).height(280.dp)
             )
         }
     }

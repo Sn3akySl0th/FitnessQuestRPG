@@ -1,0 +1,25 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="500dp"
+    android:height="600dp"
+    android:viewportWidth="500"
+    android:viewportHeight="600">
+
+    <!-- Rear of the same tier-1 leather cap; no face opening or contrasting crown. -->
+    <path
+        android:fillColor="#78350F"
+        android:pathData="M180,122 Q178,55 250,50 Q322,55 320,122 L318,134 Q250,142 182,134 Z" />
+    <path
+        android:fillColor="#92400E"
+        android:pathData="M194,116 Q194,66 250,57 Q292,62 307,94 Q250,83 194,116 Z" />
+    <path
+        android:fillColor="#451A03"
+        android:pathData="M180,118 Q250,128 320,118 L322,132 Q250,143 178,132 Z" />
+    <path
+        android:strokeColor="#D97706"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M202,86 L206,93 M224,72 L228,78 M248,66 L252,72 M274,72 L278,78 M296,86 L300,93" />
+    <path
+        android:fillColor="#B45309"
+        android:pathData="M250,128 m-4,0 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0" />
+</vector>

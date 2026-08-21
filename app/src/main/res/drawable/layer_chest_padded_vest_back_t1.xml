@@ -1,0 +1,49 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="500dp"
+    android:height="600dp"
+    android:viewportWidth="500"
+    android:viewportHeight="600">
+
+    <!-- Rear identity of the padded vest: same shoulder span, sleeve length,
+         waist, and material palette as the authored front asset. -->
+    <path
+        android:fillColor="#451A03"
+        android:pathData="M114,235 L170,228 L220,230 L280,230 L330,228 L386,235 L384,300 L334,295 L334,330 L318,375 L182,375 L166,330 L166,295 L116,300 Z" />
+
+    <!-- Opaque short leather sleeves. These cover the upper arms but stop
+         above the forearms, matching the front silhouette. -->
+    <path
+        android:fillColor="#5C240A"
+        android:pathData="M116,238 L168,232 L166,285 L118,285 Z M384,238 L332,232 L334,285 L382,285 Z" />
+    <path
+        android:fillColor="#271105"
+        android:pathData="M116,282 L167,277 L166,300 L116,300 Z M384,282 L333,277 L334,300 L384,300 Z" />
+
+    <!-- Rear quilted panels and central spine seam. -->
+    <path
+        android:fillColor="#78350F"
+        android:pathData="M172,238 L246,236 L246,340 L184,368 L168,326 Z M328,238 L254,236 L254,340 L316,368 L332,326 Z" />
+    <path
+        android:fillColor="#92400E"
+        android:pathData="M184,320 L246,292 L246,368 L184,368 Z M316,320 L254,292 L254,368 L316,368 Z" />
+    <path
+        android:fillColor="#271105"
+        android:pathData="M246,236 L254,236 L254,368 L246,368 Z" />
+
+    <!-- Belt remains confined to the torso rather than projecting into arms. -->
+    <path
+        android:fillColor="#271105"
+        android:pathData="M178,348 L322,348 L318,375 L182,375 Z" />
+    <path
+        android:fillColor="#78350F"
+        android:pathData="M238,347 L262,347 L262,374 L238,374 Z" />
+    <path
+        android:fillColor="#451A03"
+        android:pathData="M244,353 L256,353 L256,368 L244,368 Z" />
+
+    <path
+        android:strokeColor="#271105"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:pathData="M114,235 L116,300 L166,295 L166,330 L182,375 L318,375 L334,330 L334,295 L384,300 L386,235" />
+</vector>

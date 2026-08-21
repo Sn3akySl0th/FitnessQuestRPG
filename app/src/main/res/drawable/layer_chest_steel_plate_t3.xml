@@ -8,16 +8,16 @@
     <!-- Steel Cuirass Silhouette -->
     <path
         android:fillColor="#1E293B"
-        android:pathData="M165,240 L220,238 L238,265 Q250,268 262,265 L280,238 L335,240 L342,322 L318,380 L182,380 L158,322 Z" />
+        android:pathData="M184,242 L221,240 L239,263 Q250,268 261,263 L279,240 L316,242 L322,322 L303,378 L197,378 L178,322 Z" />
 
     <!-- Breastplate Left & Right Polished Steel Plates -->
     <path
         android:fillColor="#475569"
-        android:pathData="M170,244 L216,242 L236,316 L168,312 Z M330,244 L284,242 L264,316 L332,312 Z" />
+        android:pathData="M188,246 L217,244 L237,316 L184,312 Z M312,246 L283,244 L263,316 L316,312 Z" />
 
     <path
         android:fillColor="#64748B"
-        android:pathData="M178,248 L212,246 L228,308 L174,306 Z M322,248 L288,246 L272,308 L326,306 Z" />
+        android:pathData="M194,250 L213,248 L229,307 L190,305 Z M306,250 L287,248 L271,307 L310,305 Z" />
 
     <!-- Center Breastplate Ridge / Keel -->
     <path
@@ -27,20 +27,31 @@
     <!-- Abdominal Segment Plates (Faulds) -->
     <path
         android:fillColor="#334155"
-        android:pathData="M184,320 L316,320 L312,338 L188,338 Z M186,342 L314,342 L310,358 L190,358 Z M188,362 L312,362 L308,378 L192,378 Z" />
+        android:pathData="M190,320 L310,320 L306,338 L194,338 Z M193,342 L307,342 L303,358 L197,358 Z M196,362 L304,362 L301,378 L199,378 Z" />
 
     <!-- Cyan Runic Energy Inlay on Chest Center -->
     <path
         android:strokeColor="#06B6D4"
         android:strokeWidth="3"
         android:strokeLineCap="round"
-        android:pathData="M208,280 L250,296 L292,280 M224,310 L250,320 L276,310" />
+        android:pathData="M214,280 L250,296 L286,280 M225,310 L250,320 L275,310" />
 
     <!-- Left & Right Flanged Spaulders (Over shoulders kept at Y=236) -->
     <path
         android:fillColor="#64748B"
-        android:pathData="M136,236 L178,234 L174,275 L132,268 Z M364,236 L322,234 L326,275 L368,268 Z" />
+        android:pathData="M150,240 L188,237 L184,273 L148,267 Z M350,240 L312,237 L316,273 L352,267 Z" />
     <path
         android:fillColor="#94A3B8"
-        android:pathData="M140,238 L170,236 L168,266 L138,260 Z M360,238 L330,236 L332,266 L362,260 Z" />
+        android:pathData="M154,242 L180,240 L177,266 L152,261 Z M346,242 L320,240 L323,266 L348,261 Z" />
+
+    <!-- Articulated arm plates; the skin hands remain visible at the grip. -->
+    <path
+        android:fillColor="#475569"
+        android:pathData="M120,262 Q120,250 132,246 L162,250 L162,310 L120,310 Z M380,262 Q380,250 368,246 L338,250 L338,310 L380,310 Z" />
+    <path
+        android:fillColor="#64748B"
+        android:pathData="M122,312 L162,312 L162,350 Q158,362 142,364 Q126,362 122,350 Z M378,312 L338,312 L338,350 Q342,362 358,364 Q374,362 378,350 Z" />
+    <path
+        android:fillColor="#334155"
+        android:pathData="M122,304 L162,304 L162,314 L122,314 Z M378,304 L338,304 L338,314 L378,314 Z M126,344 L158,344 L158,352 L126,352 Z M374,344 L342,344 L342,352 L374,352 Z" />
 </vector>

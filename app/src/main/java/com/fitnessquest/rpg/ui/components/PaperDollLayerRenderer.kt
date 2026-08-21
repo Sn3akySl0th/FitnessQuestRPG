@@ -30,27 +30,20 @@ import com.fitnessquest.rpg.data.db.ItemSlot
 import com.fitnessquest.rpg.domain.CharacterClass
 import com.fitnessquest.rpg.domain.GearRarity
 import com.fitnessquest.rpg.domain.build
+import com.fitnessquest.rpg.domain.visuals.AvatarOrientation
 import com.fitnessquest.rpg.domain.visuals.BodyRegion
 import com.fitnessquest.rpg.domain.visuals.EquipmentDye
 import com.fitnessquest.rpg.domain.visuals.EquipmentVisualRegistry
 import com.fitnessquest.rpg.domain.visuals.EquipmentVisualSpec
 import com.fitnessquest.rpg.domain.visuals.PaperDollLayerOrder
 import com.fitnessquest.rpg.domain.visuals.PaperDollVisualSlot
+import com.fitnessquest.rpg.domain.visuals.VisualFacingRule
 import com.fitnessquest.rpg.ui.effects.rememberDeviceTilt
 
-/**
- * Encapsulates a resolved layer for rendering in the 5:6 paper doll stack.
- */
-data class ResolvedPaperDollLayer(
-    val order: PaperDollLayerOrder,
-    val visualSlot: PaperDollVisualSlot?,
-    val spec: EquipmentVisualSpec?,
-    val drawableResId: Int?,
-    val item: ItemEntity? = null,
-    val isEquipped: Boolean = true,
-    val rarity: GearRarity = GearRarity.COMMON,
-    val dye: EquipmentDye = EquipmentDye.NATURAL
-)
+import com.fitnessquest.rpg.domain.visuals.PaperDollPassResolver
+import com.fitnessquest.rpg.domain.visuals.PaperDollRenderEntry
+import com.fitnessquest.rpg.domain.visuals.ResolvedPaperDollLayer
+import com.fitnessquest.rpg.domain.visuals.ResolvedPaperDollPassPlan
 
 /**
  * Calculates 3D depth displacement multiplier for holographic card parallax.
@@ -73,7 +66,10 @@ fun PaperDollLayerOrder.parallaxDepth(): Float = when (this) {
 }
 
 /**
- * Compositor that renders avatar and gear layers in the standardized 14-layer Z-order stack
+ * Compositor that renders avatar and gear layers in strictly interleaved, orientation-aware order:
+ * - Body base
+ * - Canvas fallback slots
+ * - 2D Drawable layers
  * with 3D gyroscopic parallax depth, procedural dyes, and organic cape flutter physics.
  */
 @Composable
@@ -122,68 +118,30 @@ fun PaperDollLayerRenderer(
         label = "animPhase"
     )
 
-    fun buildAvatarFrame(
-        u: Float,
-        gearMap: Map<ItemSlot, ItemEntity>,
-        hiddenRegs: Set<BodyRegion> = emptySet()
-    ): AvatarFrame {
-        return AvatarFrame(
-            u = u,
-            cls = clazz,
-            look = lookFor(clazz),
-            gear = gearMap,
-            costume = showClassOutfit,
-            highlightMuscles = emptySet(),
-            facingBack = facingBack,
-            appearance = appearance,
-            expression = expression,
-            detail = detail,
-            phase = animPhase,
-            hiddenRegions = hiddenRegs
+    val orientation = AvatarOrientation.fromFacingBack(facingBack)
+
+    // Pure, orientation-aware structural pass plan resolution with full slot interleaving
+    val passPlan = remember(gear, customDyes, orientation) {
+        PaperDollPassResolver.resolvePlan(
+            gear = gear,
+            orientation = orientation,
+            customDyes = customDyes,
+            context = context
         )
     }
 
-    // Resolve visual layers for all equipped items
-    val activeLayers = remember(gear, customDyes) {
-        val layers = mutableListOf<ResolvedPaperDollLayer>()
-        gear.forEach { (slot, item) ->
+    // Filter full loadout context respecting active orientation facing rules
+    val orientationGear = remember(gear, orientation) {
+        gear.filter { (_, item) ->
             val spec = EquipmentVisualRegistry.resolveSpec(item)
-            val resId = EquipmentVisualRegistry.findDrawableId(context, spec.layerResName)
-            val resolvedDye = customDyes[slot] ?: EquipmentDye.fromItem(item)
-            layers.add(
-                ResolvedPaperDollLayer(
-                    order = spec.layerOrder,
-                    visualSlot = spec.visualSlot,
-                    spec = spec,
-                    drawableResId = resId,
-                    item = item,
-                    isEquipped = true,
-                    dye = resolvedDye
-                )
-            )
+            when (orientation) {
+                AvatarOrientation.FRONT -> spec.facingRule != VisualFacingRule.BACK_ONLY
+                AvatarOrientation.BACK -> spec.facingRule != VisualFacingRule.FRONT_ONLY
+            }
         }
-        layers.sortedBy { it.order.zIndex }
     }
 
-    // Derive hidden visual slots from active gear before rendering (e.g. Robes suppress LEGS slot)
-    val hiddenVisualSlots = remember(activeLayers) {
-        activeLayers.flatMap { it.spec?.hiddenVisualSlots.orEmpty() }.toSet()
-    }
-
-    val visibleLayers = remember(activeLayers, hiddenVisualSlots) {
-        activeLayers
-            .filterNot { it.visualSlot in hiddenVisualSlots }
-            .sortedBy { it.order.zIndex }
-    }
-
-    val hasAny2DLayer = remember(visibleLayers) {
-        visibleLayers.any { it.drawableResId != null }
-    }
-
-    // Derive all covered body regions across equipped visible gear
-    val hiddenBodyRegions = remember(visibleLayers) {
-        visibleLayers.flatMap { it.spec?.coveredRegions.orEmpty() }.toSet()
-    }
+    val isTransformedDruid = appearance.druidForm in setOf("BEAR", "PANTHER", "TREANT", "MOONKIN", "AVATAR")
 
     Box(
         modifier = modifier
@@ -197,11 +155,12 @@ fun PaperDollLayerRenderer(
             },
         contentAlignment = Alignment.Center
     ) {
-        if (!hasAny2DLayer) {
-            // Transitional Canvas Fallback: Full dynamic vector canvas rendering
+        val hasAnyDrawable = !isTransformedDruid && passPlan.entries.any { it is PaperDollRenderEntry.DrawableLayer }
+        if (!hasAnyDrawable) {
+            // Pure Canvas Mode / Beast Forms: Single full-avatar render pass
             CharacterAvatar(
                 clazz = clazz,
-                gear = gear,
+                gear = if (isTransformedDruid) gear else passPlan.canvasFallbackGear,
                 appearance = appearance,
                 modifier = Modifier.fillMaxSize(),
                 showClassOutfit = showClassOutfit,
@@ -210,122 +169,120 @@ fun PaperDollLayerRenderer(
                 expression = expression,
                 detail = detail,
                 enableBreathing = false,
-                hiddenRegions = hiddenBodyRegions
+                hiddenRegions = passPlan.hiddenBodyRegions
             )
         } else {
-            // 2D Layer Compositor (rendered strictly in z-index order 00 to 13)
-            val unhandledCanvasGear = remember(gear, visibleLayers) {
-                val handledSlots = visibleLayers.filter { it.drawableResId != null }.mapNotNull { it.spec?.domainSlot }.toSet()
-                // When 2D layers are active, TRINKET and WEAPON are rendered at their proper zIndex in the layer stack Box,
-                // so we don't render them in the underlying base avatar canvas.
-                gear.filterKeys { it !in handledSlots && it != ItemSlot.TRINKET && it != ItemSlot.WEAPON }
-            }
+            // Mixed Interleaved Pipeline: Render each entry in exact orientation-aware zIndex order
+            val raceBuild = appearance.race.build()
 
             Box(modifier = Modifier.fillMaxSize()) {
-                // Base canvas avatar (body, face, hair) with body depth parallax and region masking
-                val bodyDepth = PaperDollLayerOrder.BODY_BASE.parallaxDepth()
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .graphicsLayer {
-                            translationX = tilt.x * bodyDepth * 14f * density
-                            translationY = tilt.y * bodyDepth * 14f * density
-                        }
-                ) {
-                    CharacterAvatar(
-                        clazz = clazz,
-                        gear = unhandledCanvasGear,
-                        appearance = appearance,
-                        modifier = Modifier.fillMaxSize(),
-                        showClassOutfit = showClassOutfit,
-                        facingBack = facingBack,
-                        animation = animation,
-                        expression = expression,
-                        detail = detail,
-                        enableBreathing = false,
-                        hiddenRegions = hiddenBodyRegions
-                    )
-                }
-
-                // Render each resolved 2D layer with independent 3D parallax depth, dyes, and race-proportional scaling
-                val raceBuild = appearance.race.build()
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .graphicsLayer {
-                            scaleX = raceBuild.width
-                            scaleY = raceBuild.height
-                            transformOrigin = TransformOrigin(0.5f, 0.9f)
-                        }
-                ) {
-                    visibleLayers.forEach { layer ->
-                        if (layer.drawableResId != null) {
-                            val isEquipTarget = equipAnimationState?.equippedSlot?.let {
-                                layer.spec?.domainSlot == it
-                            } ?: false
-
-                            val layerAlpha by animateFloatAsState(
-                                targetValue = 1f,
-                                animationSpec = spring(),
-                                label = "layerAlpha_${layer.order.name}"
-                            )
-
-                            val depth = layer.order.parallaxDepth()
-                            val isCapeOrWings = layer.order == PaperDollLayerOrder.GEAR_BACK
-                            val colorFilter = layer.dye.tintColor?.let { tint ->
-                                ColorFilter.tint(tint, BlendMode.SrcAtop)
-                            }
-
-                            Image(
-                                painter = painterResource(id = layer.drawableResId),
-                                contentDescription = null,
-                                contentScale = ContentScale.Fit,
-                                colorFilter = colorFilter,
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .alpha(layerAlpha)
-                                    .scale(if (isEquipTarget) 1.04f else 1f)
-                                    .graphicsLayer {
-                                        translationX = (tilt.x * depth * 14f + if (isCapeOrWings) capeFlutter else 0f) * density
-                                        translationY = (tilt.y * depth * 14f) * density
-                                    }
-                            )
-                        } else if (layer.visualSlot == PaperDollVisualSlot.TRINKET && layer.item != null) {
-                            // Foreground Trinket Canvas Overlay (rendered strictly after GEAR_TORSO at GEAR_TRINKET z-index 11)
-                            if (!facingBack) {
-                                val depth = PaperDollLayerOrder.GEAR_TRINKET.parallaxDepth()
-                                Canvas(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .graphicsLayer {
-                                            translationX = (tilt.x * depth * 14f) * density
-                                            translationY = (tilt.y * depth * 14f) * density
-                                        }
-                                ) {
-                                    val frame = buildAvatarFrame(size.width / 100f, mapOf(ItemSlot.TRINKET to layer.item))
-                                    val pose = calculatePose(animation, frame.phase, frame.u)
-                                    withTransform({
-                                        translate(pose.bodyOffset.x, pose.bodyOffset.y)
-                                    }) {
-                                        drawTrinketLayer(frame)
-                                    }
-                                }
-                            }
-                        } else if (layer.visualSlot == PaperDollVisualSlot.WEAPON && layer.item != null) {
-                            // Foreground Weapon Canvas Overlay (rendered strictly after GEAR_TRINKET and GEAR_TORSO at GEAR_WEAPON z-index 12)
-                            val depth = PaperDollLayerOrder.GEAR_WEAPON.parallaxDepth()
+                passPlan.entries.forEach { entry ->
+                    when (entry) {
+                        is PaperDollRenderEntry.AvatarBackdrop -> {
+                            val bgDepth = PaperDollLayerOrder.FX_AURA_BACK.parallaxDepth()
                             Canvas(
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .graphicsLayer {
-                                        translationX = (tilt.x * depth * 14f) * density
-                                        translationY = (tilt.y * depth * 14f) * density
+                                        translationX = tilt.x * bgDepth * 14f * density
+                                        translationY = tilt.y * bgDepth * 14f * density
                                     }
                             ) {
-                                val frame = buildAvatarFrame(size.width / 100f, mapOf(ItemSlot.WEAPON to layer.item))
-                                val pose = calculatePose(animation, frame.phase, frame.u)
-                                if (pose.prop == null) {
-                                    drawWeaponLayer(frame, pose)
+                                val frame = AvatarFrame(
+                                    u = size.width / 100f,
+                                    cls = clazz,
+                                    look = lookFor(clazz),
+                                    gear = orientationGear,
+                                    costume = showClassOutfit,
+                                    highlightMuscles = emptySet(),
+                                    facingBack = facingBack,
+                                    appearance = appearance,
+                                    expression = expression,
+                                    detail = detail,
+                                    phase = animPhase,
+                                    hiddenRegions = passPlan.hiddenBodyRegions
+                                )
+                                val pose = calculatePose(animation, animPhase, frame.u)
+                                with(AvatarPainter) {
+                                    drawBackdrop(frame, pose, tilt = tilt)
+                                }
+                            }
+                        }
+                        is PaperDollRenderEntry.BodyBase -> {
+                            val bodyDepth = PaperDollLayerOrder.BODY_BASE.parallaxDepth()
+                            Canvas(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .graphicsLayer {
+                                        translationX = tilt.x * bodyDepth * 14f * density
+                                        translationY = tilt.y * bodyDepth * 14f * density
+                                    }
+                            ) {
+                                val frame = AvatarFrame(
+                                    u = size.width / 100f,
+                                    cls = clazz,
+                                    look = lookFor(clazz),
+                                    gear = orientationGear,
+                                    costume = showClassOutfit,
+                                    highlightMuscles = emptySet(),
+                                    facingBack = facingBack,
+                                    appearance = appearance,
+                                    expression = expression,
+                                    detail = detail,
+                                    phase = animPhase,
+                                    hiddenRegions = passPlan.hiddenBodyRegions
+                                )
+                                val pose = calculatePose(animation, animPhase, frame.u)
+                                with(AvatarPainter) {
+                                    drawBodyBase(frame, pose, tilt = tilt)
+                                }
+                            }
+                        }
+                        is PaperDollRenderEntry.DrawableLayer -> {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .graphicsLayer {
+                                        scaleX = raceBuild.width
+                                        scaleY = raceBuild.height
+                                        transformOrigin = TransformOrigin(0.5f, 0.9f)
+                                    }
+                            ) {
+                                RenderPaperDollLayer(
+                                    layer = entry.layer,
+                                    tilt = tilt,
+                                    capeFlutter = capeFlutter,
+                                    equipAnimationState = equipAnimationState
+                                )
+                            }
+                        }
+                        is PaperDollRenderEntry.CanvasFallbackSlot -> {
+                            val depth = entry.spec.layerOrder.parallaxDepth()
+                            Canvas(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .graphicsLayer {
+                                        translationX = tilt.x * depth * 14f * density
+                                        translationY = tilt.y * depth * 14f * density
+                                    }
+                            ) {
+                                val frame = AvatarFrame(
+                                    u = size.width / 100f,
+                                    cls = clazz,
+                                    look = lookFor(clazz),
+                                    gear = orientationGear,
+                                    costume = false,
+                                    highlightMuscles = emptySet(),
+                                    facingBack = facingBack,
+                                    appearance = appearance,
+                                    expression = expression,
+                                    detail = detail,
+                                    phase = animPhase,
+                                    hiddenRegions = passPlan.hiddenBodyRegions
+                                )
+                                val pose = calculatePose(animation, animPhase, frame.u)
+                                with(AvatarPainter) {
+                                    drawSlotEquipment(entry.slot, frame, pose, tilt = tilt)
                                 }
                             }
                         }
@@ -334,4 +291,54 @@ fun PaperDollLayerRenderer(
             }
         }
     }
+}
+
+/**
+ * Renders an individual 2D paper doll layer sprite with independent 3D parallax depth, dye tinting, and flutter.
+ */
+@Composable
+private fun RenderPaperDollLayer(
+    layer: ResolvedPaperDollLayer,
+    tilt: androidx.compose.ui.geometry.Offset,
+    capeFlutter: Float,
+    equipAnimationState: EquipAnimationState?
+) {
+    val isEquipTarget = equipAnimationState?.equippedSlot?.let {
+        layer.spec?.domainSlot == it
+    } ?: false
+
+    val layerAlpha by animateFloatAsState(
+        targetValue = 1f,
+        animationSpec = spring(),
+        label = "layerAlpha_${layer.order.name}"
+    )
+
+    val depth = layer.order.parallaxDepth()
+    val isCapeOrWings = shouldFlutterBackWearable(layer.item)
+    val colorFilter = layer.dye.tintColor?.let { tint ->
+        ColorFilter.tint(tint, BlendMode.SrcAtop)
+    }
+
+    Image(
+        painter = painterResource(id = layer.drawableResId),
+        contentDescription = null,
+        contentScale = ContentScale.Fit,
+        colorFilter = colorFilter,
+        modifier = Modifier
+            .fillMaxSize()
+            .alpha(layerAlpha)
+            .scale(if (isEquipTarget) 1.04f else 1f)
+            .graphicsLayer {
+                translationX = (tilt.x * depth * 14f + if (isCapeOrWings) capeFlutter else 0f) * density
+                translationY = (tilt.y * depth * 14f) * density
+            }
+    )
+}
+
+/** Only flexible cloth/wing assets receive lateral flutter; rigid back gear stays attached. */
+internal fun shouldFlutterBackWearable(item: ItemEntity?): Boolean {
+    val name = item?.name?.lowercase().orEmpty()
+    val style = item?.style?.lowercase().orEmpty()
+    return name.contains("cape") || name.contains("cloak") || name.contains("wing") ||
+        style == "cape" || style == "cloak" || style == "wings"
 }

@@ -4,70 +4,16 @@
     android:viewportWidth="500"
     android:viewportHeight="600">
 
-    <!-- Hunter's Quiver (Back layer Z: 02, Behind Body) -->
-    <!-- Quiver Body Cylinder (slung diagonally across back) -->
-    <path
-        android:fillColor="#3E2723"
-        android:pathData="M275,185 L320,170 L285,410 L245,415 Z" />
+    <!-- Narrow shoulder quiver; avoids covering the head, torso, or legs. -->
+    <path android:fillColor="#3E2723" android:pathData="M292,224 L326,216 L305,390 L274,394 Z" />
+    <path android:fillColor="#6D4C41" android:pathData="M297,226 L321,220 L301,384 L280,388 Z" />
+    <path android:fillColor="#F59E0B" android:pathData="M289,221 L329,211 L331,221 L292,231 Z M272,389 L307,384 L306,396 L274,400 Z" />
 
-    <!-- Leather Body Shading & Trim -->
-    <path
-        android:fillColor="#5D4037"
-        android:pathData="M278,188 L315,175 L282,405 L250,410 Z" />
-    <path
-        android:fillColor="#8D6E63"
-        android:pathData="M285,185 L305,178 L275,405 L260,408 Z" />
-
-    <!-- Quiver Lip Band (Gold/Brass) -->
-    <path
-        android:fillColor="#D97706"
-        android:pathData="M272,185 L322,168 L325,178 L275,195 Z" />
-    <path
-        android:fillColor="#FBBF24"
-        android:pathData="M275,186 L320,171 L322,176 L277,191 Z" />
-
-    <!-- Quiver Bottom Cap -->
-    <path
-        android:fillColor="#D97706"
-        android:pathData="M243,412 L287,407 L285,420 L245,423 Z" />
-
-    <!-- Arrow Shafts extending upward past the right shoulder -->
-    <!-- Arrow 1 (Left) -->
-    <path
-        android:strokeColor="#A1887F"
-        android:strokeWidth="4"
-        android:strokeLineCap="round"
-        android:pathData="M285,185 L305,115" />
-    <!-- Fletching 1 (Red/White Feathers) -->
-    <path
-        android:fillColor="#DC2626"
-        android:pathData="M305,115 L297,125 L305,140 L307,130 Z M305,115 L313,125 L305,140 L303,130 Z" />
-    <path
-        android:fillColor="#FEE2E2"
-        android:pathData="M305,118 L301,126 L305,134 Z" />
-
-    <!-- Arrow 2 (Center) -->
-    <path
-        android:strokeColor="#A1887F"
-        android:strokeWidth="4"
-        android:strokeLineCap="round"
-        android:pathData="M298,180 L322,100" />
-    <!-- Fletching 2 (Green/Gold Feathers) -->
-    <path
-        android:fillColor="#059669"
-        android:pathData="M322,100 L313,112 L322,128 L324,118 Z M322,100 L331,112 L322,128 L320,118 Z" />
-    <path
-        android:fillColor="#FEF08A"
-        android:pathData="M322,103 L318,112 L322,122 Z" />
-
-    <!-- Arrow 3 (Right) -->
-    <path
-        android:strokeColor="#A1887F"
-        android:strokeWidth="4"
-        android:strokeLineCap="round"
-        android:pathData="M310,175 L338,110" />
-    <!-- Fletching 3 (Red/White Feathers) -->
-    <path
-        android:fillColor="#DC2626"
-        android:pathData="M338,110 L330,122 L338,136 L340,126 Z M338,110 L346,122 L338,136 L336,126 Z" />
+    <!-- Three short, parallel arrows with matching colored fletching. -->
+    <path android:strokeColor="#A1887F" android:strokeWidth="3" android:strokeLineCap="round" android:pathData="M299,224 L310,158" />
+    <path android:strokeColor="#A1887F" android:strokeWidth="3" android:strokeLineCap="round" android:pathData="M309,221 L322,148" />
+    <path android:strokeColor="#A1887F" android:strokeWidth="3" android:strokeLineCap="round" android:pathData="M318,219 L335,158" />
+    <path android:fillColor="#DC2626" android:pathData="M310,155 L303,166 L311,176 L313,165 Z M335,155 L328,166 L335,176 L338,165 Z" />
+    <path android:fillColor="#10B981" android:pathData="M322,145 L315,157 L323,168 L325,156 Z" />
+    <path android:strokeColor="#5D4037" android:strokeWidth="8" android:strokeLineCap="round" android:pathData="M274,250 L330,357" />
 </vector>

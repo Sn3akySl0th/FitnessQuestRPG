@@ -1,0 +1,25 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="500dp"
+    android:height="600dp"
+    android:viewportWidth="500"
+    android:viewportHeight="600">
+
+    <!-- Front presentation: a full-size heater shield actively held at the left arm. -->
+    <path
+        android:fillColor="#1E293B"
+        android:pathData="M82,258 L210,258 L206,338 Q201,418 146,452 Q91,418 86,338 Z" />
+    <path
+        android:fillColor="#64748B"
+        android:pathData="M89,266 L203,266 L199,337 Q194,408 146,440 Q98,408 93,337 Z" />
+    <path
+        android:strokeColor="#94A3B8"
+        android:strokeWidth="5"
+        android:strokeLineJoin="round"
+        android:pathData="M89,266 L203,266 L199,337 Q194,408 146,440 Q98,408 93,337 Z" />
+    <path
+        android:fillColor="#F59E0B"
+        android:pathData="M140,278 L152,278 L152,414 L140,414 Z M108,323 L184,323 L184,335 L108,335 Z" />
+    <path
+        android:fillColor="#CBD5E1"
+        android:pathData="M132,329 A14,14 0 1,1 160,329 A14,14 0 1,1 132,329 Z" />
+</vector>

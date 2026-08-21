@@ -229,8 +229,8 @@ class GearSanitizationAndVisualsTest {
         assertEquals(CoverageProfile.SLEEVED_TUNIC, vestSpec.coverageProfile)
         assertTrue(vestSpec.coveredRegions.contains(BodyRegion.TORSO))
         assertTrue(vestSpec.coveredRegions.contains(BodyRegion.HIPS))
-        assertTrue(vestSpec.coveredRegions.contains(BodyRegion.LEFT_UPPER_ARM))
-        assertTrue(vestSpec.coveredRegions.contains(BodyRegion.RIGHT_UPPER_ARM))
+        assertFalse(vestSpec.coveredRegions.contains(BodyRegion.LEFT_UPPER_ARM))
+        assertFalse(vestSpec.coveredRegions.contains(BodyRegion.RIGHT_UPPER_ARM))
         assertTrue(vestSpec.hiddenVisualSlots.isEmpty())
 
         val robe = ItemEntity(id = 2L, name = "Apprentice Robes", slot = ItemSlot.CHEST, style = ItemStyle.ROBE, tier = 2, emoji = "🥋", price = 100)

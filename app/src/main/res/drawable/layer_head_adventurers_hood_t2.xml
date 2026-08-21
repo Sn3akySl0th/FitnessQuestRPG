@@ -4,30 +4,30 @@
     android:viewportWidth="500"
     android:viewportHeight="600">
 
-    <!-- Tier 2: Adventurer's Hood (Head layer: fits head & neck Y=60 to 225, X=170 to 330) -->
-    <!-- Back / Inner Shadow -->
-    <path
-        android:fillColor="#064E3B"
-        android:pathData="M172,190 Q168,66 250,56 Q332,66 328,190 Q250,210 172,190 Z" />
-
-    <!-- Hood Outer Drape -->
+    <!-- Tier 2: Adventurer's Hood (Head layer: Cowl framing face without obscuring features) -->
+    <!-- Outer Cowl Rim (Encloses head perimeter leaving central face aperture clear) -->
     <path
         android:fillColor="#047857"
-        android:pathData="M174,180 Q170,60 250,52 Q330,60 326,180 Q305,200 250,204 Q195,200 174,180 Z" />
+        android:pathData="M170,185 Q168,60 250,52 Q332,60 330,185 L310,175 Q314,86 250,80 Q186,86 190,175 Z" />
 
-    <!-- Hood Peak / Fold Highlight -->
+    <!-- Hood Inner Shading -->
+    <path
+        android:fillColor="#064E3B"
+        android:pathData="M174,180 Q172,66 250,58 Q328,66 326,180 L312,175 Q316,90 250,84 Q184,90 188,175 Z" />
+
+    <!-- Hood Peak Top Fold -->
     <path
         android:fillColor="#10B981"
         android:pathData="M210,80 Q250,58 290,80 Q270,70 250,68 Q230,70 210,80 Z" />
 
-    <!-- Face Opening Trim / Golden Accent -->
+    <!-- Face Opening Gold Trim Accent -->
     <path
         android:strokeColor="#FBBF24"
         android:strokeWidth="3.5"
         android:strokeLineCap="round"
         android:pathData="M188,175 Q184,88 250,80 Q316,88 312,175" />
 
-    <!-- Neck / Collar Wrap -->
+    <!-- Neck / Collar Wrap Wrap -->
     <path
         android:fillColor="#065F46"
         android:pathData="M170,185 L190,222 Q250,228 310,222 L330,185 Q250,205 170,185 Z" />
@@ -38,5 +38,5 @@
         android:pathData="M250,214 m-6,0 a6,6 0 1,0 12,0 a6,6 0 1,0 -12,0" />
     <path
         android:fillColor="#F59E0B"
-        android:pathData="M250,214 m-3,0 a3,3 0 1,0 6,0 a3,3 0 1,0 -6,0" />
+        android:pathData="M250,214 m-3,0 a3,3 0 1,0 6,0 a3,3 0 1,0 -3,0" />
 </vector>

@@ -4,47 +4,34 @@
     android:viewportWidth="500"
     android:viewportHeight="600">
 
-    <!-- Tier 1: Training Shortbow (Hand=(357.5, 390), Bow Stave Y=270-510, X=357.5 to 430) -->
-    <!-- Wooden Bow Stave Curve -->
+    <!-- Tier 1: Training Shortbow (raised to the actual neutral hand center at 357.5,335) -->
     <path
         android:strokeColor="#78350F"
-        android:strokeWidth="5"
+        android:strokeWidth="5.5"
         android:strokeLineCap="round"
-        android:pathData="M365,270 Q435,390 365,510" />
+        android:pathData="M315,205 Q350,270 357.5,335 Q350,400 315,445" />
 
     <!-- Bow Stave Inner Highlight -->
     <path
         android:strokeColor="#B45309"
         android:strokeWidth="2.5"
         android:strokeLineCap="round"
-        android:pathData="M366,276 Q431,390 366,504" />
+        android:pathData="M316,211 Q348,272 356,335 Q348,398 316,439" />
 
     <!-- Bowstring -->
     <path
         android:strokeColor="#E2E8F0"
-        android:strokeWidth="1.5"
-        android:pathData="M365,270 L365,510" />
+        android:strokeWidth="1.8"
+        android:pathData="M315,205 L315,445" />
 
-    <!-- Leather Handle Grip at Hand -->
+    <!-- Leather Handle Grip Centered on Hand (357.5, 335) -->
     <path
         android:fillColor="#1E293B"
-        android:pathData="M388,370 L402,370 L402,410 L388,410 Z" />
+        android:pathData="M351.5,320 L363.5,320 L363.5,350 L351.5,350 Z" />
     <path
         android:strokeColor="#F59E0B"
         android:strokeWidth="1.5"
-        android:pathData="M388,378 L402,382 M388,390 L402,394 M388,402 L402,406" />
+        android:pathData="M351.5,327 L363.5,331 M351.5,335 L363.5,339 M351.5,343 L363.5,347" />
 
-    <!-- Nocked Training Arrow -->
-    <path
-        android:strokeColor="#94A3B8"
-        android:strokeWidth="2"
-        android:pathData="M335,390 L395,390" />
-    <!-- Arrowhead -->
-    <path
-        android:fillColor="#64748B"
-        android:pathData="M335,390 L345,385 L345,395 Z" />
-    <!-- Arrow Fletching (Green feathers) -->
-    <path
-        android:fillColor="#10B981"
-        android:pathData="M388,390 L398,383 L398,390 Z M388,390 L398,397 L398,390 Z" />
+    <!-- No nocked arrow in the neutral paper-doll pose: it previously crossed the thighs. -->
 </vector>

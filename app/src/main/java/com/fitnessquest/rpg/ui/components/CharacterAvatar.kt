@@ -32,6 +32,11 @@ import com.fitnessquest.rpg.domain.CharacterRace
 import com.fitnessquest.rpg.domain.build
 import com.fitnessquest.rpg.domain.ItemStyle
 import com.fitnessquest.rpg.domain.visuals.BodyRegion
+import com.fitnessquest.rpg.domain.visuals.ProceduralMaterialFinish
+import com.fitnessquest.rpg.domain.visuals.ProceduralOrnament
+import com.fitnessquest.rpg.domain.visuals.ProceduralSilhouette
+import com.fitnessquest.rpg.domain.visuals.ProceduralTrim
+import com.fitnessquest.rpg.domain.visuals.ProceduralVisualSignature
 import com.fitnessquest.rpg.ui.effects.rememberDeviceTilt
 import kotlin.math.cos
 import kotlin.math.sin
@@ -113,7 +118,7 @@ data class GearPalette(
 )
 
 /** How a headgear item is shaped on the hero. */
-enum class HeadgearShape { HELM, HAT, HOOD, CAP }
+enum class HeadgearShape { HELM, HAT, HOOD, CROWN, CAP }
 
 /**
  * Single source of truth for what equipment looks like on the avatar.
@@ -127,30 +132,35 @@ object GearVisuals {
     private val ArcaneGlow = Color(0xFFC9A8FF)
     private val ShadowGlow = Color(0xFF9C7BE3)
 
-    fun palette(item: ItemEntity): GearPalette = when (item.style) {
-        // Cloth & arcane: robes shouldn't look like sheet metal.
-        ItemStyle.ROBE -> when (item.tier) {
-            1, 2 -> GearPalette(Color(0xFF7C5CB8), Color(0xFF54418C))
-            3 -> GearPalette(Color(0xFF4A6FD8), Color(0xFF3450A8))
-            else -> GearPalette(Color(0xFF8A5CE8), Color(0xFF5C36B0), ArcaneGlow)
-        }
-        // Leather & stealth: earthy up to shadowy midnight.
-        ItemStyle.LIGHT -> when (item.tier) {
-            1 -> GearPalette(Color(0xFF8B6B4A), Color(0xFF6B5138))
-            2 -> GearPalette(Color(0xFF6E8B57), Color(0xFF4E6B3E))
-            3 -> GearPalette(Color(0xFF5A6B78), Color(0xFF3E4C58))
-            else -> GearPalette(Color(0xFF3A3D5C), Color(0xFF282A44), ShadowGlow)
-        }
-        // Plate & everything else: leather -> iron -> steel -> gold.
-        else -> when (item.tier) {
-            1 -> GearPalette(Color(0xFF8B6B4A), Color(0xFF6B5138))
-            2 -> GearPalette(Color(0xFF9AA3AD), Color(0xFF767E87))
-            3 -> GearPalette(Color(0xFF8FA8C8), Color(0xFF6E88A8))
-            else -> GearPalette(Color(0xFFF0C040), Color(0xFFC89B26), LegendaryGlow)
-        }
+    fun palette(item: ItemEntity): GearPalette {
+        val desc = com.fitnessquest.rpg.domain.visuals.EquipmentVisualRegistry.resolveVisualDescriptor(item)
+        return GearPalette(desc.primaryColor, desc.secondaryColor, desc.glowColor)
+    }
+
+    fun signature(item: ItemEntity): ProceduralVisualSignature =
+        com.fitnessquest.rpg.domain.visuals.EquipmentVisualRegistry
+            .resolveVisualDescriptor(item)
+            .proceduralSignature
+
+    fun accent(item: ItemEntity): Color {
+        val descriptor = com.fitnessquest.rpg.domain.visuals.EquipmentVisualRegistry.resolveVisualDescriptor(item)
+        descriptor.accentColor?.let { return it }
+        return listOf(
+            Color(0xFFD97706), // amber
+            Color(0xFF06B6D4), // cyan
+            Color(0xFF7C3AED), // violet
+            Color(0xFF16A34A), // emerald
+            Color(0xFFDC2626), // crimson
+            Color(0xFFE2E8F0)  // silver
+        )[descriptor.proceduralSignature.accentFamily]
     }
 
     fun headgearShape(item: ItemEntity): HeadgearShape = when {
+        item.name.contains("hood", ignoreCase = true) || item.name.contains("cowl", ignoreCase = true) ||
+            item.name.contains("coif", ignoreCase = true) -> HeadgearShape.HOOD
+        item.name.contains("crown", ignoreCase = true) || item.name.contains("circlet", ignoreCase = true) -> HeadgearShape.CROWN
+        item.name.contains("hat", ignoreCase = true) -> HeadgearShape.HAT
+        item.name.contains("helm", ignoreCase = true) || item.name.contains("helmet", ignoreCase = true) -> HeadgearShape.HELM
         item.style == ItemStyle.PLATE -> HeadgearShape.HELM
         (item.classAffinity == CharacterClass.NECROMANCER) ||
             (item.classAffinity == CharacterClass.THIEF) ||
@@ -422,12 +432,28 @@ internal class AvatarFrame(
     fun hasHighlight(vararg muscles: String): Boolean =
         muscles.any { it.lowercase() in expandedHighlights }
 
+    /**
+     * Preview appearances commonly specify only a race. In that case, use a
+     * race-appropriate base tone instead of silently retaining human skin on
+     * the back/body pass. Explicitly customized skin colors remain untouched.
+     */
+    private val resolvedSkinColor: Color
+        get() = if (appearance.skinColor != DefaultAppearance.skinColor) {
+            appearance.skinColor
+        } else {
+            when (appearance.race) {
+                CharacterRace.ORC -> Color(0xFF6F9358)
+                CharacterRace.UNDEAD -> Color(0xFF81907A)
+                else -> appearance.skinColor
+            }
+        }
+
     fun skinColor(vararg muscles: String): Color {
-        return if (hasHighlight(*muscles)) Color(0xFFE57373) else appearance.skinColor
+        return if (hasHighlight(*muscles)) Color(0xFFE57373) else resolvedSkinColor
     }
 
     fun skinShade(vararg muscles: String): Color {
-        val sc = appearance.skinColor
+        val sc = resolvedSkinColor
         val baseShade = sc.copy(
             red = (sc.red * 0.88f).coerceIn(0f, 1f),
             green = (sc.green * 0.84f).coerceIn(0f, 1f),
@@ -438,22 +464,211 @@ internal class AvatarFrame(
 }
 
 internal object AvatarPainter {
+    private fun androidx.compose.ui.graphics.drawscope.DrawTransform.applyFocusTransform(
+        focus: AvatarFocus,
+        u: Float,
+        width: Float,
+        height: Float
+    ) {
+        when (focus) {
+            AvatarFocus.LOWER_BODY -> {
+                scale(scaleX = 1.6f, scaleY = 1.6f, pivot = Offset(width / 2f, height))
+                translate(left = 0f, top = -15f * u)
+            }
+            AvatarFocus.PORTRAIT -> {
+                scale(scaleX = 1.85f, scaleY = 1.85f, pivot = Offset(width / 2f, 40f * u))
+                translate(left = 0f, top = 25f * u)
+            }
+            AvatarFocus.FULL_BODY -> Unit
+        }
+    }
+
+    /**
+     * Renders background aura, shadow, and class silhouette.
+     * Guaranteed to render BEFORE front capes and base anatomy in the interleaved stack.
+     */
+    fun DrawScope.drawBackdrop(
+        frame: AvatarFrame,
+        pose: AvatarPose,
+        focus: AvatarFocus = AvatarFocus.FULL_BODY,
+        tilt: Offset = Offset.Zero
+    ) {
+        clipRect {
+            withTransform({
+                applyFocusTransform(focus, frame.u, size.width, size.height)
+            }) {
+                val bgShift = Offset(tilt.x * 3f * frame.u, tilt.y * 3f * frame.u)
+                translate(bgShift.x, bgShift.y) {
+                    drawAuraLayer(frame)
+                    drawShadowLayer(frame)
+                    drawClassSilhouetteLayer(frame)
+                }
+            }
+        }
+    }
+
+    /**
+     * Renders base humanoid/druid anatomy (body, face, hair, arms, underwear) and companions exactly once.
+     * Excludes all gear layers (weapons, chest armor, helms, gauntlets, pants, boots, trinkets) and backdrop.
+     */
+    fun DrawScope.drawBodyBase(
+        frame: AvatarFrame,
+        pose: AvatarPose,
+        focus: AvatarFocus = AvatarFocus.FULL_BODY,
+        tilt: Offset = Offset.Zero
+    ) {
+        clipRect {
+            withTransform({
+                applyFocusTransform(focus, frame.u, size.width, size.height)
+            }) {
+                val bodyShift = Offset(tilt.x * 12f * frame.u, tilt.y * 12f * frame.u)
+                translate(bodyShift.x, bodyShift.y) {
+                    if (frame.cls == CharacterClass.SUMMONER) {
+                        when (frame.appearance.druidForm) {
+                            "SHIVA" -> drawShivaCompanion(frame)
+                            "BAHAMUT" -> drawBahamutCompanion(frame)
+                            "IFRIT" -> drawIfritCompanion(frame)
+                            else -> {
+                                if ((frame.weapon?.tier ?: 1) >= 4) drawBahamutCompanion(frame)
+                                else if ((frame.weapon?.tier ?: 1) >= 2) drawShivaCompanion(frame)
+                                else drawIfritCompanion(frame)
+                            }
+                        }
+                    }
+                    if (frame.cls == CharacterClass.NECROMANCER) {
+                        when (frame.appearance.druidForm) {
+                            "ARMY" -> drawUndeadArmyCompanion(frame)
+                            "SKELETON" -> drawSkeletonCompanion(frame)
+                            else -> {
+                                if ((frame.weapon?.tier ?: 1) >= 3) drawUndeadArmyCompanion(frame)
+                                else drawSkeletonCompanion(frame)
+                            }
+                        }
+                    }
+                    if (frame.cls == CharacterClass.DRAGOON && frame.appearance.druidForm != "NONE") {
+                        drawWyvernCompanion(frame)
+                    }
+                    if (frame.cls == CharacterClass.RANGER) {
+                        when (frame.appearance.druidForm) {
+                            "FALCON" -> drawHunterFalconCompanion(frame)
+                            "BEAR" -> drawHunterBearCompanion(frame)
+                            else -> drawHunterWolfCompanion(frame)
+                        }
+                    }
+
+                    when (frame.appearance.druidForm) {
+                        "BEAR" -> drawDireBearLayer(frame)
+                        "PANTHER" -> drawDirePantherLayer(frame)
+                        "TREANT" -> drawAncientTreantLayer(frame)
+                        "MOONKIN" -> drawCelestialMoonkinLayer(frame)
+                        "AVATAR" -> drawPrimalAvatarLayer(frame)
+                        else -> {
+                            val build = frame.appearance.race.build()
+                            withTransform({
+                                scale(
+                                    scaleX = build.width,
+                                    scaleY = build.height,
+                                    pivot = Offset(size.width / 2f, 108f * frame.u)
+                                )
+                            }) {
+                                drawBareLowerBody(frame, pose)
+
+                                withTransform({
+                                    translate(pose.bodyOffset.x, pose.bodyOffset.y)
+                                }) {
+                                    drawNeckLayer(frame)
+                                    drawTorsoLayer(frame)
+                                    drawRaceBodyAccents(frame)
+                                }
+
+                                drawBareArms(frame, pose)
+                                drawRaceArmAccents(frame, pose)
+
+                                withTransform({
+                                    translate(pose.headOffset.x, pose.headOffset.y)
+                                }) {
+                                    drawHeadBase(frame)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Renders ONLY the procedural Canvas equipment for a single equipment slot.
+     * Guaranteed zero base anatomy redrawing (no face, body, arms, or legs skin).
+     */
+    fun DrawScope.drawSlotEquipment(
+        slot: ItemSlot,
+        frame: AvatarFrame,
+        pose: AvatarPose,
+        focus: AvatarFocus = AvatarFocus.FULL_BODY,
+        tilt: Offset = Offset.Zero
+    ) {
+        clipRect {
+            withTransform({
+                applyFocusTransform(focus, frame.u, size.width, size.height)
+            }) {
+                val bodyShift = Offset(tilt.x * 12f * frame.u, tilt.y * 12f * frame.u)
+                translate(bodyShift.x, bodyShift.y) {
+                    val build = frame.appearance.race.build()
+                    withTransform({
+                        scale(
+                            scaleX = build.width,
+                            scaleY = build.height,
+                            pivot = Offset(size.width / 2f, 108f * frame.u)
+                        )
+                    }) {
+                        when (slot) {
+                            ItemSlot.LEGS -> drawLegsGear(frame, pose)
+                            ItemSlot.FEET -> drawFeetGear(frame, pose)
+                            ItemSlot.CHEST -> {
+                                withTransform({
+                                    translate(pose.bodyOffset.x, pose.bodyOffset.y)
+                                }) {
+                                    drawChestGarmentLayer(frame)
+                                }
+                                drawChestArmArmor(frame, pose)
+                            }
+                            ItemSlot.HANDS -> drawHandsGear(frame, pose)
+                            ItemSlot.HEAD -> {
+                                withTransform({
+                                    translate(pose.headOffset.x, pose.headOffset.y)
+                                }) {
+                                    drawHeadgearOnly(frame)
+                                }
+                            }
+                            ItemSlot.TRINKET -> {
+                                withTransform({
+                                    translate(pose.bodyOffset.x, pose.bodyOffset.y)
+                                }) {
+                                    drawTrinketLayer(frame)
+                                }
+                            }
+                            ItemSlot.WEAPON -> {
+                                if (pose.prop == null) {
+                                    drawWeaponLayer(frame, pose)
+                                } else {
+                                    drawPropLayer(frame, pose)
+                                }
+                            }
+                            else -> Unit
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     fun DrawScope.draw(frame: AvatarFrame, focus: AvatarFocus, tilt: Offset = Offset.Zero, animation: HeroAnimation = HeroAnimation.IDLE) {
         val pose = calculatePose(animation, frame.phase, frame.u)
 
         clipRect {
             withTransform({
-                when (focus) {
-                    AvatarFocus.LOWER_BODY -> {
-                        scale(scaleX = 1.6f, scaleY = 1.6f, pivot = Offset(size.width / 2f, size.height))
-                        translate(left = 0f, top = -15f * frame.u)
-                    }
-                    AvatarFocus.PORTRAIT -> {
-                        scale(scaleX = 1.85f, scaleY = 1.85f, pivot = Offset(size.width / 2f, 40f * frame.u))
-                        translate(left = 0f, top = 25f * frame.u)
-                    }
-                    AvatarFocus.FULL_BODY -> Unit
-                }
+                applyFocusTransform(focus, frame.u, size.width, size.height)
             }) {
                 val bgShift = Offset(tilt.x * 3f * frame.u, tilt.y * 3f * frame.u)
                 val bodyShift = Offset(tilt.x * 12f * frame.u, tilt.y * 12f * frame.u)
@@ -640,10 +855,16 @@ private fun DrawScope.drawClassSilhouetteLayer(f: AvatarFrame) {
         }
         CharacterClass.PALADIN -> {
             drawOval(
-                Color(0xFFF5E6A8).copy(alpha = 0.30f),
+                Color(0xFFFDE68A).copy(alpha = 0.18f),
+                topLeft = f.p(30.5f, 7.5f),
+                size = f.s(39f, 13f),
+                style = Stroke(width = 4.5f * f.u)
+            )
+            drawOval(
+                Color(0xFFFDE68A).copy(alpha = 0.82f),
                 topLeft = f.p(32f, 9f),
                 size = f.s(36f, 10f),
-                style = Stroke(width = 2.2f * f.u)
+                style = Stroke(width = 2.4f * f.u)
             )
         }
         CharacterClass.WHITE_MAGE -> {
@@ -719,11 +940,10 @@ private fun DrawScope.drawClassSilhouetteLayer(f: AvatarFrame) {
             drawCircle(Color(0xFF7CF0C0).copy(alpha = 0.16f), radius = 38f * f.u, center = f.p(50f, 58f))
             drawLine(Color(0xFF7CF0C0).copy(alpha = 0.28f), start = f.p(28f, 88f), end = f.p(72f, 88f), strokeWidth = 1.4f * f.u)
         }
-        else -> {}
     }
 }
 
-private fun DrawScope.drawArmsLayer(f: AvatarFrame, pose: AvatarPose) {
+internal fun DrawScope.drawBareArms(f: AvatarFrame, pose: AvatarPose) {
     val isBare = !f.costume && f.robeChest == null
 
     fun DrawScope.drawBareArmSegments(baseX: Float, isLeft: Boolean) {
@@ -735,7 +955,7 @@ private fun DrawScope.drawArmsLayer(f: AvatarFrame, pose: AvatarPose) {
             val forearmColor = f.skinColor("forearms")
             drawRoundRect(forearmColor, topLeft = f.p(baseX, 60f), size = f.s(11f, 16f), cornerRadius = CornerRadius(4f * f.u))
         }
-        
+
         // Upper Arm (Triceps, Biceps, Deltoid)
         if (!upperArmHidden) {
             val tricepColor = f.skinColor("triceps")
@@ -758,17 +978,11 @@ private fun DrawScope.drawArmsLayer(f: AvatarFrame, pose: AvatarPose) {
         if (!isBare) {
             val sleeve = if (f.costume) f.look.outfitDark else GearVisuals.palette(f.robeChest!!).dark
             drawRoundRect(sleeve, topLeft = f.p(23f, 46f), size = f.s(11f, 30f), cornerRadius = CornerRadius(5f * f.u))
+            if (f.robeChest != null && BodyRegion.LEFT_HAND !in f.hiddenRegions) {
+                drawCircle(f.skinColor("hands"), radius = 5f * f.u, center = f.p(28.5f, 78f))
+            }
         } else {
             drawBareArmSegments(23f, isLeft = true)
-        }
-        
-        f.hands?.let { item ->
-            val pal = GearVisuals.palette(item)
-            drawRoundRect(pal.main, topLeft = f.p(22.5f, 64f), size = f.s(12f, 12f), cornerRadius = CornerRadius(3f * f.u))
-            drawRect(pal.dark, topLeft = f.p(22.5f, 64f), size = f.s(12f, 3f))
-            pal.glow?.let { g ->
-                drawRect(g.copy(alpha = 0.85f), topLeft = f.p(22.5f, 67f), size = f.s(12f, 1.4f))
-            }
         }
     }
 
@@ -779,22 +993,124 @@ private fun DrawScope.drawArmsLayer(f: AvatarFrame, pose: AvatarPose) {
         if (!isBare) {
             val sleeve = if (f.costume) f.look.outfitDark else GearVisuals.palette(f.robeChest!!).dark
             drawRoundRect(sleeve, topLeft = f.p(66f, 46f), size = f.s(11f, 30f), cornerRadius = CornerRadius(5f * f.u))
+            if (f.robeChest != null && BodyRegion.RIGHT_HAND !in f.hiddenRegions) {
+                drawCircle(f.skinColor("hands"), radius = 5f * f.u, center = f.p(71.5f, 78f))
+            }
         } else {
             drawBareArmSegments(66f, isLeft = false)
-        }
-        
-        f.hands?.let { item ->
-            val pal = GearVisuals.palette(item)
-            drawRoundRect(pal.main, topLeft = f.p(65.5f, 64f), size = f.s(12f, 12f), cornerRadius = CornerRadius(3f * f.u))
-            drawRect(pal.dark, topLeft = f.p(65.5f, 64f), size = f.s(12f, 3f))
-            pal.glow?.let { g ->
-                drawRect(g.copy(alpha = 0.85f), topLeft = f.p(65.5f, 67f), size = f.s(12f, 1.4f))
-            }
         }
     }
 }
 
-private fun DrawScope.drawLowerBodyLayer(f: AvatarFrame, pose: AvatarPose) {
+internal fun DrawScope.drawHandsGear(f: AvatarFrame, pose: AvatarPose) {
+    val item = f.hands ?: return
+    val pal = GearVisuals.palette(item)
+    val signature = GearVisuals.signature(item)
+    val accent = GearVisuals.accent(item)
+
+    fun DrawScope.drawGloveDetails(baseX: Float) {
+        when (signature.trim) {
+            ProceduralTrim.PLAIN -> Unit
+            ProceduralTrim.BAND -> drawRect(accent, topLeft = f.p(baseX, 67f), size = f.s(12f, 1.2f))
+            ProceduralTrim.SPLIT -> drawLine(accent, f.p(baseX + 6f, 67f), f.p(baseX + 6f, 75f), 1f * f.u)
+            ProceduralTrim.CHEVRON -> {
+                drawLine(accent, f.p(baseX + 2f, 70f), f.p(baseX + 6f, 73f), 1f * f.u)
+                drawLine(accent, f.p(baseX + 6f, 73f), f.p(baseX + 10f, 70f), 1f * f.u)
+            }
+            ProceduralTrim.RUNIC -> for (x in listOf(3f, 6f, 9f)) {
+                drawCircle(accent, radius = 0.7f * f.u, center = f.p(baseX + x, 71f))
+            }
+        }
+        if (signature.ornament == ProceduralOrnament.GEM || signature.ornament == ProceduralOrnament.CREST) {
+            drawCircle(accent, radius = 1.2f * f.u, center = f.p(baseX + 6f, 70.5f))
+        }
+    }
+
+    withTransform({
+        translate(pose.leftArmOffset.x, pose.leftArmOffset.y)
+        rotate(pose.leftArmRotation, pivot = f.p(28f, 46f))
+    }) {
+        drawRoundRect(pal.main, topLeft = f.p(22.5f, 64f), size = f.s(12f, 12f), cornerRadius = CornerRadius(3f * f.u))
+        drawRect(pal.dark, topLeft = f.p(22.5f, 64f), size = f.s(12f, 3f))
+        if (f.facingBack) {
+            // Dorsal knuckle protector plate
+            drawRoundRect(pal.dark, topLeft = f.p(24f, 70f), size = f.s(9f, 4f), cornerRadius = CornerRadius(1.5f * f.u))
+        }
+        pal.glow?.let { g ->
+            drawRect(g.copy(alpha = 0.85f), topLeft = f.p(22.5f, 67f), size = f.s(12f, 1.4f))
+        }
+        drawGloveDetails(22.5f)
+    }
+
+    withTransform({
+        translate(pose.rightArmOffset.x, pose.rightArmOffset.y)
+        rotate(pose.rightArmRotation, pivot = f.p(71f, 46f))
+    }) {
+        drawRoundRect(pal.main, topLeft = f.p(65.5f, 64f), size = f.s(12f, 12f), cornerRadius = CornerRadius(3f * f.u))
+        drawRect(pal.dark, topLeft = f.p(65.5f, 64f), size = f.s(12f, 3f))
+        if (f.facingBack) {
+            // Dorsal knuckle protector plate
+            drawRoundRect(pal.dark, topLeft = f.p(67f, 70f), size = f.s(9f, 4f), cornerRadius = CornerRadius(1.5f * f.u))
+        }
+        pal.glow?.let { g ->
+            drawRect(g.copy(alpha = 0.85f), topLeft = f.p(65.5f, 67f), size = f.s(12f, 1.4f))
+        }
+        drawGloveDetails(65.5f)
+    }
+}
+
+private fun DrawScope.drawArmsLayer(f: AvatarFrame, pose: AvatarPose) {
+    drawBareArms(f, pose)
+    drawChestArmArmor(f, pose)
+    drawHandsGear(f, pose)
+}
+
+/** Chest-attached sleeves drawn over, rather than instead of, base anatomy. */
+internal fun DrawScope.drawChestArmArmor(f: AvatarFrame, pose: AvatarPose) {
+    val chest = f.chest?.takeIf { it.style == ItemStyle.PLATE || it.style == ItemStyle.LIGHT } ?: return
+    val pal = GearVisuals.palette(chest)
+
+    fun DrawScope.drawArmArmor(baseX: Float) {
+        if (chest.style == ItemStyle.LIGHT) {
+            // Short leather sleeves belong to the chest garment. Keep them in
+            // the same articulated arm transform in both orientations so a
+            // turn cannot leave the rear view with bare upper arms.
+            drawRoundRect(
+                pal.main,
+                topLeft = f.p(baseX - 1f, 46f),
+                size = f.s(11f, 14f),
+                cornerRadius = CornerRadius(3.5f * f.u)
+            )
+            drawRect(pal.dark, topLeft = f.p(baseX - 1f, 56.5f), size = f.s(11f, 3.5f))
+            if (chest.tier >= 2) {
+                drawLine(
+                    pal.dark,
+                    start = f.p(baseX + 1f, 49f),
+                    end = f.p(baseX + 1f, 55f),
+                    strokeWidth = 1f * f.u
+                )
+            }
+            return
+        }
+
+        drawRoundRect(pal.main, topLeft = f.p(baseX, 48f), size = f.s(9f, 13f), cornerRadius = CornerRadius(3f * f.u))
+        drawRect(pal.dark, topLeft = f.p(baseX, 58f), size = f.s(9f, 3f))
+        drawRoundRect(pal.main, topLeft = f.p(baseX, 61f), size = f.s(9f, 10f), cornerRadius = CornerRadius(2.5f * f.u))
+        drawRect(pal.dark, topLeft = f.p(baseX, 67f), size = f.s(9f, 2f))
+    }
+
+    withTransform({
+        translate(pose.leftArmOffset.x, pose.leftArmOffset.y)
+        rotate(pose.leftArmRotation, pivot = f.p(28f, 46f))
+    }) { drawArmArmor(24f) }
+
+    withTransform({
+        translate(pose.rightArmOffset.x, pose.rightArmOffset.y)
+        rotate(pose.rightArmRotation, pivot = f.p(71f, 46f))
+    }) { drawArmArmor(67f) }
+}
+
+internal fun DrawScope.drawBareLowerBody(f: AvatarFrame, pose: AvatarPose) {
     if (f.costume) {
         withTransform({
             translate(pose.bodyOffset.x, pose.bodyOffset.y)
@@ -806,9 +1122,6 @@ private fun DrawScope.drawLowerBodyLayer(f: AvatarFrame, pose: AvatarPose) {
     // A full-length robe replaces the lower body entirely.
     if (f.robeChest != null) return
 
-    val legPal = f.legs?.let { GearVisuals.palette(it) }
-    val feetPal = f.feet?.let { GearVisuals.palette(it) }
-    
     fun DrawScope.drawBareLegSegments(baseX: Float, isLeft: Boolean) {
         val thighHidden = if (isLeft) BodyRegion.LEFT_THIGH in f.hiddenRegions else BodyRegion.RIGHT_THIGH in f.hiddenRegions
         val calfHidden = if (isLeft) BodyRegion.LEFT_CALF in f.hiddenRegions else BodyRegion.RIGHT_CALF in f.hiddenRegions
@@ -826,7 +1139,7 @@ private fun DrawScope.drawLowerBodyLayer(f: AvatarFrame, pose: AvatarPose) {
             drawRect(hamstringsColor, topLeft = f.p(outerX, 74f), size = f.s(5f, 15f))
             drawRect(quadsColor, topLeft = f.p(innerX, 74f), size = f.s(5f, 15f))
         }
-        
+
         // Calves (lower leg)
         if (!calfHidden) {
             val calvesColor = f.skinColor("calves")
@@ -843,58 +1156,22 @@ private fun DrawScope.drawLowerBodyLayer(f: AvatarFrame, pose: AvatarPose) {
         translate(pose.leftLegOffset.x, pose.leftLegOffset.y)
         rotate(pose.leftLegRotation, pivot = f.p(43f, 74f))
     }) {
-        if (legPal != null) {
-            drawRoundRect(legPal.main, topLeft = f.p(38f, 74f), size = f.s(10f, 30f), cornerRadius = CornerRadius(3f * f.u))
-            drawRoundRect(legPal.dark, topLeft = f.p(37.5f, 84f), size = f.s(11f, 6f), cornerRadius = CornerRadius(2f * f.u))
-            legPal.glow?.let { g ->
-                drawRect(g.copy(alpha = 0.85f), topLeft = f.p(37.5f, 86f), size = f.s(11f, 1.2f))
-            }
-        } else {
-            drawBareLegSegments(38f, isLeft = true)
-        }
-        
-        if (feetPal != null) {
-            drawRoundRect(feetPal.main, topLeft = f.p(36f, 98f), size = f.s(13f, 10f), cornerRadius = CornerRadius(3f * f.u))
-            drawRect(feetPal.dark, topLeft = f.p(36f, 98f), size = f.s(13f, 3f))
-            feetPal.glow?.let { g ->
-                drawRect(g.copy(alpha = 0.85f), topLeft = f.p(36f, 100.5f), size = f.s(13f, 1.2f))
-            }
-        }
+        drawBareLegSegments(38f, isLeft = true)
     }
 
     withTransform({
         translate(pose.rightLegOffset.x, pose.rightLegOffset.y)
         rotate(pose.rightLegRotation, pivot = f.p(57f, 74f))
     }) {
-        if (legPal != null) {
-            drawRoundRect(legPal.main, topLeft = f.p(52f, 74f), size = f.s(10f, 30f), cornerRadius = CornerRadius(3f * f.u))
-            drawRoundRect(legPal.dark, topLeft = f.p(51.5f, 84f), size = f.s(11f, 6f), cornerRadius = CornerRadius(2f * f.u))
-            legPal.glow?.let { g ->
-                drawRect(g.copy(alpha = 0.85f), topLeft = f.p(51.5f, 86f), size = f.s(11f, 1.2f))
-            }
-        } else {
-            drawBareLegSegments(52f, isLeft = false)
-        }
-
-        if (feetPal != null) {
-            drawRoundRect(feetPal.main, topLeft = f.p(50f, 98f), size = f.s(13f, 10f), cornerRadius = CornerRadius(3f * f.u))
-            drawRect(feetPal.dark, topLeft = f.p(50f, 98f), size = f.s(13f, 3f))
-            feetPal.glow?.let { g ->
-                drawRect(g.copy(alpha = 0.85f), topLeft = f.p(50f, 100.5f), size = f.s(13f, 1.2f))
-            }
-        }
+        drawBareLegSegments(52f, isLeft = false)
     }
-    
+
     // Modesty layer moves with the body, not the individual legs.
     if (BodyRegion.HIPS !in f.hiddenRegions) {
         withTransform({
             translate(pose.bodyOffset.x, pose.bodyOffset.y)
         }) {
-            val modestyColor = legPal?.main ?: f.appearance.underwearColor
-            drawRoundRect(modestyColor, topLeft = f.p(36f, 71f), size = f.s(28f, 13f), cornerRadius = CornerRadius(4f * f.u))
-            if (legPal != null) {
-                drawRect(legPal.dark, topLeft = f.p(36f, 71f), size = f.s(28f, 3f))
-            }
+            drawRoundRect(f.appearance.underwearColor, topLeft = f.p(36f, 71f), size = f.s(28f, 13f), cornerRadius = CornerRadius(4f * f.u))
 
             // Glute highlight overlay (draw over underwear if sore, back view only)
             if (f.facingBack && f.hasHighlight("glutes", "legs")) {
@@ -907,6 +1184,149 @@ private fun DrawScope.drawLowerBodyLayer(f: AvatarFrame, pose: AvatarPose) {
             }
         }
     }
+}
+
+internal fun DrawScope.drawLegsGear(f: AvatarFrame, pose: AvatarPose) {
+    if (f.costume || f.robeChest != null) return
+    val item = f.legs ?: return
+    val legPal = GearVisuals.palette(item)
+    val signature = GearVisuals.signature(item)
+    val accent = GearVisuals.accent(item)
+
+    fun DrawScope.drawLegDetails(baseX: Float) {
+        when (signature.silhouette) {
+            ProceduralSilhouette.BALANCED -> Unit
+            ProceduralSilhouette.ANGULAR -> {
+                drawLine(accent, f.p(baseX, 86f), f.p(baseX + 5f, 89f), 1f * f.u)
+                drawLine(accent, f.p(baseX + 5f, 89f), f.p(baseX + 10f, 86f), 1f * f.u)
+            }
+            ProceduralSilhouette.CURVED -> drawOval(
+                accent.copy(alpha = 0.8f), topLeft = f.p(baseX + 2f, 84.5f), size = f.s(6f, 4f)
+            )
+            ProceduralSilhouette.FORTIFIED -> drawRoundRect(
+                legPal.dark, topLeft = f.p(baseX - 0.5f, 83.5f), size = f.s(11f, 7f),
+                cornerRadius = CornerRadius(1.5f * f.u)
+            )
+        }
+        if (signature.trim == ProceduralTrim.BAND || signature.trim == ProceduralTrim.RUNIC) {
+            drawRect(accent, topLeft = f.p(baseX, 96f), size = f.s(10f, 1.2f))
+        }
+    }
+
+    withTransform({
+        translate(pose.leftLegOffset.x, pose.leftLegOffset.y)
+        rotate(pose.leftLegRotation, pivot = f.p(43f, 74f))
+    }) {
+        drawRoundRect(legPal.main, topLeft = f.p(38f, 74f), size = f.s(10f, 30f), cornerRadius = CornerRadius(3f * f.u))
+        if (!f.facingBack) {
+            drawRoundRect(legPal.dark, topLeft = f.p(37.5f, 84f), size = f.s(11f, 6f), cornerRadius = CornerRadius(2f * f.u))
+        } else {
+            drawRect(legPal.dark, topLeft = f.p(38.5f, 84f), size = f.s(9f, 2f))
+            drawRect(legPal.dark, topLeft = f.p(37.5f, 88f), size = f.s(11f, 2.5f))
+            drawRect(legPal.dark, topLeft = f.p(37.5f, 93f), size = f.s(11f, 2.5f))
+        }
+        legPal.glow?.let { g ->
+            drawRect(g.copy(alpha = 0.85f), topLeft = f.p(37.5f, 86f), size = f.s(11f, 1.2f))
+        }
+        drawLegDetails(38f)
+    }
+
+    withTransform({
+        translate(pose.rightLegOffset.x, pose.rightLegOffset.y)
+        rotate(pose.rightLegRotation, pivot = f.p(57f, 74f))
+    }) {
+        drawRoundRect(legPal.main, topLeft = f.p(52f, 74f), size = f.s(10f, 30f), cornerRadius = CornerRadius(3f * f.u))
+        if (!f.facingBack) {
+            drawRoundRect(legPal.dark, topLeft = f.p(51.5f, 84f), size = f.s(11f, 6f), cornerRadius = CornerRadius(2f * f.u))
+        } else {
+            drawRect(legPal.dark, topLeft = f.p(52.5f, 84f), size = f.s(9f, 2f))
+            drawRect(legPal.dark, topLeft = f.p(51.5f, 88f), size = f.s(11f, 2.5f))
+            drawRect(legPal.dark, topLeft = f.p(51.5f, 93f), size = f.s(11f, 2.5f))
+        }
+        legPal.glow?.let { g ->
+            drawRect(g.copy(alpha = 0.85f), topLeft = f.p(51.5f, 86f), size = f.s(11f, 1.2f))
+        }
+        drawLegDetails(52f)
+    }
+
+    if (BodyRegion.HIPS !in f.hiddenRegions) {
+        withTransform({
+            translate(pose.bodyOffset.x, pose.bodyOffset.y)
+        }) {
+            drawRoundRect(legPal.main, topLeft = f.p(36f, 71f), size = f.s(28f, 13f), cornerRadius = CornerRadius(4f * f.u))
+            drawRect(legPal.dark, topLeft = f.p(36f, 71f), size = f.s(28f, 3f))
+        }
+    }
+}
+
+internal fun DrawScope.drawFeetGear(f: AvatarFrame, pose: AvatarPose) {
+    if (f.costume || f.robeChest != null) return
+    val item = f.feet ?: return
+    val feetPal = GearVisuals.palette(item)
+    val signature = GearVisuals.signature(item)
+    val accent = GearVisuals.accent(item)
+
+    fun DrawScope.drawBootDetails(baseX: Float, width: Float) {
+        when (signature.trim) {
+            ProceduralTrim.PLAIN -> Unit
+            ProceduralTrim.BAND -> drawRect(accent, topLeft = f.p(baseX, 101f), size = f.s(width, 1.2f))
+            ProceduralTrim.SPLIT -> drawLine(accent, f.p(baseX + width / 2f, 99f), f.p(baseX + width / 2f, 106f), 1f * f.u)
+            ProceduralTrim.CHEVRON -> {
+                drawLine(accent, f.p(baseX + 2f, 102f), f.p(baseX + width / 2f, 105f), 1f * f.u)
+                drawLine(accent, f.p(baseX + width / 2f, 105f), f.p(baseX + width - 2f, 102f), 1f * f.u)
+            }
+            ProceduralTrim.RUNIC -> for (x in listOf(3f, width - 3f)) {
+                drawCircle(accent, radius = 0.7f * f.u, center = f.p(baseX + x, 103f))
+            }
+        }
+        if (signature.finish == ProceduralMaterialFinish.ASCENDANT) {
+            drawLine(accent.copy(alpha = 0.85f), f.p(baseX + 1f, 107f), f.p(baseX + width - 1f, 107f), 1f * f.u)
+        }
+    }
+
+    withTransform({
+        translate(pose.leftLegOffset.x, pose.leftLegOffset.y)
+        rotate(pose.leftLegRotation, pivot = f.p(43f, 74f))
+    }) {
+        if (!f.facingBack) {
+            drawRoundRect(feetPal.main, topLeft = f.p(36f, 98f), size = f.s(13f, 10f), cornerRadius = CornerRadius(3f * f.u))
+            drawRect(feetPal.dark, topLeft = f.p(36f, 98f), size = f.s(13f, 3f))
+        } else {
+            drawRoundRect(feetPal.main, topLeft = f.p(37f, 98f), size = f.s(11f, 10f), cornerRadius = CornerRadius(3f * f.u))
+            drawRect(feetPal.dark, topLeft = f.p(37f, 98f), size = f.s(11f, 3f))
+            drawRect(feetPal.dark, topLeft = f.p(37.5f, 105f), size = f.s(10f, 3f))
+            drawLine(feetPal.dark, start = f.p(42.5f, 98f), end = f.p(42.5f, 106f), strokeWidth = 1.5f * f.u)
+        }
+        feetPal.glow?.let { g ->
+            drawRect(g.copy(alpha = 0.85f), topLeft = f.p(36f, 100.5f), size = f.s(13f, 1.2f))
+        }
+        drawBootDetails(if (f.facingBack) 37f else 36f, if (f.facingBack) 11f else 13f)
+    }
+
+    withTransform({
+        translate(pose.rightLegOffset.x, pose.rightLegOffset.y)
+        rotate(pose.rightLegRotation, pivot = f.p(57f, 74f))
+    }) {
+        if (!f.facingBack) {
+            drawRoundRect(feetPal.main, topLeft = f.p(50f, 98f), size = f.s(13f, 10f), cornerRadius = CornerRadius(3f * f.u))
+            drawRect(feetPal.dark, topLeft = f.p(50f, 98f), size = f.s(13f, 3f))
+        } else {
+            drawRoundRect(feetPal.main, topLeft = f.p(52f, 98f), size = f.s(11f, 10f), cornerRadius = CornerRadius(3f * f.u))
+            drawRect(feetPal.dark, topLeft = f.p(52f, 98f), size = f.s(11f, 3f))
+            drawRect(feetPal.dark, topLeft = f.p(52.5f, 105f), size = f.s(10f, 3f))
+            drawLine(feetPal.dark, start = f.p(57.5f, 98f), end = f.p(57.5f, 106f), strokeWidth = 1.5f * f.u)
+        }
+        feetPal.glow?.let { g ->
+            drawRect(g.copy(alpha = 0.85f), topLeft = f.p(50f, 100.5f), size = f.s(13f, 1.2f))
+        }
+        drawBootDetails(if (f.facingBack) 52f else 50f, if (f.facingBack) 11f else 13f)
+    }
+}
+
+private fun DrawScope.drawLowerBodyLayer(f: AvatarFrame, pose: AvatarPose) {
+    drawBareLowerBody(f, pose)
+    drawLegsGear(f, pose)
+    drawFeetGear(f, pose)
 }
 
 private fun DrawScope.drawCostumeLowerBody(f: AvatarFrame) {
@@ -1036,7 +1456,7 @@ private fun DrawScope.drawBareTorsoSegments(f: AvatarFrame) {
     } else {
         // Full torso base (skin) so zones never leave holes; highlights paint on top.
         drawRoundRect(
-            f.appearance.skinColor,
+            f.skinColor("torso"),
             topLeft = f.p(34f, 47.5f),
             size = f.s(32f, 23.5f),
             cornerRadius = CornerRadius(5f * f.u)
@@ -1071,108 +1491,544 @@ private fun DrawScope.drawBareTorsoSegments(f: AvatarFrame) {
 private fun DrawScope.drawChestGarmentLayer(f: AvatarFrame) {
     val armor = f.chest ?: return
     val pal = GearVisuals.palette(armor)
+    val archetype = com.fitnessquest.rpg.domain.visuals.EquipmentVisualRegistry.resolveVisualDescriptor(armor).archetype
+    if (archetype == com.fitnessquest.rpg.domain.visuals.VisualArchetype.ARMOR_MAIL) {
+        drawMailArmor(f, armor, pal)
+        drawTorsoSignatureDetails(f, armor, pal)
+        return
+    }
+    if (archetype == com.fitnessquest.rpg.domain.visuals.VisualArchetype.ARMOR_CLOAK) {
+        drawChestCloak(f, armor, pal)
+        drawTorsoSignatureDetails(f, armor, pal)
+        return
+    }
     when (armor.style) {
         ItemStyle.ROBE -> {
-            // Full-length robe: covers torso and legs, low scooped neckline exposing neck.
-            val robe = Path().apply {
-                moveTo(34f * f.u, 48.5f * f.u)
-                lineTo(43f * f.u, 48f * f.u)
-                quadraticTo(50f * f.u, 53.5f * f.u, 57f * f.u, 48f * f.u)
-                lineTo(66f * f.u, 48.5f * f.u)
-                lineTo(74f * f.u, 108f * f.u)
-                lineTo(26f * f.u, 108f * f.u)
-                close()
-            }
-            drawPath(robe, pal.main)
-            drawRect(pal.dark, topLeft = f.p(47f, 53.5f), size = f.s(6f, 22f))
-            f.feet?.let { item ->
-                val fp = GearVisuals.palette(item)
-                drawOval(fp.main, topLeft = f.p(36f, 103f), size = f.s(11f, 6f))
-                drawOval(fp.main, topLeft = f.p(53f, 103f), size = f.s(11f, 6f))
-            }
-            // Leg gear tints the hem band.
-            val hem = f.legs?.let { GearVisuals.palette(it).main } ?: pal.dark
-            drawRect(hem, topLeft = f.p(26f, 104f), size = f.s(48f, 4f))
-            if (armor.tier >= 3) {
-                val rune = pal.glow ?: Color(0xFF9C7BE3)
-                for (y in listOf(56f, 63f, 70f)) {
-                    drawCircle(rune, radius = 1.4f * f.u, center = f.p(41f, y))
-                    drawCircle(rune, radius = 1.4f * f.u, center = f.p(59f, y))
+            if (!f.facingBack) {
+                // Front: Floor robe with clear sculpted footwear peeking below hem
+                // Grounded footwear (Left & Right distinctly separated)
+                val shoeDark = Color(0xFF0F172A)
+                val shoeMain = pal.dark
+                // Left Foot
+                drawRoundRect(shoeMain, topLeft = f.p(33.5f, 96f), size = f.s(14f, 10f), cornerRadius = CornerRadius(3f * f.u))
+                drawRect(shoeDark, topLeft = f.p(33f, 104f), size = f.s(15f, 2.5f))
+                // Right Foot
+                drawRoundRect(shoeMain, topLeft = f.p(52.5f, 96f), size = f.s(14f, 10f), cornerRadius = CornerRadius(3f * f.u))
+                drawRect(shoeDark, topLeft = f.p(52f, 104f), size = f.s(15f, 2.5f))
+                // Ground shadow
+                drawOval(shoeDark.copy(alpha = 0.35f), topLeft = f.p(24f, 105.5f), size = f.s(52f, 3f))
+
+                val robe = Path().apply {
+                    moveTo(34f * f.u, 48.5f * f.u)
+                    lineTo(43f * f.u, 48f * f.u)
+                    quadraticTo(50f * f.u, 53.5f * f.u, 57f * f.u, 48f * f.u)
+                    lineTo(66f * f.u, 48.5f * f.u)
+                    lineTo(72f * f.u, 98f * f.u)
+                    quadraticTo(50f * f.u, 96.5f * f.u, 28f * f.u, 98f * f.u)
+                    close()
                 }
-            }
-            pal.glow?.let { g ->
-                drawPath(robe, g.copy(alpha = 0.8f), style = Stroke(width = 1.3f * f.u))
+                drawPath(robe, pal.main)
+                drawRect(pal.dark, topLeft = f.p(47f, 53.5f), size = f.s(6f, 22f))
+                val hem = f.legs?.let { GearVisuals.palette(it).main } ?: pal.dark
+                drawRect(hem, topLeft = f.p(28f, 96.5f), size = f.s(44f, 3f))
+                if (armor.tier >= 3) {
+                    val rune = pal.glow ?: pal.dark
+                    for (y in listOf(56f, 63f, 70f)) {
+                        drawCircle(rune, radius = 1.4f * f.u, center = f.p(41f, y))
+                        drawCircle(rune, radius = 1.4f * f.u, center = f.p(59f, y))
+                    }
+                }
+                pal.glow?.let { g ->
+                    drawPath(robe, g.copy(alpha = 0.8f), style = Stroke(width = 1.3f * f.u))
+                }
+            } else {
+                // Back: Seamless draped cowl robe with sculpted footwear peeking below hem
+                val shoeDark = Color(0xFF0F172A)
+                val shoeMain = Color(0xFF1E293B)
+                val shoeLight = Color(0xFF334155)
+                // Ground shadow
+                drawOval(shoeDark.copy(alpha = 0.35f), topLeft = f.p(24f, 105.5f), size = f.s(52f, 3f))
+
+                val backRobe = Path().apply {
+                    moveTo(34f * f.u, 47.5f * f.u)
+                    lineTo(66f * f.u, 47.5f * f.u)
+                    lineTo(72f * f.u, 98f * f.u)
+                    quadraticTo(50f * f.u, 96.5f * f.u, 28f * f.u, 98f * f.u)
+                    close()
+                }
+                drawPath(backRobe, pal.main)
+                // Center spine drape line
+                drawRect(pal.dark, topLeft = f.p(49f, 47.5f), size = f.s(2f, 48f))
+                // Shoulder blade pleats
+                drawRect(pal.dark.copy(alpha = 0.6f), topLeft = f.p(38f, 52f), size = f.s(1.5f, 18f))
+                drawRect(pal.dark.copy(alpha = 0.6f), topLeft = f.p(60.5f, 52f), size = f.s(1.5f, 18f))
+                // Hem band
+                val hem = f.legs?.let { GearVisuals.palette(it).main } ?: pal.dark
+                drawRect(hem, topLeft = f.p(28f, 96.5f), size = f.s(44f, 3f))
+                // Exact 1:5 reconstruction of the authored front footwear:
+                // identical slate colors, width, toe curve, instep, and sole.
+                val leftShoe = Path().apply {
+                    moveTo(34.8f * f.u, 100f * f.u)
+                    lineTo(44.8f * f.u, 100f * f.u)
+                    lineTo(44.8f * f.u, 105.6f * f.u)
+                    quadraticTo(39.8f * f.u, 106.8f * f.u, 34.8f * f.u, 105.6f * f.u)
+                    close()
+                }
+                val rightShoe = Path().apply {
+                    moveTo(55.2f * f.u, 100f * f.u)
+                    lineTo(65.2f * f.u, 100f * f.u)
+                    lineTo(65.2f * f.u, 105.6f * f.u)
+                    quadraticTo(60.2f * f.u, 106.8f * f.u, 55.2f * f.u, 105.6f * f.u)
+                    close()
+                }
+                drawPath(leftShoe, shoeMain)
+                drawPath(rightShoe, shoeMain)
+                drawPath(Path().apply {
+                    moveTo(35.6f * f.u, 100.8f * f.u)
+                    lineTo(44f * f.u, 100.8f * f.u)
+                    lineTo(43.6f * f.u, 104.4f * f.u)
+                    lineTo(36f * f.u, 104.4f * f.u)
+                    close()
+                }, shoeLight)
+                drawPath(Path().apply {
+                    moveTo(56f * f.u, 100.8f * f.u)
+                    lineTo(64.4f * f.u, 100.8f * f.u)
+                    lineTo(64f * f.u, 104.4f * f.u)
+                    lineTo(56.4f * f.u, 104.4f * f.u)
+                    close()
+                }, shoeLight)
+                drawRect(shoeDark, topLeft = f.p(34.4f, 105.6f), size = f.s(10.8f, 1.4f))
+                drawRect(shoeDark, topLeft = f.p(54.8f, 105.6f), size = f.s(10.8f, 1.4f))
+                if (armor.tier >= 3) {
+                    val rune = pal.glow ?: pal.dark
+                    drawCircle(rune.copy(alpha = 0.75f), radius = 6f * f.u, center = f.p(50f, 60f), style = Stroke(width = 1.2f * f.u))
+                    drawCircle(rune, radius = 1.8f * f.u, center = f.p(50f, 60f))
+                    for (y in listOf(72f, 80f, 88f)) {
+                        drawCircle(rune, radius = 1.3f * f.u, center = f.p(50f, y))
+                    }
+                }
+                pal.glow?.let { g ->
+                    drawPath(backRobe, g.copy(alpha = 0.8f), style = Stroke(width = 1.3f * f.u))
+                }
             }
         }
         ItemStyle.LIGHT -> {
-            // Fitted leather vest with belt, straps, and deep scooped neckline.
-            drawRoundRect(pal.main, topLeft = f.p(34f, 48f), size = f.s(32f, 28f), cornerRadius = CornerRadius(6f * f.u))
-            drawRect(pal.dark, topLeft = f.p(34f, 70f), size = f.s(32f, 5f))
-            drawRect(pal.dark, topLeft = f.p(40f, 48f), size = f.s(4f, 4f))
-            drawRect(pal.dark, topLeft = f.p(56f, 48f), size = f.s(4f, 4f))
-            if (armor.tier >= 2) {
-                drawRect(pal.dark, topLeft = f.p(49.2f, 53f), size = f.s(1.6f, 13f))
-                for (y in listOf(55f, 59f, 63f, 67f)) {
-                    drawLine(pal.dark, start = f.p(46f, y), end = f.p(54f, y), strokeWidth = 1f * f.u)
+            if (!f.facingBack) {
+                // Front: Fitted leather vest with belt, straps, and laces
+                drawRoundRect(pal.main, topLeft = f.p(34f, 48f), size = f.s(32f, 28f), cornerRadius = CornerRadius(6f * f.u))
+                drawRect(pal.dark, topLeft = f.p(34f, 70f), size = f.s(32f, 5f))
+                drawRect(pal.dark, topLeft = f.p(40f, 48f), size = f.s(4f, 4f))
+                drawRect(pal.dark, topLeft = f.p(56f, 48f), size = f.s(4f, 4f))
+                if (armor.tier >= 2) {
+                    drawRect(pal.dark, topLeft = f.p(49.2f, 53f), size = f.s(1.6f, 13f))
+                    for (y in listOf(55f, 59f, 63f, 67f)) {
+                        drawLine(pal.dark, start = f.p(46f, y), end = f.p(54f, y), strokeWidth = 1f * f.u)
+                    }
                 }
-            }
-            if (armor.tier >= 3) {
-                drawCircle(pal.dark, radius = 1.8f * f.u, center = f.p(39f, 52f))
-                drawCircle(pal.dark, radius = 1.8f * f.u, center = f.p(61f, 52f))
-            }
-            pal.glow?.let { g ->
-                drawRoundRect(
-                    g.copy(alpha = 0.8f),
-                    topLeft = f.p(34f, 48f),
-                    size = f.s(32f, 28f),
-                    cornerRadius = CornerRadius(6f * f.u),
-                    style = Stroke(width = 1.3f * f.u)
-                )
+                if (armor.tier >= 3) {
+                    drawCircle(pal.dark, radius = 1.8f * f.u, center = f.p(39f, 52f))
+                    drawCircle(pal.dark, radius = 1.8f * f.u, center = f.p(61f, 52f))
+                }
+                pal.glow?.let { g ->
+                    drawRoundRect(
+                        g.copy(alpha = 0.8f),
+                        topLeft = f.p(34f, 48f),
+                        size = f.s(32f, 28f),
+                        cornerRadius = CornerRadius(6f * f.u),
+                        style = Stroke(width = 1.3f * f.u)
+                    )
+                }
+            } else {
+                // Back: Midnight leather panels matching the authored front asset.
+                drawRoundRect(pal.main, topLeft = f.p(34f, 48f), size = f.s(32f, 28f), cornerRadius = CornerRadius(6f * f.u))
+                drawRect(pal.dark, topLeft = f.p(36f, 50f), size = f.s(11f, 16f))
+                drawRect(pal.dark, topLeft = f.p(53f, 50f), size = f.s(11f, 16f))
+                drawRect(pal.dark, topLeft = f.p(49f, 49f), size = f.s(2f, 18f))
+                // The quiver supplies the only diagonal rear strap.
+                drawRect(pal.dark, topLeft = f.p(34f, 70f), size = f.s(32f, 5f))
+                drawRoundRect(pal.main, topLeft = f.p(46.5f, 69f), size = f.s(7f, 6.5f), cornerRadius = CornerRadius(1.5f * f.u))
+                drawRect(pal.dark, topLeft = f.p(48.5f, 71.5f), size = f.s(3f, 2f))
+                pal.glow?.let { g ->
+                    drawRoundRect(
+                        g.copy(alpha = 0.8f),
+                        topLeft = f.p(34f, 48f),
+                        size = f.s(32f, 28f),
+                        cornerRadius = CornerRadius(6f * f.u),
+                        style = Stroke(width = 1.3f * f.u)
+                    )
+                }
             }
         }
         else -> {
-            // Full plate cuirass with low collar.
-            drawRoundRect(pal.main, topLeft = f.p(34f, 47.5f), size = f.s(32f, 25f), cornerRadius = CornerRadius(6f * f.u))
-            drawRect(pal.dark, topLeft = f.p(34f, 57f), size = f.s(32f, 3f))
-            drawRect(pal.dark, topLeft = f.p(34f, 68f), size = f.s(32f, 4f))
-            drawCircle(pal.dark, radius = 6.5f * f.u, center = f.p(35f, 51f))
-            drawCircle(pal.main, radius = 5f * f.u, center = f.p(35f, 51f))
-            drawCircle(pal.dark, radius = 6.5f * f.u, center = f.p(65f, 51f))
-            drawCircle(pal.main, radius = 5f * f.u, center = f.p(65f, 51f))
-            if (armor.tier >= 2) {
-                for ((x, y) in listOf(38f to 52f, 62f to 52f, 38f to 65f, 62f to 65f)) {
-                    drawCircle(pal.dark, radius = 1.2f * f.u, center = f.p(x, y))
+            if (!f.facingBack) {
+                // Front: Full plate cuirass
+                drawRoundRect(pal.main, topLeft = f.p(34f, 47.5f), size = f.s(32f, 25f), cornerRadius = CornerRadius(6f * f.u))
+                drawRect(pal.dark, topLeft = f.p(34f, 57f), size = f.s(32f, 3f))
+                drawRect(pal.dark, topLeft = f.p(34f, 68f), size = f.s(32f, 4f))
+                drawCircle(pal.dark, radius = 6.5f * f.u, center = f.p(35f, 51f))
+                drawCircle(pal.main, radius = 5f * f.u, center = f.p(35f, 51f))
+                drawCircle(pal.dark, radius = 6.5f * f.u, center = f.p(65f, 51f))
+                drawCircle(pal.main, radius = 5f * f.u, center = f.p(65f, 51f))
+                if (armor.tier >= 2) {
+                    for ((x, y) in listOf(38f to 52f, 62f to 52f, 38f to 65f, 62f to 65f)) {
+                        drawCircle(pal.dark, radius = 1.2f * f.u, center = f.p(x, y))
+                    }
                 }
-            }
-            if (armor.tier >= 3) {
-                val emblem = Path().apply {
-                    moveTo(50f * f.u, 60f * f.u)
-                    lineTo(53f * f.u, 64f * f.u)
-                    lineTo(50f * f.u, 68f * f.u)
-                    lineTo(47f * f.u, 64f * f.u)
+                if (armor.tier >= 3) {
+                    val emblem = Path().apply {
+                        moveTo(50f * f.u, 60f * f.u)
+                        lineTo(53f * f.u, 64f * f.u)
+                        lineTo(50f * f.u, 68f * f.u)
+                        lineTo(47f * f.u, 64f * f.u)
+                        close()
+                    }
+                    drawPath(emblem, pal.glow ?: pal.dark)
+                }
+                pal.glow?.let { g ->
+                    drawRoundRect(
+                        g.copy(alpha = 0.8f),
+                        topLeft = f.p(34f, 47.5f),
+                        size = f.s(32f, 25f),
+                        cornerRadius = CornerRadius(6f * f.u),
+                        style = Stroke(width = 1.3f * f.u)
+                    )
+                }
+            } else {
+                // Back: tapered articulated cuirass matching the front plate language.
+                val backPlate = Path().apply {
+                    moveTo(37f * f.u, 48f * f.u)
+                    lineTo(63f * f.u, 48f * f.u)
+                    lineTo(66f * f.u, 55f * f.u)
+                    lineTo(61f * f.u, 72f * f.u)
+                    lineTo(39f * f.u, 72f * f.u)
+                    lineTo(34f * f.u, 55f * f.u)
                     close()
                 }
-                drawPath(emblem, pal.glow ?: pal.dark)
-            }
-            pal.glow?.let { g ->
-                drawRoundRect(
-                    g.copy(alpha = 0.8f),
-                    topLeft = f.p(34f, 47.5f),
-                    size = f.s(32f, 25f),
-                    cornerRadius = CornerRadius(6f * f.u),
-                    style = Stroke(width = 1.3f * f.u)
-                )
+                drawPath(backPlate, pal.main)
+
+                val leftPlate = Path().apply {
+                    moveTo(37f * f.u, 50f * f.u)
+                    lineTo(48f * f.u, 50f * f.u)
+                    lineTo(47f * f.u, 63f * f.u)
+                    lineTo(38f * f.u, 61f * f.u)
+                    close()
+                }
+                val rightPlate = Path().apply {
+                    moveTo(52f * f.u, 50f * f.u)
+                    lineTo(63f * f.u, 50f * f.u)
+                    lineTo(62f * f.u, 61f * f.u)
+                    lineTo(53f * f.u, 63f * f.u)
+                    close()
+                }
+                drawPath(leftPlate, pal.dark.copy(alpha = 0.72f))
+                drawPath(rightPlate, pal.dark.copy(alpha = 0.72f))
+                drawRect(pal.dark, topLeft = f.p(49f, 49f), size = f.s(2f, 18f))
+                drawRect(pal.dark, topLeft = f.p(38f, 64f), size = f.s(24f, 2.5f))
+                drawRect(pal.dark, topLeft = f.p(39f, 68f), size = f.s(22f, 3.5f))
+                for (x in listOf(39f, 61f)) {
+                    drawCircle(pal.dark, radius = 1.1f * f.u, center = f.p(x, 53f))
+                    drawCircle(pal.dark, radius = 1.1f * f.u, center = f.p(x, 61f))
+                }
+                if (armor.tier >= 3) {
+                    val sigil = Path().apply {
+                        moveTo(50f * f.u, 54f * f.u)
+                        lineTo(53f * f.u, 58f * f.u)
+                        lineTo(50f * f.u, 62f * f.u)
+                        lineTo(47f * f.u, 58f * f.u)
+                        close()
+                    }
+                    drawPath(sigil, pal.glow ?: pal.dark)
+                }
             }
         }
     }
+    if (archetype == com.fitnessquest.rpg.domain.visuals.VisualArchetype.ARMOR_PAULDRONS) {
+        drawRoundRect(pal.dark, topLeft = f.p(25f, 45f), size = f.s(17f, 10f), cornerRadius = CornerRadius(4f * f.u))
+        drawRoundRect(pal.main, topLeft = f.p(27f, 46f), size = f.s(14f, 7f), cornerRadius = CornerRadius(3f * f.u))
+        drawRoundRect(pal.dark, topLeft = f.p(58f, 45f), size = f.s(17f, 10f), cornerRadius = CornerRadius(4f * f.u))
+        drawRoundRect(pal.main, topLeft = f.p(59f, 46f), size = f.s(14f, 7f), cornerRadius = CornerRadius(3f * f.u))
+    }
+    drawTorsoSignatureDetails(f, armor, pal)
+}
+
+private fun DrawScope.drawMailArmor(f: AvatarFrame, item: ItemEntity, pal: GearPalette) {
+    val mail = Path().apply {
+        moveTo(34f * f.u, 48f * f.u)
+        lineTo(66f * f.u, 48f * f.u)
+        lineTo(67f * f.u, 76f * f.u)
+        lineTo(33f * f.u, 76f * f.u)
+        close()
+    }
+    drawPath(mail, pal.main)
+    drawRect(pal.dark, topLeft = f.p(33f, 72f), size = f.s(34f, 4f))
+    val ringColor = (pal.glow ?: pal.dark).copy(alpha = 0.72f)
+    val xOffset = if (f.facingBack) 1.5f else 0f
+    for (row in 0..4) {
+        for (column in 0..5) {
+            val x = 37f + column * 5.2f + if (row % 2 == 0) xOffset else 2.6f - xOffset
+            val y = 52f + row * 4f
+            drawCircle(ringColor, radius = 1.25f * f.u, center = f.p(x, y), style = Stroke(width = 0.65f * f.u))
+        }
+    }
+    if (!f.facingBack) {
+        drawLine(pal.dark, f.p(50f, 49f), f.p(50f, 72f), 1.2f * f.u)
+    }
+    if (item.tier >= 3) drawRect(GearVisuals.accent(item), topLeft = f.p(34f, 48f), size = f.s(32f, 1.2f))
+}
+
+private fun DrawScope.drawChestCloak(f: AvatarFrame, item: ItemEntity, pal: GearPalette) {
+    val accent = GearVisuals.accent(item)
+    if (f.facingBack) {
+        val cloak = Path().apply {
+            moveTo(34f * f.u, 48f * f.u)
+            quadraticTo(50f * f.u, 43f * f.u, 66f * f.u, 48f * f.u)
+            lineTo(71f * f.u, 94f * f.u)
+            quadraticTo(50f * f.u, 99f * f.u, 29f * f.u, 94f * f.u)
+            close()
+        }
+        drawPath(cloak, pal.main)
+        drawLine(pal.dark, f.p(50f, 49f), f.p(50f, 95f), 1.5f * f.u)
+        drawLine(pal.dark.copy(alpha = 0.65f), f.p(40f, 52f), f.p(37f, 92f), 1f * f.u)
+        drawLine(pal.dark.copy(alpha = 0.65f), f.p(60f, 52f), f.p(63f, 92f), 1f * f.u)
+        if (item.tier >= 3) drawRect(accent, topLeft = f.p(30f, 92f), size = f.s(40f, 2f))
+    } else {
+        drawRoundRect(pal.dark, topLeft = f.p(33f, 48f), size = f.s(34f, 30f), cornerRadius = CornerRadius(5f * f.u))
+        drawRoundRect(pal.main, topLeft = f.p(35f, 49f), size = f.s(30f, 27f), cornerRadius = CornerRadius(4f * f.u))
+        val mantle = Path().apply {
+            moveTo(29f * f.u, 49f * f.u)
+            quadraticTo(50f * f.u, 43f * f.u, 71f * f.u, 49f * f.u)
+            lineTo(64f * f.u, 57f * f.u)
+            quadraticTo(50f * f.u, 52f * f.u, 36f * f.u, 57f * f.u)
+            close()
+        }
+        drawPath(mantle, pal.main)
+        drawPath(mantle, pal.dark, style = Stroke(width = 1f * f.u))
+        drawCircle(accent, radius = 2f * f.u, center = f.p(50f, 53f))
+    }
+}
+
+private fun DrawScope.drawTorsoSignatureDetails(f: AvatarFrame, item: ItemEntity, pal: GearPalette) {
+    val signature = GearVisuals.signature(item)
+    val accent = GearVisuals.accent(item)
+    val top = if (item.style == ItemStyle.ROBE) 55f else 51f
+    val bottom = if (item.style == ItemStyle.ROBE) 91f else 68f
+
+    when (signature.trim) {
+        ProceduralTrim.PLAIN -> Unit
+        ProceduralTrim.BAND -> drawRect(accent.copy(alpha = 0.9f), topLeft = f.p(36f, top + 5f), size = f.s(28f, 1.3f))
+        ProceduralTrim.SPLIT -> drawRect(accent.copy(alpha = 0.85f), topLeft = f.p(49.2f, top), size = f.s(1.6f, bottom - top))
+        ProceduralTrim.CHEVRON -> {
+            drawLine(accent, f.p(38f, top + 2f), f.p(50f, top + 8f), 1.2f * f.u)
+            drawLine(accent, f.p(50f, top + 8f), f.p(62f, top + 2f), 1.2f * f.u)
+        }
+        ProceduralTrim.RUNIC -> {
+            val marks = signature.detailCount.coerceIn(2, 5)
+            repeat(marks) { index ->
+                val y = top + 3f + index * ((bottom - top - 6f) / marks)
+                drawLine(accent, f.p(47.5f, y), f.p(52.5f, y), 1f * f.u)
+            }
+        }
+    }
+
+    when (signature.ornament) {
+        ProceduralOrnament.NONE -> Unit
+        ProceduralOrnament.STUDS -> for (x in listOf(39f, 61f)) {
+            drawCircle(accent, radius = 0.9f * f.u, center = f.p(x, top + 2f))
+        }
+        ProceduralOrnament.GEM -> {
+            val gem = Path().apply {
+                moveTo(50f * f.u, (top + 2f) * f.u)
+                lineTo(53f * f.u, (top + 5f) * f.u)
+                lineTo(50f * f.u, (top + 8f) * f.u)
+                lineTo(47f * f.u, (top + 5f) * f.u)
+                close()
+            }
+            drawPath(gem, accent)
+        }
+        ProceduralOrnament.RUNES -> for (x in listOf(42f, 50f, 58f)) {
+            drawCircle(accent, radius = 1f * f.u, center = f.p(x, top + 5f), style = Stroke(width = 0.8f * f.u))
+        }
+        ProceduralOrnament.SPIKES -> for (x in listOf(36f, 64f)) {
+            val direction = if (x < 50f) -1f else 1f
+            val spike = Path().apply {
+                moveTo(x * f.u, (top + 2f) * f.u)
+                lineTo((x + direction * 4f) * f.u, (top - 2f) * f.u)
+                lineTo((x + direction) * f.u, (top + 6f) * f.u)
+                close()
+            }
+            drawPath(spike, accent)
+        }
+        ProceduralOrnament.CREST -> {
+            drawCircle(accent.copy(alpha = 0.28f), radius = 4f * f.u, center = f.p(50f, top + 6f))
+            drawCircle(accent, radius = 2f * f.u, center = f.p(50f, top + 6f))
+        }
+    }
+
+    when (signature.finish) {
+        ProceduralMaterialFinish.WORN -> {
+            drawLine(pal.dark.copy(alpha = 0.6f), f.p(39f, bottom - 3f), f.p(44f, bottom - 5f), 0.8f * f.u)
+            drawLine(pal.dark.copy(alpha = 0.6f), f.p(58f, bottom - 6f), f.p(62f, bottom - 4f), 0.8f * f.u)
+        }
+        ProceduralMaterialFinish.CRAFTED -> Unit
+        ProceduralMaterialFinish.REFINED -> drawLine(
+            accent.copy(alpha = 0.5f), f.p(36f, top), f.p(64f, top), 0.8f * f.u
+        )
+        ProceduralMaterialFinish.ASCENDANT -> drawRoundRect(
+            (pal.glow ?: accent).copy(alpha = 0.45f), topLeft = f.p(34f, 48f),
+            size = f.s(32f, if (item.style == ItemStyle.ROBE) 49f else 27f),
+            cornerRadius = CornerRadius(5f * f.u), style = Stroke(width = 1.1f * f.u)
+        )
+    }
+}
+
+internal object ProceduralBackWearableMotion {
+    fun computeCapeSway(phase: Float, u: Float = 1f): Float =
+        kotlin.math.sin(phase * kotlin.math.PI.toFloat() * 2f) * 3.5f * u
+
+    fun computeWingFlap(phase: Float, u: Float = 1f): Float =
+        kotlin.math.sin(phase * kotlin.math.PI.toFloat() * 2f) * 5f * u
+
+    fun computeQuiverMotion(phase: Float, u: Float = 1f): Float = 0f
+
+    fun computeShieldMotion(phase: Float, u: Float = 1f): Float = 0f
 }
 
 internal fun DrawScope.drawTrinketLayer(f: AvatarFrame) {
     val item = f.trinket ?: return
-    val tc = GearVisuals.trinketColor(item.id)
-    drawCircle(tc.copy(alpha = 0.35f), radius = 6.5f * f.u, center = f.p(50f, 51f))
-    drawCircle(tc, radius = 4f * f.u, center = f.p(50f, 51f))
-    drawCircle(Color.White.copy(alpha = 0.7f), radius = 1.5f * f.u, center = f.p(48.8f, 49.8f))
+    val nameLower = item.name.lowercase()
+    val isCape = item.style == "cape" || nameLower.contains("cape") || nameLower.contains("cloak")
+    val isQuiver = nameLower.contains("quiver")
+    val isWings = nameLower.contains("wing")
+    val isShield = nameLower.contains("shield")
+
+    if (f.facingBack) {
+        when {
+            isCape -> {
+                val capePal = when {
+                    nameLower.contains("velvet") || nameLower.contains("purple") -> GearPalette(Color(0xFF6B459E), Color(0xFF452B6B))
+                    nameLower.contains("emerald") || nameLower.contains("green") -> GearPalette(Color(0xFF2E7A50), Color(0xFF1B4D32))
+                    nameLower.contains("crimson") || nameLower.contains("red") -> GearPalette(Color(0xFF9E2A2B), Color(0xFF6B1D1E))
+                    nameLower.contains("royal") || nameLower.contains("blue") -> GearPalette(Color(0xFF3450A8), Color(0xFF233670))
+                    nameLower.contains("shadow") || nameLower.contains("black") -> GearPalette(Color(0xFF2C243B), Color(0xFF1B1624))
+                    else -> when (item.tier) {
+                        1 -> GearPalette(Color(0xFF8B3A3A), Color(0xFF5A2222))
+                        2 -> GearPalette(Color(0xFF3E5A78), Color(0xFF283A4E))
+                        3 -> GearPalette(Color(0xFF6B459E), Color(0xFF452B6B))
+                        else -> GearPalette(Color(0xFF8A5CE8), Color(0xFF5C36B0), Color(0xFFF8D24A))
+                    }
+                }
+                val sway = ProceduralBackWearableMotion.computeCapeSway(f.phase, f.u)
+                val cape = Path().apply {
+                    moveTo(39f * f.u, 49f * f.u)
+                    lineTo(61f * f.u, 49f * f.u)
+                    lineTo((67f * f.u) + sway, 96f * f.u)
+                    lineTo((33f * f.u) + sway, 96f * f.u)
+                    close()
+                }
+                drawPath(cape, capePal.main)
+                drawLine(capePal.dark, start = f.p(43f, 51f), end = Offset((40f * f.u) + sway, 94f * f.u), strokeWidth = 1.5f * f.u)
+                drawLine(capePal.dark, start = f.p(57f, 51f), end = Offset((60f * f.u) + sway, 94f * f.u), strokeWidth = 1.5f * f.u)
+                drawLine(capePal.dark, start = f.p(50f, 50f), end = Offset((50f * f.u) + sway, 95f * f.u), strokeWidth = 1.3f * f.u)
+                drawRect(Color(0xFFD4AF37), topLeft = Offset((33f * f.u) + sway, 94f * f.u), size = f.s(34f, 2.5f))
+            }
+            isQuiver -> {
+                val leather = Color(0xFF6B4423)
+                val leatherDark = Color(0xFF452A15)
+                val quiver = Path().apply {
+                    moveTo(44f * f.u, 72f * f.u)
+                    lineTo(50f * f.u, 74f * f.u)
+                    lineTo(64f * f.u, 46f * f.u)
+                    lineTo(58f * f.u, 44f * f.u)
+                    close()
+                }
+                drawPath(quiver, leather)
+                drawPath(quiver, leatherDark, style = Stroke(width = 1.2f * f.u))
+                drawLine(leatherDark, start = f.p(38f, 52f), end = f.p(62f, 70f), strokeWidth = 2f * f.u)
+                for ((dx, dy) in listOf(0f to 0f, 3f to -2f, 6f to 1f)) {
+                    drawLine(Color(0xFFB89758), start = f.p(60f + dx, 46f + dy), end = f.p(66f + dx, 36f + dy), strokeWidth = 1.2f * f.u)
+                    drawCircle(Color(0xFFE85A5A), radius = 1.6f * f.u, center = f.p(66f + dx, 36f + dy))
+                }
+            }
+            isWings -> {
+                val wingPal = when {
+                    nameLower.contains("celestial") || nameLower.contains("seraph") || item.tier >= 4 ->
+                        GearPalette(Color(0xFFFFFAEB), Color(0xFFE0D5B5), Color(0xFFFFD54F))
+                    nameLower.contains("shadow") || nameLower.contains("void") ->
+                        GearPalette(Color(0xFF382A4D), Color(0xFF221A30), Color(0xFF9C7BE3))
+                    else -> GearPalette(Color(0xFFE8EEF5), Color(0xFFBAC8D8), Color(0xFF90CAF9))
+                }
+                val flap = ProceduralBackWearableMotion.computeWingFlap(f.phase, f.u)
+
+                // Left Wing: articulated feathers anchored at left shoulder blade
+                val leftSpar = Path().apply {
+                    moveTo(42f * f.u, 52f * f.u)
+                    quadraticTo(24f * f.u, (34f * f.u) - flap, 16f * f.u, (42f * f.u) - flap)
+                    lineTo(22f * f.u, (52f * f.u) - flap * 0.5f)
+                    quadraticTo(32f * f.u, 58f * f.u, 40f * f.u, 60f * f.u)
+                    close()
+                }
+                val rightSpar = Path().apply {
+                    moveTo(58f * f.u, 52f * f.u)
+                    quadraticTo(76f * f.u, (34f * f.u) - flap, 84f * f.u, (42f * f.u) - flap)
+                    lineTo(78f * f.u, (52f * f.u) - flap * 0.5f)
+                    quadraticTo(68f * f.u, 58f * f.u, 60f * f.u, 60f * f.u)
+                    close()
+                }
+                drawPath(leftSpar, wingPal.main.copy(alpha = 0.9f))
+                drawPath(rightSpar, wingPal.main.copy(alpha = 0.9f))
+                drawPath(leftSpar, wingPal.dark, style = Stroke(width = 1.3f * f.u))
+                drawPath(rightSpar, wingPal.dark, style = Stroke(width = 1.3f * f.u))
+
+                // Feather vanes
+                for (step in 1..3) {
+                    val spread = step * 4f * f.u
+                    drawLine(wingPal.dark.copy(alpha = 0.7f), start = Offset((40f * f.u) - spread * 0.5f, 55f * f.u), end = Offset((20f * f.u) + spread, (44f * f.u) - flap + spread * 0.4f), strokeWidth = 1f * f.u)
+                    drawLine(wingPal.dark.copy(alpha = 0.7f), start = Offset((60f * f.u) + spread * 0.5f, 55f * f.u), end = Offset((80f * f.u) - spread, (44f * f.u) - flap + spread * 0.4f), strokeWidth = 1f * f.u)
+                }
+            }
+            isShield -> {
+                val shieldMain = Color(0xFF8A9BA8)
+                val shieldDark = Color(0xFF5A6B78)
+                val shieldGold = Color(0xFFD4AF37)
+                // Compact heater shield strapped across left back: keeps torso, arms, and waist fully readable
+                drawRoundRect(shieldDark, topLeft = f.p(41f, 50f), size = f.s(18f, 22f), cornerRadius = CornerRadius(4f * f.u))
+                drawRoundRect(shieldMain, topLeft = f.p(43f, 52f), size = f.s(14f, 18f), cornerRadius = CornerRadius(3f * f.u))
+                drawCircle(shieldGold, radius = 3.2f * f.u, center = f.p(50f, 61f))
+            }
+            else -> {
+                // Generic back wearable fallback
+                val tc = GearVisuals.trinketColor(item.id)
+                drawCircle(tc.copy(alpha = 0.35f), radius = 6.5f * f.u, center = f.p(50f, 58f))
+                drawCircle(tc, radius = 4f * f.u, center = f.p(50f, 58f))
+            }
+        }
+    } else {
+        if (isCape) {
+            val capePal = when {
+                nameLower.contains("velvet") || nameLower.contains("purple") -> GearPalette(Color(0xFF6B459E), Color(0xFF452B6B))
+                nameLower.contains("emerald") || nameLower.contains("green") -> GearPalette(Color(0xFF2E7A50), Color(0xFF1B4D32))
+                nameLower.contains("crimson") || nameLower.contains("red") -> GearPalette(Color(0xFF9E2A2B), Color(0xFF6B1D1E))
+                nameLower.contains("royal") || nameLower.contains("blue") -> GearPalette(Color(0xFF3450A8), Color(0xFF233670))
+                nameLower.contains("shadow") || nameLower.contains("black") -> GearPalette(Color(0xFF2C243B), Color(0xFF1B1624))
+                else -> when (item.tier) {
+                    1 -> GearPalette(Color(0xFF8B3A3A), Color(0xFF5A2222))
+                    2 -> GearPalette(Color(0xFF3E5A78), Color(0xFF283A4E))
+                    3 -> GearPalette(Color(0xFF6B459E), Color(0xFF452B6B))
+                    else -> GearPalette(Color(0xFF8A5CE8), Color(0xFF5C36B0), Color(0xFFF8D24A))
+                }
+            }
+            drawCircle(Color(0xFFD4AF37), radius = 2.5f * f.u, center = f.p(38f, 49f))
+            drawCircle(Color(0xFFD4AF37), radius = 2.5f * f.u, center = f.p(62f, 49f))
+            drawLine(Color(0xFFD4AF37), start = f.p(38f, 49f), end = f.p(62f, 49f), strokeWidth = 1.4f * f.u)
+            drawRect(capePal.main, topLeft = f.p(35f, 49f), size = f.s(3f, 8f))
+            drawRect(capePal.main, topLeft = f.p(62f, 49f), size = f.s(3f, 8f))
+        } else {
+            val tc = GearVisuals.trinketColor(item.id)
+            drawCircle(tc.copy(alpha = 0.35f), radius = 6.5f * f.u, center = f.p(50f, 51f))
+            drawCircle(tc, radius = 4f * f.u, center = f.p(50f, 51f))
+            drawCircle(Color.White.copy(alpha = 0.7f), radius = 1.5f * f.u, center = f.p(48.8f, 49.8f))
+        }
+    }
 }
 
 // ---- Head + headgear ----
@@ -1233,48 +2089,58 @@ private fun DrawScope.drawHair(f: AvatarFrame, style: String, isHat: Boolean = f
     }
 }
 
-private fun DrawScope.drawHeadLayer(f: AvatarFrame) {
+internal fun DrawScope.drawHeadBase(f: AvatarFrame) {
     if (f.costume) {
         drawClassCostumeHead(f)
         return
     }
-    val item = f.head
-    if (item == null) {
-        drawRaceEars(f) // behind the skull so elf tips read clearly
-        drawCircle(f.skinColor("head", "face"), radius = 14f * f.u, center = f.p(50f, 30f))
-        val hideAllHair = BodyRegion.SCALP in f.hiddenRegions && BodyRegion.FOREHEAD in f.hiddenRegions
-        if (!hideAllHair) {
-            val isHat = BodyRegion.FOREHEAD in f.hiddenRegions || BodyRegion.SCALP in f.hiddenRegions
-            drawHair(f, f.appearance.hairStyle, isHat = isHat)
-        }
-        if (!f.facingBack) {
+    drawRaceEars(f) // behind the skull so elf tips read clearly
+    drawCircle(f.skinColor("head", "face"), radius = 14f * f.u, center = f.p(50f, 30f))
+    val hideAllHair = BodyRegion.SCALP in f.hiddenRegions && BodyRegion.FOREHEAD in f.hiddenRegions
+    if (!hideAllHair) {
+        val isHat = BodyRegion.FOREHEAD in f.hiddenRegions || BodyRegion.SCALP in f.hiddenRegions || f.head != null
+        drawHair(f, f.appearance.hairStyle, isHat = isHat)
+    }
+    if (!f.facingBack) {
+        val isHelm = f.head?.let { GearVisuals.headgearShape(it) == HeadgearShape.HELM } == true
+        if (!isHelm) {
             eyes(f, 44f, 32f, 56f)
             drawRaceFaceAccents(f)
+        } else {
+            drawRaceFaceAccents(f, helmCovered = true)
         }
-        return
     }
+}
+
+internal fun DrawScope.drawHeadgearOnly(f: AvatarFrame) {
+    if (f.costume) return // Costume headgear is drawn completely in drawClassCostumeHead inside drawHeadBase
+    val item = f.head ?: return
     val pal = GearVisuals.palette(item)
     when (GearVisuals.headgearShape(item)) {
         HeadgearShape.HELM -> {
-            drawRaceEars(f)
-            drawCircle(f.skinColor("head", "face"), radius = 14f * f.u, center = f.p(50f, 30f))
-            drawArc(pal.main, startAngle = 180f, sweepAngle = 180f, useCenter = true, topLeft = f.p(34.5f, 14.5f), size = f.s(31f, 31f))
-            drawRect(pal.dark, topLeft = f.p(34.5f, 26f), size = f.s(31f, 3.5f))
-            drawRoundRect(pal.main, topLeft = f.p(35f, 28f), size = f.s(7f, 12f), cornerRadius = CornerRadius(2f * f.u))
-            drawRoundRect(pal.main, topLeft = f.p(58f, 28f), size = f.s(7f, 12f), cornerRadius = CornerRadius(2f * f.u))
-            drawRoundRect(VisorSlit, topLeft = f.p(42f, 30f), size = f.s(16f, 4f), cornerRadius = CornerRadius(2f * f.u))
-            if (item.tier >= 3) {
-                drawRoundRect(pal.glow ?: f.look.outfit, topLeft = f.p(46f, 5f), size = f.s(8f, 11f), cornerRadius = CornerRadius(3f * f.u))
+            if (!f.facingBack) {
+                drawArc(pal.main, startAngle = 180f, sweepAngle = 180f, useCenter = true, topLeft = f.p(34.5f, 14.5f), size = f.s(31f, 31f))
+                drawRect(pal.dark, topLeft = f.p(34.5f, 26f), size = f.s(31f, 3.5f))
+                drawRoundRect(pal.main, topLeft = f.p(35f, 28f), size = f.s(7f, 12f), cornerRadius = CornerRadius(2f * f.u))
+                drawRoundRect(pal.main, topLeft = f.p(58f, 28f), size = f.s(7f, 12f), cornerRadius = CornerRadius(2f * f.u))
+                drawRoundRect(VisorSlit, topLeft = f.p(42f, 30f), size = f.s(16f, 4f), cornerRadius = CornerRadius(2f * f.u))
+                if (item.tier >= 3) {
+                    drawRoundRect(pal.glow ?: f.look.outfit, topLeft = f.p(46f, 5f), size = f.s(8f, 11f), cornerRadius = CornerRadius(3f * f.u))
+                }
+            } else {
+                drawArc(pal.main, startAngle = 180f, sweepAngle = 180f, useCenter = true, topLeft = f.p(34.5f, 14.5f), size = f.s(31f, 31f))
+                drawRoundRect(pal.main, topLeft = f.p(34f, 26f), size = f.s(32f, 11f), cornerRadius = CornerRadius(3f * f.u))
+                drawRect(pal.dark, topLeft = f.p(34f, 26f), size = f.s(32f, 3f))
+                drawRect(pal.dark, topLeft = f.p(48.5f, 16f), size = f.s(3f, 21f))
+                for (x in listOf(38f, 43f, 57f, 62f)) {
+                    drawCircle(pal.dark, radius = 1f * f.u, center = f.p(x, 34f))
+                }
+                if (item.tier >= 3) {
+                    drawRoundRect(pal.glow ?: f.look.outfit, topLeft = f.p(46f, 5f), size = f.s(8f, 11f), cornerRadius = CornerRadius(3f * f.u))
+                }
             }
-            // Beard / tusks can still peek under a closed helm.
-            drawRaceFaceAccents(f, helmCovered = true)
         }
         HeadgearShape.HAT -> {
-            drawRaceEars(f)
-            drawCircle(f.skinColor("head", "face"), radius = 14f * f.u, center = f.p(50f, 30f))
-            drawHair(f, f.appearance.hairStyle, isHat = true)
-            eyes(f, 44f, 30f, 56f)
-            drawRaceFaceAccents(f)
             val cone = Path().apply {
                 moveTo(33f * f.u, 20f * f.u)
                 lineTo(67f * f.u, 20f * f.u)
@@ -1284,38 +2150,543 @@ private fun DrawScope.drawHeadLayer(f: AvatarFrame) {
             drawPath(cone, pal.main)
             drawOval(pal.main, topLeft = f.p(29f, 16f), size = f.s(42f, 9f))
             drawRect(pal.glow ?: pal.dark, topLeft = f.p(40f, 17.5f), size = f.s(20f, 3f))
+            if (f.facingBack) {
+                drawRect(pal.dark, topLeft = f.p(48.5f, 16.5f), size = f.s(3f, 5f))
+            }
             pal.glow?.let { g ->
                 drawLine(g, start = f.p(56f, 2f), end = f.p(60f, 6f), strokeWidth = 1.2f * f.u)
                 drawLine(g, start = f.p(60f, 2f), end = f.p(56f, 6f), strokeWidth = 1.2f * f.u)
             }
         }
         HeadgearShape.HOOD -> {
-            drawCircle(pal.main, radius = 15.5f * f.u, center = f.p(50f, 29f))
-            drawArc(pal.dark, startAngle = 200f, sweepAngle = 140f, useCenter = true, topLeft = f.p(34.5f, 13.5f), size = f.s(31f, 31f))
-            drawOval(f.skinColor("head", "face"), topLeft = f.p(40f, 24f), size = f.s(20f, 17f))
-            eyes(f, 45f, 31f, 55f)
-            drawRaceFaceAccents(f)
-            val point = Path().apply {
-                moveTo(42f * f.u, 16f * f.u)
-                lineTo(58f * f.u, 16f * f.u)
-                lineTo(50f * f.u, 6f * f.u)
+            if (!f.facingBack) {
+                // Front: Outer hood cowl framing the face - leaves eyes, expression, and skin tone fully visible
+                val point = Path().apply {
+                    moveTo(42f * f.u, 16f * f.u)
+                    lineTo(58f * f.u, 16f * f.u)
+                    lineTo(50f * f.u, 6f * f.u)
+                    close()
+                }
+                drawPath(point, pal.main)
+                // Outer cowl framing head
+                drawArc(
+                    pal.main,
+                    startAngle = 140f,
+                    sweepAngle = 260f,
+                    useCenter = false,
+                    topLeft = f.p(33.5f, 13.5f),
+                    size = f.s(33f, 33f),
+                    style = Stroke(width = 4.5f * f.u)
+                )
+                drawArc(
+                    pal.dark,
+                    startAngle = 140f,
+                    sweepAngle = 260f,
+                    useCenter = false,
+                    topLeft = f.p(35.5f, 15.5f),
+                    size = f.s(29f, 29f),
+                    style = Stroke(width = 1.8f * f.u)
+                )
+                // Lower cowl wrap beneath chin and across collar
+                drawRoundRect(pal.main, topLeft = f.p(38f, 38f), size = f.s(24f, 7f), cornerRadius = CornerRadius(3f * f.u))
+                drawRect(pal.dark, topLeft = f.p(36f, 44f), size = f.s(28f, 3f))
+                pal.glow?.let { g ->
+                    drawArc(
+                        g.copy(alpha = 0.8f),
+                        startAngle = 140f,
+                        sweepAngle = 260f,
+                        useCenter = false,
+                        topLeft = f.p(32f, 12f),
+                        size = f.s(36f, 36f),
+                        style = Stroke(width = 1.3f * f.u)
+                    )
+                }
+            } else {
+                // Back: fitted tapered hood rather than an oversized oval sack.
+                val backCowl = Path().apply {
+                    moveTo(39f * f.u, 31f * f.u)
+                    quadraticTo(36f * f.u, 20f * f.u, 44f * f.u, 14f * f.u)
+                    lineTo(47f * f.u, 9f * f.u)
+                    lineTo(53f * f.u, 9f * f.u)
+                    lineTo(56f * f.u, 14f * f.u)
+                    quadraticTo(64f * f.u, 20f * f.u, 61f * f.u, 31f * f.u)
+                    lineTo(58f * f.u, 42f * f.u)
+                    lineTo(42f * f.u, 42f * f.u)
+                    close()
+                }
+                drawPath(backCowl, pal.main)
+                drawLine(pal.dark, start = f.p(50f, 10f), end = f.p(50f, 41f), strokeWidth = 1.5f * f.u)
+                drawLine(pal.dark.copy(alpha = 0.75f), start = f.p(42f, 34f), end = f.p(58f, 34f), strokeWidth = 1.2f * f.u)
+                pal.glow?.let { g ->
+                    drawPath(backCowl, g.copy(alpha = 0.6f), style = Stroke(width = 1.2f * f.u))
+                }
+            }
+        }
+        HeadgearShape.CROWN -> {
+            val crown = Path().apply {
+                moveTo(36f * f.u, 27f * f.u)
+                lineTo(36f * f.u, 19f * f.u)
+                lineTo(43f * f.u, 23f * f.u)
+                lineTo(50f * f.u, 14f * f.u)
+                lineTo(57f * f.u, 23f * f.u)
+                lineTo(64f * f.u, 19f * f.u)
+                lineTo(64f * f.u, 27f * f.u)
                 close()
             }
-            drawPath(point, pal.main)
-            pal.glow?.let { g ->
-                drawCircle(g.copy(alpha = 0.6f), radius = 15.8f * f.u, center = f.p(50f, 29f), style = Stroke(width = 1.2f * f.u))
+            drawPath(crown, pal.main)
+            drawRect(pal.dark, topLeft = f.p(36f, 25f), size = f.s(28f, 3f))
+            if (!f.facingBack) {
+                drawCircle(pal.glow ?: GearVisuals.accent(item), radius = 1.8f * f.u, center = f.p(50f, 23f))
+            } else {
+                drawLine(pal.dark, f.p(50f, 16f), f.p(50f, 26f), 1f * f.u)
             }
-            // Elf ears poke out of the hood rim.
-            drawRaceEars(f, hooded = true)
         }
         HeadgearShape.CAP -> {
-            drawRaceEars(f)
-            drawCircle(f.skinColor("head", "face"), radius = 14f * f.u, center = f.p(50f, 30f))
-            drawHair(f, f.appearance.hairStyle, isHat = true)
-            eyes(f, 44f, 31f, 56f)
-            drawRaceFaceAccents(f)
-            drawOval(pal.main, topLeft = f.p(38f, 15f), size = f.s(24f, 9f))
-            drawRect(pal.dark, topLeft = f.p(35f, 21f), size = f.s(30f, 3.5f))
+            if (!f.facingBack) {
+                drawOval(pal.main, topLeft = f.p(38f, 15f), size = f.s(24f, 9f))
+                drawRect(pal.dark, topLeft = f.p(35f, 21f), size = f.s(30f, 3.5f))
+            } else {
+                drawOval(pal.main, topLeft = f.p(38f, 15f), size = f.s(24f, 9f))
+                drawRect(pal.dark, topLeft = f.p(38f, 21f), size = f.s(24f, 3.5f))
+                drawArc(f.skinColor("head"), startAngle = 180f, sweepAngle = 180f, useCenter = true, topLeft = f.p(46f, 18f), size = f.s(8f, 6f))
+                drawRect(pal.dark, topLeft = f.p(45f, 22f), size = f.s(10f, 2f))
+            }
+        }
+    }
+    drawHeadgearSignatureDetails(f, item, pal)
+}
+
+private fun DrawScope.drawHeadgearSignatureDetails(f: AvatarFrame, item: ItemEntity, pal: GearPalette) {
+    val signature = GearVisuals.signature(item)
+    val accent = GearVisuals.accent(item)
+    when (signature.silhouette) {
+        ProceduralSilhouette.BALANCED -> Unit
+        ProceduralSilhouette.ANGULAR -> {
+            val ridge = Path().apply {
+                moveTo(46f * f.u, 16f * f.u)
+                lineTo(50f * f.u, 9f * f.u)
+                lineTo(54f * f.u, 16f * f.u)
+                close()
+            }
+            drawPath(ridge, pal.dark)
+        }
+        ProceduralSilhouette.CURVED -> drawArc(
+            accent.copy(alpha = 0.85f), 190f, 160f, false,
+            topLeft = f.p(38f, 15f), size = f.s(24f, 14f), style = Stroke(width = 1.2f * f.u)
+        )
+        ProceduralSilhouette.FORTIFIED -> {
+            drawCircle(pal.dark, radius = 2f * f.u, center = f.p(36f, 27f))
+            drawCircle(pal.dark, radius = 2f * f.u, center = f.p(64f, 27f))
+        }
+    }
+    when (signature.ornament) {
+        ProceduralOrnament.NONE -> Unit
+        ProceduralOrnament.STUDS -> for (x in listOf(42f, 50f, 58f)) drawCircle(accent, 0.8f * f.u, f.p(x, 25f))
+        ProceduralOrnament.GEM -> drawCircle(accent, 1.8f * f.u, f.p(50f, 23f))
+        ProceduralOrnament.RUNES -> for (x in listOf(44f, 50f, 56f)) {
+            drawLine(accent, f.p(x - 1f, 24f), f.p(x + 1f, 21f), 0.8f * f.u)
+        }
+        ProceduralOrnament.SPIKES -> for (x in listOf(39f, 61f)) {
+            drawLine(accent, f.p(x, 20f), f.p(x + if (x < 50f) -3f else 3f, 15f), 2f * f.u)
+        }
+        ProceduralOrnament.CREST -> drawRoundRect(
+            accent, topLeft = f.p(47.5f, 8f), size = f.s(5f, 9f), cornerRadius = CornerRadius(2f * f.u)
+        )
+    }
+}
+
+private fun DrawScope.drawHeadLayer(f: AvatarFrame) {
+    drawHeadBase(f)
+    drawHeadgearOnly(f)
+}
+
+// ---- Weapon + hands ----
+
+internal fun DrawScope.drawWeaponLayer(f: AvatarFrame, pose: AvatarPose) {
+    if (f.facingBack) {
+        val rearWeapon = f.weapon
+        val hasFeaturedBackItem = f.gear.values.any {
+            com.fitnessquest.rpg.domain.visuals.EquipmentVisualRegistry.resolveSpec(it).visualSlot ==
+                com.fitnessquest.rpg.domain.visuals.PaperDollVisualSlot.BACK
+        }
+        val rearPresentation = rearWeapon?.let {
+            com.fitnessquest.rpg.domain.visuals.EquipmentVisualRegistry.resolvePresentation(
+                item = it,
+                orientation = com.fitnessquest.rpg.domain.visuals.AvatarOrientation.BACK,
+                hasFeaturedBackItem = hasFeaturedBackItem
+            )
+        }
+
+        if (rearPresentation?.attachment == com.fitnessquest.rpg.domain.visuals.VisualAttachmentMode.HIDDEN) {
+            Unit
+        } else if (
+            rearWeapon != null &&
+            rearPresentation?.attachment == com.fitnessquest.rpg.domain.visuals.VisualAttachmentMode.HELD
+        ) {
+            val handX = rearPresentation.anchor.xFraction * 100f
+            val rearHand = f.hands?.let { GearVisuals.palette(it).dark }
+                ?: f.skinShade("forearms", "hands", "arms")
+            withTransform({
+                translate(pose.weaponOffset.x, pose.weaponOffset.y)
+                translate(pose.rightArmOffset.x, pose.rightArmOffset.y)
+                rotate(pose.rightArmRotation, pivot = f.p(71f, 46f))
+            }) {
+                // A featured cape, wing set, shield, or quiver owns the back.
+                // Keep the equipped weapon in hand so it remains identifiable
+                // without crossing or hiding the showcased back item.
+                drawWeapon(f, rearWeapon)
+                drawCircle(rearHand, radius = 5f * f.u, center = f.p(handX, 78f))
+            }
+        } else {
+            rearWeapon?.let { drawSlungBackWeapon(f, it, presentation = rearPresentation) }
+                ?: run {
+                if (f.costume && f.cls == CharacterClass.NECROMANCER) {
+                    drawSlungBackWeapon(f, ItemEntity(id = 999, name = "Bone Staff", slot = ItemSlot.WEAPON, style = ItemStyle.STAFF, classAffinity = CharacterClass.NECROMANCER, tier = 3, emoji = "🪄", price = 250))
+                }
+            }
+        }
+        return
+    }
+
+    // Front View: Weapons gripped in hands in foreground
+    val handsPal = f.hands?.let { GearVisuals.palette(it) }
+    val leftHand = handsPal?.main ?: f.skinColor("forearms", "hands", "arms")
+    val rightHand = when {
+        handsPal != null && f.weapon != null -> handsPal.dark
+        handsPal != null -> handsPal.main
+        f.weapon != null -> f.skinShade("forearms", "hands", "arms")
+        else -> f.skinColor("forearms", "hands", "arms")
+    }
+
+    withTransform({
+        translate(pose.weaponOffset.x, pose.weaponOffset.y)
+        translate(pose.rightArmOffset.x, pose.rightArmOffset.y)
+        rotate(pose.rightArmRotation, pivot = f.p(71f, 46f))
+    }) {
+        f.weapon?.let { drawWeapon(f, it) }
+            ?: run {
+                if (f.costume && f.cls == CharacterClass.NECROMANCER) {
+                    drawSkullStaff(f, handX = 71.5f, tier = 3)
+                }
+            }
+        drawCircle(rightHand, radius = 5f * f.u, center = f.p(71.5f, 78f))
+    }
+
+    withTransform({
+        translate(pose.weaponOffset.x, pose.weaponOffset.y)
+        translate(pose.leftArmOffset.x, pose.leftArmOffset.y)
+        rotate(pose.leftArmRotation, pivot = f.p(29f, 46f))
+    }) {
+        drawCircle(leftHand, radius = 5f * f.u, center = f.p(28.5f, 78f))
+
+        // Off-hand dagger sits over the left hand
+        val w = f.weapon
+        if (w != null && w.style == ItemStyle.DAGGER && w.tier >= 2) {
+            drawDagger(f, handX = 28.5f, tier = w.tier, length = 14f)
+        }
+    }
+}
+
+private fun DrawScope.drawSlungBackWeapon(
+    f: AvatarFrame,
+    weapon: ItemEntity,
+    knightHandX: Float = 71.5f,
+    presentation: com.fitnessquest.rpg.domain.visuals.OrientationPresentation? = null,
+) {
+    val descriptor = com.fitnessquest.rpg.domain.visuals.EquipmentVisualRegistry.resolveVisualDescriptor(weapon)
+    val backPresentation = presentation ?: descriptor.orientationContract.back
+    val anchorX = backPresentation.anchor.xFraction * 100f
+    val anchorY = backPresentation.anchor.yFraction * 120f
+    val leatherStrap = Color(0xFF4A3525)
+    val signature = descriptor.proceduralSignature
+    val proceduralAccent = descriptor.accentColor ?: GearVisuals.accent(weapon)
+    val silhouetteWidth = when (signature.silhouette) {
+        ProceduralSilhouette.BALANCED -> 0f
+        ProceduralSilhouette.ANGULAR -> 0.4f
+        ProceduralSilhouette.CURVED -> -0.3f
+        ProceduralSilhouette.FORTIFIED -> 0.9f
+    }
+
+    when (descriptor.archetype) {
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.TONFA,
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.INSTRUMENT,
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.AXE,
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.SCYTHE,
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.HAMMER,
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.CLUB,
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.SCEPTER,
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.ARCANE_FOCUS -> {
+            withTransform({ rotate(backPresentation.anchor.rotationDegrees, pivot = f.p(anchorX, anchorY)) }) {
+                drawSemanticWeapon(f, weapon, descriptor, handX = anchorX)
+            }
+            if (descriptor.archetype != com.fitnessquest.rpg.domain.visuals.VisualArchetype.ARCANE_FOCUS) {
+                drawLine(leatherStrap, f.p(anchorX - 6f, anchorY - 3f), f.p(anchorX + 5f, anchorY + 3f), 2f * f.u)
+            }
+        }
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.SPEAR_GENERIC -> {
+            withTransform({ rotate(backPresentation.anchor.rotationDegrees, pivot = f.p(anchorX, anchorY)) }) {
+                drawProceduralSpear(f, weapon, descriptor, handX = anchorX)
+            }
+            drawLine(
+                leatherStrap,
+                start = f.p(anchorX - 7f, anchorY - 4f),
+                end = f.p(anchorX + 5f, anchorY + 3f),
+                strokeWidth = 2f * f.u
+            )
+        }
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.GREATSWORD_DRAGON -> {
+            // Exact 1:5 reconstruction of the authored Dragonfang silhouette,
+            // rotated as one rigid object into a true two-handed back mount.
+            // Hilt rests over the physical right shoulder (viewer-left from
+            // behind); blade points toward the opposite hip.
+            withTransform({ rotate(145f, pivot = f.p(50f, 60f)) }) {
+                drawOval(
+                    color = (descriptor.glowColor ?: Color(0xFFEF4444)).copy(alpha = 0.13f),
+                    topLeft = f.p(43f, 8f),
+                    size = f.s(14f, 64f),
+                )
+
+                val blade = Path().apply {
+                    moveTo(46.9f * f.u, 24f * f.u)
+                    lineTo(50f * f.u, 9f * f.u)
+                    lineTo(53.1f * f.u, 24f * f.u)
+                    lineTo(52.5f * f.u, 70f * f.u)
+                    lineTo(47.5f * f.u, 70f * f.u)
+                    close()
+                }
+                drawPath(blade, descriptor.primaryColor)
+
+                val leftFangs = Path().apply {
+                    moveTo(46.9f * f.u, 24f * f.u)
+                    lineTo(44.5f * f.u, 29f * f.u)
+                    lineTo(47.3f * f.u, 31.6f * f.u)
+                    lineTo(44.1f * f.u, 38f * f.u)
+                    lineTo(47.3f * f.u, 41f * f.u)
+                    lineTo(44.1f * f.u, 48f * f.u)
+                    lineTo(47.3f * f.u, 51f * f.u)
+                    lineTo(44.1f * f.u, 58f * f.u)
+                    lineTo(47.3f * f.u, 61f * f.u)
+                    lineTo(47.3f * f.u, 24f * f.u)
+                    close()
+                }
+                val rightFangs = Path().apply {
+                    moveTo(53.1f * f.u, 24f * f.u)
+                    lineTo(55.5f * f.u, 29f * f.u)
+                    lineTo(52.7f * f.u, 31.6f * f.u)
+                    lineTo(55.9f * f.u, 38f * f.u)
+                    lineTo(52.7f * f.u, 41f * f.u)
+                    lineTo(55.9f * f.u, 48f * f.u)
+                    lineTo(52.7f * f.u, 51f * f.u)
+                    lineTo(55.9f * f.u, 58f * f.u)
+                    lineTo(52.7f * f.u, 61f * f.u)
+                    lineTo(52.7f * f.u, 24f * f.u)
+                    close()
+                }
+                drawPath(leftFangs, descriptor.secondaryColor)
+                drawPath(rightFangs, descriptor.secondaryColor)
+                drawLine(descriptor.glowColor ?: Color(0xFFEF4444), f.p(50f, 15f), f.p(50f, 67f), 0.9f * f.u, StrokeCap.Round)
+                drawLine(Color(0xFFFCA5A5), f.p(50f, 17f), f.p(50f, 65f), 0.4f * f.u, StrokeCap.Round)
+
+                val outerGuard = Path().apply {
+                    moveTo(40.9f * f.u, 68.4f * f.u)
+                    quadraticTo(50f * f.u, 71.2f * f.u, 59.1f * f.u, 68.4f * f.u)
+                    lineTo(59.9f * f.u, 71.2f * f.u)
+                    quadraticTo(50f * f.u, 73.6f * f.u, 40.1f * f.u, 71.2f * f.u)
+                    close()
+                }
+                val innerGuard = Path().apply {
+                    moveTo(42.5f * f.u, 69f * f.u)
+                    quadraticTo(50f * f.u, 70.8f * f.u, 57.5f * f.u, 69f * f.u)
+                    lineTo(57.9f * f.u, 70.6f * f.u)
+                    quadraticTo(50f * f.u, 72.4f * f.u, 42.1f * f.u, 70.6f * f.u)
+                    close()
+                }
+                drawPath(outerGuard, descriptor.accentColor ?: Color(0xFF991B1B))
+                drawPath(innerGuard, Color(0xFFD97706))
+                drawCircle(descriptor.glowColor ?: Color(0xFFEF4444), radius = 1.1f * f.u, center = f.p(50f, 71.2f))
+                drawLine(Color(0xFFFEF08A), f.p(50f, 70.4f), f.p(50f, 72f), 0.35f * f.u)
+
+                drawRect(Color(0xFF451A03), topLeft = f.p(48.8f, 71.6f), size = f.s(2.4f, 15.4f))
+                for (y in listOf(73.6f, 76.4f, 79.2f, 82f, 84.8f)) {
+                    drawLine(Color(0xFFF59E0B), f.p(48.8f, y), f.p(51.2f, y + 1.4f), 0.4f * f.u)
+                }
+                val pommel = Path().apply {
+                    moveTo(47.7f * f.u, 87f * f.u)
+                    lineTo(52.3f * f.u, 87f * f.u)
+                    lineTo(51.3f * f.u, 91f * f.u)
+                    lineTo(50f * f.u, 93f * f.u)
+                    lineTo(48.7f * f.u, 91f * f.u)
+                    close()
+                }
+                drawPath(pommel, Color(0xFFB45309))
+            }
+
+            // Opposing baldric visibly secures the weapon to the torso.
+            drawLine(leatherStrap, start = f.p(67f, 48f), end = f.p(33f, 76f), strokeWidth = 2.6f * f.u)
+        }
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.GREATSWORD_GENERIC -> {
+            val expansion = silhouetteWidth * 0.6f
+            val scabbard = Path().apply {
+                moveTo((38f - expansion) * f.u, 78f * f.u)
+                lineTo((44f + expansion) * f.u, 81f * f.u)
+                lineTo((63f + expansion) * f.u, 44f * f.u)
+                lineTo((57f - expansion) * f.u, 41f * f.u)
+                close()
+            }
+            drawPath(scabbard, descriptor.primaryColor)
+            drawPath(scabbard, descriptor.secondaryColor, style = Stroke(width = 1.2f * f.u))
+            val guardWidth = 11f + signature.detailCount
+            drawRoundRect(proceduralAccent, topLeft = f.p(61f - guardWidth / 2f, 40f), size = f.s(guardWidth, 3.5f), cornerRadius = CornerRadius(1.7f * f.u))
+            drawRect(bladeColor(weapon.tier), topLeft = f.p(59.5f, 28f), size = f.s(3f, 13f))
+            drawCircle(descriptor.secondaryColor, radius = 2.4f * f.u, center = f.p(61f, 27f))
+            drawLine(leatherStrap, start = f.p(36f, 70f), end = f.p(57f, 46f), strokeWidth = 2.4f * f.u)
+        }
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.SWORD_KNIGHT -> {
+            // Reconstruct the authored 500x600 front asset at an exact 1:5
+            // scale and orientation. The back view therefore shows the same
+            // sword—not an inverted or separately designed approximation.
+            val cx = knightHandX
+            val blade = Path().apply {
+                moveTo((cx - 2.3f) * f.u, 40f * f.u)
+                lineTo(cx * f.u, 33f * f.u)
+                lineTo((cx + 2.3f) * f.u, 40f * f.u)
+                lineTo((cx + 1.7f) * f.u, 71f * f.u)
+                lineTo((cx - 1.7f) * f.u, 71f * f.u)
+                close()
+            }
+            drawPath(blade, descriptor.secondaryColor)
+            val bevel = Path().apply {
+                moveTo((cx - 1.9f) * f.u, 40f * f.u)
+                lineTo(cx * f.u, 34f * f.u)
+                lineTo(cx * f.u, 71f * f.u)
+                lineTo((cx - 1.7f) * f.u, 71f * f.u)
+                close()
+            }
+            drawPath(bevel, Color(0xFFCBD5E1))
+            drawLine(
+                descriptor.glowColor ?: Color(0xFF06B6D4),
+                start = f.p(cx, 38f),
+                end = f.p(cx, 69f),
+                strokeWidth = 0.5f * f.u,
+                cap = StrokeCap.Round
+            )
+
+            val guard = Path().apply {
+                moveTo((cx - 6.3f) * f.u, 70.4f * f.u)
+                quadraticTo(cx * f.u, 68.4f * f.u, (cx + 6.3f) * f.u, 70.4f * f.u)
+                lineTo((cx + 6.7f) * f.u, 72.4f * f.u)
+                quadraticTo(cx * f.u, 74f * f.u, (cx - 6.7f) * f.u, 72.4f * f.u)
+                close()
+            }
+            drawPath(guard, Color(0xFFD97706))
+            drawCircle(descriptor.glowColor ?: Color(0xFF06B6D4), radius = 0.7f * f.u, center = f.p(cx, 72.4f))
+
+            drawRect(Color(0xFF1E293B), topLeft = f.p(cx - 1f, 72.8f), size = f.s(2f, 10.2f))
+            for (y in listOf(74.4f, 76.4f, 78.4f, 80.4f, 82.4f)) {
+                drawLine(Color(0xFF94A3B8), start = f.p(cx - 1f, y), end = f.p(cx + 1f, y + 1f), strokeWidth = 0.3f * f.u)
+            }
+            val pommel = Path().apply {
+                moveTo((cx - 1.6f) * f.u, 83f * f.u)
+                lineTo((cx + 1.6f) * f.u, 83f * f.u)
+                lineTo((cx + 1f) * f.u, 86.4f * f.u)
+                lineTo((cx - 1f) * f.u, 86.4f * f.u)
+                close()
+            }
+            drawPath(pommel, Color(0xFFF59E0B))
+        }
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.SWORD_GENERIC -> {
+            val expansion = silhouetteWidth * 0.45f
+            val scabbard = Path().apply {
+                moveTo((41f - expansion) * f.u, 75f * f.u)
+                lineTo((45f + expansion) * f.u, 77f * f.u)
+                lineTo((61f + expansion) * f.u, 44f * f.u)
+                lineTo((57f - expansion) * f.u, 42f * f.u)
+                close()
+            }
+            drawPath(scabbard, descriptor.primaryColor)
+            drawPath(scabbard, descriptor.secondaryColor, style = Stroke(width = 1.2f * f.u))
+            drawRoundRect(proceduralAccent, topLeft = f.p(55f, 41f), size = f.s(10f, 3f), cornerRadius = CornerRadius(1.5f * f.u))
+            drawRect(bladeColor(weapon.tier), topLeft = f.p(58.5f, 31f), size = f.s(2.8f, 10f))
+            drawCircle(proceduralAccent, radius = 2.2f * f.u, center = f.p(60f, 30f))
+            drawLine(leatherStrap, start = f.p(38f, 68f), end = f.p(57f, 46f), strokeWidth = 2f * f.u)
+        }
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.BOW_SHORT,
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.BOW_GENERIC -> {
+            val curve = 8.5f + silhouetteWidth
+            val bow = Path().apply {
+                moveTo(anchorX * f.u, (anchorY - 33f) * f.u)
+                quadraticTo((anchorX - curve) * f.u, anchorY * f.u, anchorX * f.u, (anchorY + 33f) * f.u)
+            }
+            drawPath(bow, descriptor.primaryColor, style = Stroke(width = 1.4f * f.u))
+            drawPath(bow, descriptor.secondaryColor, style = Stroke(width = 0.65f * f.u))
+            drawLine(descriptor.accentColor ?: Color(0xFFE2E8F0), start = f.p(anchorX, anchorY - 33f), end = f.p(anchorX, anchorY + 33f), strokeWidth = 0.55f * f.u)
+            drawRoundRect(Color(0xFF1E293B), topLeft = f.p(anchorX - 5.8f, anchorY - 3.5f), size = f.s(3.2f, 7f), cornerRadius = CornerRadius(1.2f * f.u))
+            for (dy in listOf(-2f, 0f, 2f)) {
+                drawLine(Color(0xFFF59E0B), start = f.p(anchorX - 5.7f, anchorY + dy), end = f.p(anchorX - 2.8f, anchorY + dy + 0.8f), strokeWidth = 0.45f * f.u)
+            }
+            drawLine(leatherStrap, start = f.p(anchorX - 4f, anchorY - 1f), end = f.p(anchorX + 6f, anchorY + 1f), strokeWidth = 2f * f.u)
+            descriptor.glowColor?.let { fletch ->
+                drawCircle(fletch, radius = 2f * f.u, center = f.p(anchorX, anchorY - 30f))
+            }
+            if (signature.ornament != ProceduralOrnament.NONE) {
+                drawCircle(proceduralAccent, radius = 1.1f * f.u, center = f.p(anchorX - curve * 0.7f, anchorY))
+            }
+        }
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.WAND_ARCANE -> {
+            // A short wand belongs at the hip, not slung across the back like
+            // a staff. Its carrier is fully concealed beneath the cape so no
+            // strap is incorrectly painted over the cape surface.
+
+            // The authored front drawable uses a 500x600 viewport while this
+            // renderer uses 100x120 coordinates. These dimensions are the
+            // exact 1:5 conversion of that asset.
+            drawLine(
+                descriptor.primaryColor,
+                start = f.p(anchorX, anchorY + 18.4f),
+                end = f.p(anchorX, anchorY + 2.4f),
+                strokeWidth = 1.2f * f.u
+            )
+            drawRect(Color(0xFF3B2A1E), topLeft = f.p(anchorX - 1.2f, anchorY + 10.4f), size = f.s(2.4f, 6.4f))
+            for (dy in listOf(11.8f, 13.6f, 15.4f)) {
+                drawLine(Color(0xFFB07E24), start = f.p(anchorX - 1.1f, anchorY + dy), end = f.p(anchorX + 1.1f, anchorY + dy + 1f), strokeWidth = 0.4f * f.u)
+            }
+            val orb = descriptor.glowColor ?: orbColor(weapon.tier)
+            drawCircle(orb.copy(alpha = 0.2f), radius = 3.6f * f.u, center = f.p(anchorX, anchorY))
+            drawCircle(orb, radius = 2f * f.u, center = f.p(anchorX, anchorY))
+            drawCircle(Color.White.copy(alpha = 0.88f), radius = 0.6f * f.u, center = f.p(anchorX - 0.7f, anchorY - 1.2f))
+        }
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.STAFF_WOODEN -> {
+            // Staff strapped diagonally along dorsal spine from left hip to right shoulder
+            drawRoundRect(descriptor.primaryColor, topLeft = f.p(43f, 78f), size = f.s(3.2f, 44f), cornerRadius = CornerRadius(1.6f * f.u))
+            val orb = descriptor.glowColor ?: orbColor(weapon.tier)
+            drawCircle(orb.copy(alpha = 0.35f), radius = 6f * f.u, center = f.p(58f, 36f))
+            drawCircle(orb, radius = 3.6f * f.u, center = f.p(58f, 36f))
+            drawCircle(Color.White.copy(alpha = 0.6f), radius = 1.2f * f.u, center = f.p(57f, 35f))
+            drawLine(leatherStrap, start = f.p(40f, 68f), end = f.p(57f, 46f), strokeWidth = 2f * f.u)
+        }
+        else -> {
+            when (weapon.style) {
+                ItemStyle.MACE -> {
+                    drawRoundRect(Wood, topLeft = f.p(62f, 48f), size = f.s(3f, 32f), cornerRadius = CornerRadius(1.5f * f.u))
+                    drawCircle(Color(0xFF9AA3AD), radius = 6.5f * f.u, center = f.p(63.5f, 46f))
+                }
+                ItemStyle.DAGGER -> {
+                    drawRoundRect(Color(0xFF2C241E), topLeft = f.p(42f, 69f), size = f.s(16f, 4f), cornerRadius = CornerRadius(1.5f * f.u))
+                    drawRoundRect(Color(0xFFB07E24), topLeft = f.p(56f, 68f), size = f.s(6f, 6f), cornerRadius = CornerRadius(1f * f.u))
+                }
+                else -> {
+                    // Fallback scabbard
+                    val scabbard = Path().apply {
+                        moveTo(41f * f.u, 75f * f.u)
+                        lineTo(45f * f.u, 77f * f.u)
+                        lineTo(61f * f.u, 44f * f.u)
+                        lineTo(57f * f.u, 42f * f.u)
+                        close()
+                    }
+                    drawPath(scabbard, descriptor.primaryColor)
+                    drawPath(scabbard, descriptor.secondaryColor, style = Stroke(width = 1.2f * f.u))
+                }
+            }
         }
     }
 }
@@ -1425,7 +2796,7 @@ private fun DrawScope.drawRaceEars(f: AvatarFrame, hooded: Boolean = false) {
 }
 
 private fun DrawScope.drawRaceFaceAccents(f: AvatarFrame, helmCovered: Boolean = false) {
-    val skin = f.appearance.skinColor
+    val skin = f.skinColor("head", "face")
     val shade = f.skinShade("head", "neck", "face")
     val hair = f.appearance.hairColor
     when (f.appearance.race) {
@@ -1734,46 +3105,7 @@ private fun DrawScope.eyes(f: AvatarFrame, x1: Float, y1: Float, x2: Float) {
     }
 }
 
-// ---- Weapon + hands ----
 
-internal fun DrawScope.drawWeaponLayer(f: AvatarFrame, pose: AvatarPose) {
-    val handsPal = f.hands?.let { GearVisuals.palette(it) }
-    val leftHand = handsPal?.main ?: f.skinColor("forearms", "hands", "arms")
-    val rightHand = when {
-        handsPal != null && f.weapon != null -> handsPal.dark
-        handsPal != null -> handsPal.main
-        f.weapon != null -> f.skinShade("forearms", "hands", "arms")
-        else -> f.skinColor("forearms", "hands", "arms")
-    }
-
-    withTransform({
-        translate(pose.weaponOffset.x, pose.weaponOffset.y)
-        translate(pose.rightArmOffset.x, pose.rightArmOffset.y)
-        rotate(pose.rightArmRotation, pivot = f.p(71f, 46f))
-    }) {
-        f.weapon?.let { drawWeapon(f, it) }
-            ?: run {
-                if (f.costume && f.cls == CharacterClass.NECROMANCER) {
-                    drawSkullStaff(f, handX = 71.5f, tier = 3)
-                }
-            }
-        drawCircle(rightHand, radius = 5f * f.u, center = f.p(71.5f, 78f))
-    }
-
-    withTransform({
-        translate(pose.weaponOffset.x, pose.weaponOffset.y)
-        translate(pose.leftArmOffset.x, pose.leftArmOffset.y)
-        rotate(pose.leftArmRotation, pivot = f.p(29f, 46f))
-    }) {
-        drawCircle(leftHand, radius = 5f * f.u, center = f.p(28.5f, 78f))
-        
-        // Off-hand dagger sits over the left hand
-        val w = f.weapon
-        if (w != null && w.style == ItemStyle.DAGGER && w.tier >= 2) {
-            drawDagger(f, handX = 28.5f, tier = w.tier, length = 14f)
-        }
-    }
-}
 
 private fun bladeColor(tier: Int): Color = when (tier) {
     1 -> Color(0xFF9A8F7A) // dull, rusty
@@ -1878,6 +3210,15 @@ private fun DrawScope.drawSkullStaff(f: AvatarFrame, handX: Float, tier: Int) {
 private fun DrawScope.drawWeapon(f: AvatarFrame, weapon: ItemEntity) {
     val handX = 71.5f
     val legendary = weapon.tier >= 4
+    val descriptor = com.fitnessquest.rpg.domain.visuals.EquipmentVisualRegistry.resolveVisualDescriptor(weapon)
+    val signature = descriptor.proceduralSignature
+    val accent = GearVisuals.accent(weapon)
+    val bladeWidthBonus = when (signature.silhouette) {
+        ProceduralSilhouette.BALANCED -> 0f
+        ProceduralSilhouette.ANGULAR -> 0.4f
+        ProceduralSilhouette.CURVED -> -0.3f
+        ProceduralSilhouette.FORTIFIED -> 0.9f
+    }
     val necroPolearm = (weapon.style == ItemStyle.STAFF || weapon.style == ItemStyle.WAND) &&
         (weapon.classAffinity == CharacterClass.NECROMANCER || f.cls == CharacterClass.NECROMANCER)
 
@@ -1885,36 +3226,71 @@ private fun DrawScope.drawWeapon(f: AvatarFrame, weapon: ItemEntity) {
         drawSkullStaff(f, handX = handX, tier = weapon.tier)
         return
     }
+    if (descriptor.archetype == com.fitnessquest.rpg.domain.visuals.VisualArchetype.SPEAR_GENERIC) {
+        drawProceduralSpear(f, weapon, descriptor, handX)
+        return
+    }
+    if (descriptor.archetype in setOf(
+            com.fitnessquest.rpg.domain.visuals.VisualArchetype.UNARMED_WRAP,
+            com.fitnessquest.rpg.domain.visuals.VisualArchetype.TONFA,
+            com.fitnessquest.rpg.domain.visuals.VisualArchetype.INSTRUMENT,
+            com.fitnessquest.rpg.domain.visuals.VisualArchetype.AXE,
+            com.fitnessquest.rpg.domain.visuals.VisualArchetype.SCYTHE,
+            com.fitnessquest.rpg.domain.visuals.VisualArchetype.HAMMER,
+            com.fitnessquest.rpg.domain.visuals.VisualArchetype.CLUB,
+            com.fitnessquest.rpg.domain.visuals.VisualArchetype.SCEPTER,
+            com.fitnessquest.rpg.domain.visuals.VisualArchetype.ARCANE_FOCUS,
+        )
+    ) {
+        drawSemanticWeapon(f, weapon, descriptor, handX)
+        return
+    }
 
     when (weapon.style) {
         ItemStyle.MACE -> {
             drawRoundRect(Wood, topLeft = f.p(handX - 1.5f, 46f), size = f.s(3f, 32f), cornerRadius = CornerRadius(1.5f * f.u))
-            drawCircle(Color(0xFF9AA3AD), radius = 8f * f.u, center = f.p(handX, 42f))
-            for ((dx, dy) in listOf(0f to -10f, -9f to -4f, 9f to -4f, -7f to 6f, 7f to 6f)) {
+            val headRadius = 7.5f + bladeWidthBonus
+            drawCircle(Color(0xFF9AA3AD), radius = headRadius * f.u, center = f.p(handX, 42f))
+            val spikes = listOf(0f to -10f, -9f to -4f, 9f to -4f, -7f to 6f, 7f to 6f).take(signature.detailCount + 1)
+            for ((dx, dy) in spikes) {
                 drawCircle(Color(0xFF767E87), radius = 2.4f * f.u, center = f.p(handX + dx, 42f + dy))
             }
+            if (signature.ornament != ProceduralOrnament.NONE) drawCircle(accent, 2f * f.u, f.p(handX, 42f))
         }
         ItemStyle.GREATSWORD -> {
+            val halfWidth = 3.5f + bladeWidthBonus
             val blade = Path().apply {
-                moveTo((handX - 3.5f) * f.u, 70f * f.u)
-                lineTo((handX - 3.5f) * f.u, 22f * f.u)
+                moveTo((handX - halfWidth) * f.u, 70f * f.u)
+                lineTo((handX - halfWidth) * f.u, 22f * f.u)
                 lineTo(handX * f.u, 10f * f.u)
-                lineTo((handX + 3.5f) * f.u, 22f * f.u)
-                lineTo((handX + 3.5f) * f.u, 70f * f.u)
+                lineTo((handX + halfWidth) * f.u, 22f * f.u)
+                lineTo((handX + halfWidth) * f.u, 70f * f.u)
                 close()
             }
             if (legendary) {
                 drawPath(blade, Color(0xFFFFA040).copy(alpha = 0.5f), style = Stroke(width = 3f * f.u))
             }
             drawPath(blade, Color(0xFFE8763A))
-            drawRect(Color(0xFFB3502A), topLeft = f.p(handX - 0.8f, 12f), size = f.s(1.6f, 56f))
-            drawRoundRect(Color(0xFFF0C040), topLeft = f.p(handX - 8f, 70f), size = f.s(16f, 4f), cornerRadius = CornerRadius(2f * f.u))
+            drawRect(accent, topLeft = f.p(handX - 0.8f, 12f), size = f.s(1.6f, 56f))
+            val guardWidth = 15f + signature.detailCount
+            drawRoundRect(Color(0xFFF0C040), topLeft = f.p(handX - guardWidth / 2f, 70f), size = f.s(guardWidth, 4f), cornerRadius = CornerRadius(2f * f.u))
         }
         ItemStyle.WAND -> {
-            drawRoundRect(WoodLight, topLeft = f.p(handX - 1.2f, 56f), size = f.s(2.4f, 22f), cornerRadius = CornerRadius(1.2f * f.u))
+            val shaftWidth = 2.1f + signature.detailCount * 0.12f
+            drawRoundRect(WoodLight, topLeft = f.p(handX - shaftWidth / 2f, 56f), size = f.s(shaftWidth, 22f), cornerRadius = CornerRadius(1.2f * f.u))
             val spark = orbColor(weapon.tier)
             drawCircle(spark.copy(alpha = 0.35f), radius = 5f * f.u, center = f.p(handX, 53f))
-            drawCircle(spark, radius = 2.6f * f.u, center = f.p(handX, 53f))
+            if (signature.silhouette == ProceduralSilhouette.ANGULAR) {
+                val crystal = Path().apply {
+                    moveTo(handX * f.u, 49f * f.u)
+                    lineTo((handX + 3f) * f.u, 53f * f.u)
+                    lineTo(handX * f.u, 57f * f.u)
+                    lineTo((handX - 3f) * f.u, 53f * f.u)
+                    close()
+                }
+                drawPath(crystal, spark)
+            } else drawCircle(spark, radius = 2.6f * f.u, center = f.p(handX, 53f))
+            if (signature.trim == ProceduralTrim.RUNIC) drawRect(accent, topLeft = f.p(handX - 1.7f, 65f), size = f.s(3.4f, 1f))
         }
         ItemStyle.STAFF -> {
             drawRoundRect(Wood, topLeft = f.p(handX - 1.4f, 18f), size = f.s(2.8f, 62f), cornerRadius = CornerRadius(1.4f * f.u))
@@ -1929,9 +3305,10 @@ private fun DrawScope.drawWeapon(f: AvatarFrame, weapon: ItemEntity) {
         }
         ItemStyle.BOW -> {
             val wood = if (legendary) Color(0xFF4E7A3A) else WoodLight
+            val curve = 13f + bladeWidthBonus
             val bow = Path().apply {
-                moveTo((handX + 1.5f) * f.u, 56f * f.u)
-                quadraticTo((handX + 17f) * f.u, 78f * f.u, (handX + 1.5f) * f.u, 100f * f.u)
+                moveTo((handX + 1.5f) * f.u, 52f * f.u)
+                quadraticTo((handX + curve) * f.u, 70f * f.u, (handX + 1.5f) * f.u, 88f * f.u)
             }
             if (legendary) {
                 drawPath(bow, Color(0xFF6BC96B).copy(alpha = 0.4f), style = Stroke(width = 5f * f.u))
@@ -1939,12 +3316,17 @@ private fun DrawScope.drawWeapon(f: AvatarFrame, weapon: ItemEntity) {
             drawPath(bow, wood, style = Stroke(width = 2.6f * f.u))
             drawLine(
                 Color(0xFFE8E4D8),
-                start = f.p(handX + 1.5f, 56f),
-                end = f.p(handX + 1.5f, 100f),
+                start = f.p(handX + 1.5f, 52f),
+                end = f.p(handX + 1.5f, 88f),
                 strokeWidth = 0.9f * f.u
             )
-            drawCircle(bladeColor(weapon.tier), radius = 1.8f * f.u, center = f.p(handX + 1.5f, 56f))
-            drawCircle(bladeColor(weapon.tier), radius = 1.8f * f.u, center = f.p(handX + 1.5f, 100f))
+            drawCircle(bladeColor(weapon.tier), radius = 1.8f * f.u, center = f.p(handX + 1.5f, 52f))
+            drawCircle(bladeColor(weapon.tier), radius = 1.8f * f.u, center = f.p(handX + 1.5f, 88f))
+            // Leather grip wrap centered on hand
+            drawRect(Color(0xFF4A3525), topLeft = f.p(handX + 4f, 68f), size = f.s(3.5f, 6f))
+            if (signature.ornament != ProceduralOrnament.NONE) {
+                drawCircle(accent, radius = 1.2f * f.u, center = f.p(handX + curve * 0.72f, 70f))
+            }
         }
         else -> { // SWORD and fallback
             val topY = when (weapon.tier) {
@@ -1952,21 +3334,211 @@ private fun DrawScope.drawWeapon(f: AvatarFrame, weapon: ItemEntity) {
                 2, 3 -> 34f
                 else -> 30f
             }
+            val halfWidth = 2.2f + bladeWidthBonus
             val blade = Path().apply {
-                moveTo((handX - 2.2f) * f.u, 72f * f.u)
-                lineTo((handX - 2.2f) * f.u, (topY + 6f) * f.u)
+                moveTo((handX - halfWidth) * f.u, 72f * f.u)
+                lineTo((handX - halfWidth) * f.u, (topY + 6f) * f.u)
                 lineTo(handX * f.u, topY * f.u)
-                lineTo((handX + 2.2f) * f.u, (topY + 6f) * f.u)
-                lineTo((handX + 2.2f) * f.u, 72f * f.u)
+                lineTo((handX + halfWidth) * f.u, (topY + 6f) * f.u)
+                lineTo((handX + halfWidth) * f.u, 72f * f.u)
                 close()
             }
             if (legendary) {
                 drawPath(blade, bladeColor(weapon.tier).copy(alpha = 0.5f), style = Stroke(width = 3f * f.u))
             }
             drawPath(blade, bladeColor(weapon.tier))
-            drawRoundRect(Color(0xFFB07E24), topLeft = f.p(handX - 6.5f, 71f), size = f.s(13f, 3.5f), cornerRadius = CornerRadius(1.7f * f.u))
+            if (signature.trim != ProceduralTrim.PLAIN) {
+                drawLine(accent, f.p(handX, topY + 5f), f.p(handX, 69f), 0.9f * f.u)
+            }
+            val guardWidth = 12f + signature.detailCount * 0.7f
+            drawRoundRect(Color(0xFFB07E24), topLeft = f.p(handX - guardWidth / 2f, 71f), size = f.s(guardWidth, 3.5f), cornerRadius = CornerRadius(1.7f * f.u))
         }
     }
+}
+
+private fun DrawScope.drawSemanticWeapon(
+    f: AvatarFrame,
+    weapon: ItemEntity,
+    descriptor: com.fitnessquest.rpg.domain.visuals.EquipmentVisualDescriptor,
+    handX: Float,
+) {
+    val accent = descriptor.accentColor ?: GearVisuals.accent(weapon)
+    val glow = descriptor.glowColor ?: accent
+    when (descriptor.archetype) {
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.UNARMED_WRAP -> {
+            drawCircle(descriptor.primaryColor, radius = 5.2f * f.u, center = f.p(handX, 78f))
+            for (y in listOf(75f, 78f, 81f)) {
+                drawLine(accent, f.p(handX - 4f, y), f.p(handX + 4f, y), 0.9f * f.u)
+            }
+        }
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.TONFA -> {
+            drawRoundRect(descriptor.primaryColor, f.p(handX - 2f, 54f), f.s(4f, 42f), CornerRadius(2f * f.u))
+            drawRoundRect(descriptor.secondaryColor, f.p(handX - 9f, 68f), f.s(11f, 3.5f), CornerRadius(1.5f * f.u))
+            drawRect(accent, f.p(handX - 2f, 61f), f.s(4f, 2f))
+        }
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.INSTRUMENT -> {
+            val name = weapon.name.lowercase()
+            when {
+                name.contains("lute") -> {
+                    drawOval(descriptor.primaryColor, f.p(handX - 7f, 64f), f.s(14f, 18f))
+                    drawRoundRect(descriptor.secondaryColor, f.p(handX - 1.5f, 45f), f.s(3f, 22f), CornerRadius(1.5f * f.u))
+                    drawCircle(accent, 2.5f * f.u, f.p(handX, 72f))
+                    for (dx in listOf(-2f, 0f, 2f)) drawLine(accent.copy(alpha = 0.7f), f.p(handX + dx, 61f), f.p(handX + dx, 79f), 0.35f * f.u)
+                }
+                name.contains("flute") -> {
+                    drawRoundRect(descriptor.primaryColor, f.p(handX - 2f, 48f), f.s(4f, 37f), CornerRadius(2f * f.u))
+                    for (y in listOf(56f, 64f, 72f)) drawCircle(accent, 0.9f * f.u, f.p(handX, y))
+                }
+                else -> {
+                    val horn = Path().apply {
+                        moveTo((handX - 2f) * f.u, 76f * f.u)
+                        quadraticTo((handX + 10f) * f.u, 65f * f.u, (handX + 3f) * f.u, 50f * f.u)
+                        lineTo((handX - 1f) * f.u, 52f * f.u)
+                        quadraticTo((handX + 4f) * f.u, 65f * f.u, (handX - 5f) * f.u, 72f * f.u)
+                        close()
+                    }
+                    drawPath(horn, accent)
+                    drawRoundRect(descriptor.secondaryColor, f.p(handX - 6f, 70f), f.s(7f, 4f), CornerRadius(2f * f.u))
+                }
+            }
+        }
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.AXE -> {
+            drawRoundRect(descriptor.primaryColor, f.p(handX - 1.5f, 28f), f.s(3f, 77f), CornerRadius(1.5f * f.u))
+            val head = Path().apply {
+                moveTo((handX - 1f) * f.u, 20f * f.u)
+                quadraticTo((handX - 13f) * f.u, 20f * f.u, (handX - 14f) * f.u, 34f * f.u)
+                lineTo((handX - 1f) * f.u, 31f * f.u)
+                lineTo((handX + 7f) * f.u, 34f * f.u)
+                lineTo((handX + 5f) * f.u, 21f * f.u)
+                close()
+            }
+            drawPath(head, descriptor.secondaryColor)
+            drawPath(head, accent, style = Stroke(width = 0.9f * f.u))
+        }
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.SCYTHE -> {
+            drawRoundRect(descriptor.primaryColor, f.p(handX - 1.5f, 24f), f.s(3f, 81f), CornerRadius(1.5f * f.u))
+            val blade = Path().apply {
+                moveTo(handX * f.u, 25f * f.u)
+                quadraticTo((handX - 13f) * f.u, 12f * f.u, (handX - 27f) * f.u, 18f * f.u)
+                quadraticTo((handX - 13f) * f.u, 17f * f.u, (handX - 2f) * f.u, 31f * f.u)
+                close()
+            }
+            drawPath(blade, descriptor.secondaryColor)
+            drawLine(glow.copy(alpha = 0.8f), f.p(handX - 24f, 18f), f.p(handX - 3f, 27f), 0.7f * f.u)
+        }
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.HAMMER -> {
+            drawRoundRect(descriptor.primaryColor, f.p(handX - 1.7f, 31f), f.s(3.4f, 74f), CornerRadius(1.7f * f.u))
+            drawRoundRect(descriptor.secondaryColor, f.p(handX - 10f, 20f), f.s(20f, 13f), CornerRadius(2f * f.u))
+            drawRect(accent, f.p(handX - 11f, 23f), f.s(22f, 3f))
+        }
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.CLUB -> {
+            val club = Path().apply {
+                moveTo((handX - 2f) * f.u, 104f * f.u)
+                lineTo((handX - 5.5f) * f.u, 30f * f.u)
+                quadraticTo(handX * f.u, 19f * f.u, (handX + 5.5f) * f.u, 30f * f.u)
+                lineTo((handX + 2f) * f.u, 104f * f.u)
+                close()
+            }
+            drawPath(club, descriptor.primaryColor)
+            drawPath(club, descriptor.secondaryColor, style = Stroke(width = 1f * f.u))
+            for (y in listOf(38f, 45f, 52f)) drawLine(accent, f.p(handX - 4f, y), f.p(handX + 4f, y + 2f), 0.7f * f.u)
+        }
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.SCEPTER -> {
+            drawRoundRect(descriptor.primaryColor, f.p(handX - 1.5f, 47f), f.s(3f, 47f), CornerRadius(1.5f * f.u))
+            drawCircle(glow.copy(alpha = 0.3f), 7f * f.u, f.p(handX, 42f))
+            drawCircle(accent, 4f * f.u, f.p(handX, 42f))
+            drawCircle(Color.White.copy(alpha = 0.7f), 1.2f * f.u, f.p(handX - 1f, 41f))
+            drawRect(accent, f.p(handX - 4f, 91f), f.s(8f, 3f))
+        }
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.ARCANE_FOCUS -> {
+            drawCircle(glow.copy(alpha = 0.2f), 8f * f.u, f.p(handX, 60f))
+            val crystal = Path().apply {
+                moveTo(handX * f.u, 52f * f.u)
+                lineTo((handX + 5f) * f.u, 60f * f.u)
+                lineTo(handX * f.u, 68f * f.u)
+                lineTo((handX - 5f) * f.u, 60f * f.u)
+                close()
+            }
+            drawPath(crystal, accent)
+            drawPath(crystal, Color.White.copy(alpha = 0.65f), style = Stroke(width = 0.8f * f.u))
+        }
+        else -> Unit
+    }
+}
+
+private fun DrawScope.drawProceduralSpear(
+    f: AvatarFrame,
+    weapon: ItemEntity,
+    descriptor: com.fitnessquest.rpg.domain.visuals.EquipmentVisualDescriptor,
+    handX: Float,
+) {
+    val signature = descriptor.proceduralSignature
+    val accent = descriptor.accentColor ?: GearVisuals.accent(weapon)
+    val shaftWidth = when (signature.silhouette) {
+        ProceduralSilhouette.CURVED -> 2.1f
+        ProceduralSilhouette.FORTIFIED -> 3f
+        else -> 2.5f
+    }
+    val headHalfWidth = when (signature.silhouette) {
+        ProceduralSilhouette.BALANCED -> 4.2f
+        ProceduralSilhouette.ANGULAR -> 3.6f
+        ProceduralSilhouette.CURVED -> 4.8f
+        ProceduralSilhouette.FORTIFIED -> 5.4f
+    }
+    val tipY = if (weapon.tier >= 4) 7f else 11f
+    val shoulderY = if (signature.silhouette == ProceduralSilhouette.ANGULAR) 25f else 23f
+
+    descriptor.glowColor?.let { glow ->
+        drawLine(
+            glow.copy(alpha = 0.24f), f.p(handX, 30f), f.p(handX, 105f),
+            (shaftWidth + 2.4f) * f.u, StrokeCap.Round
+        )
+    }
+    drawRoundRect(
+        descriptor.primaryColor,
+        topLeft = f.p(handX - shaftWidth / 2f, 28f),
+        size = f.s(shaftWidth, 77f),
+        cornerRadius = CornerRadius(shaftWidth / 2f * f.u)
+    )
+    drawLine(
+        Color.White.copy(alpha = 0.2f),
+        f.p(handX - shaftWidth * 0.2f, 32f),
+        f.p(handX - shaftWidth * 0.2f, 100f),
+        0.45f * f.u
+    )
+
+    val spearhead = Path().apply {
+        moveTo(handX * f.u, tipY * f.u)
+        lineTo((handX + headHalfWidth) * f.u, shoulderY * f.u)
+        quadraticTo((handX + 2.2f) * f.u, 28f * f.u, handX * f.u, 34f * f.u)
+        quadraticTo((handX - 2.2f) * f.u, 28f * f.u, (handX - headHalfWidth) * f.u, shoulderY * f.u)
+        close()
+    }
+    drawPath(spearhead, descriptor.secondaryColor)
+    drawPath(spearhead, accent.copy(alpha = 0.8f), style = Stroke(width = 0.9f * f.u))
+    drawLine(
+        descriptor.glowColor ?: Color.White.copy(alpha = 0.55f),
+        f.p(handX, tipY + 2f), f.p(handX, 31f), 0.7f * f.u, StrokeCap.Round
+    )
+    drawRoundRect(accent, topLeft = f.p(handX - 2.8f, 31f), size = f.s(5.6f, 3f), cornerRadius = CornerRadius(1f * f.u))
+
+    when (signature.trim) {
+        ProceduralTrim.PLAIN -> Unit
+        ProceduralTrim.BAND, ProceduralTrim.SPLIT -> for (y in listOf(38f, 41f)) {
+            drawRect(accent, topLeft = f.p(handX - 2f, y), size = f.s(4f, 1f))
+        }
+        ProceduralTrim.CHEVRON -> {
+            drawLine(accent, f.p(handX - 2f, 39f), f.p(handX, 41f), 0.8f * f.u)
+            drawLine(accent, f.p(handX, 41f), f.p(handX + 2f, 39f), 0.8f * f.u)
+        }
+        ProceduralTrim.RUNIC -> drawCircle(accent, radius = 1.4f * f.u, center = f.p(handX, 40f))
+    }
+    drawRoundRect(
+        accent,
+        topLeft = f.p(handX - (shaftWidth + 1f) / 2f, 102f),
+        size = f.s(shaftWidth + 1f, 4f),
+        cornerRadius = CornerRadius(1f * f.u)
+    )
 }
 
 private fun DrawScope.drawDagger(f: AvatarFrame, handX: Float, tier: Int, length: Float) {
@@ -2056,36 +3628,64 @@ private fun DrawScope.drawDireBearLayer(frame: AvatarFrame) {
     val eyeGlow = Color(0xFF43A047)
     val scarColor = Color(0xFF3E2723).copy(alpha = 0.6f)
 
-    // Bear body
-    drawCircle(color = furDark, center = Offset(60f * u, 70f * u), radius = 32f * u)
-    drawCircle(color = furMain, center = Offset(60f * u, 68f * u), radius = 30f * u)
-    // Chest patch
-    drawCircle(color = furChest, center = Offset(60f * u, 72f * u), radius = 18f * u)
-    
-    // Battle Scars
-    drawLine(scarColor, start = Offset(45f * u, 60f * u), end = Offset(52f * u, 68f * u), strokeWidth = 2f * u)
-    drawLine(scarColor, start = Offset(48f * u, 58f * u), end = Offset(55f * u, 66f * u), strokeWidth = 2f * u)
+    if (!frame.facingBack) {
+        // Bear body (Front)
+        drawCircle(color = furDark, center = Offset(60f * u, 70f * u), radius = 32f * u)
+        drawCircle(color = furMain, center = Offset(60f * u, 68f * u), radius = 30f * u)
+        // Chest patch
+        drawCircle(color = furChest, center = Offset(60f * u, 72f * u), radius = 18f * u)
 
-    // Bear head
-    drawCircle(color = furDark, center = Offset(60f * u, 38f * u), radius = 22f * u)
-    drawCircle(color = furMain, center = Offset(60f * u, 36f * u), radius = 20f * u)
-    // Ears
-    drawCircle(color = furDark, center = Offset(42f * u, 22f * u), radius = 8f * u)
-    drawCircle(color = furDark, center = Offset(78f * u, 22f * u), radius = 8f * u)
-    // Snout
-    drawCircle(color = furChest, center = Offset(60f * u, 42f * u), radius = 10f * u)
-    drawCircle(color = Color.Black, center = Offset(60f * u, 38f * u), radius = 4f * u)
-    
-    // Glowing eyes with pulse
-    val eyeAlpha = 0.7f + 0.3f * sin(frame.phase * 6.28f)
-    drawCircle(color = eyeGlow.copy(alpha = 0.3f * eyeAlpha), center = Offset(52f * u, 32f * u), radius = 6f * u)
-    drawCircle(color = eyeGlow.copy(alpha = 0.3f * eyeAlpha), center = Offset(68f * u, 32f * u), radius = 6f * u)
-    drawCircle(color = eyeGlow, center = Offset(52f * u, 32f * u), radius = 3.5f * u)
-    drawCircle(color = eyeGlow, center = Offset(68f * u, 32f * u), radius = 3.5f * u)
-    
-    // Paws
-    drawRoundRect(color = furDark, topLeft = Offset(26f * u, 75f * u), size = Size(20f * u, 28f * u), cornerRadius = CornerRadius(10f * u))
-    drawRoundRect(color = furDark, topLeft = Offset(74f * u, 75f * u), size = Size(20f * u, 28f * u), cornerRadius = CornerRadius(10f * u))
+        // Battle Scars
+        drawLine(scarColor, start = Offset(45f * u, 60f * u), end = Offset(52f * u, 68f * u), strokeWidth = 2f * u)
+        drawLine(scarColor, start = Offset(48f * u, 58f * u), end = Offset(55f * u, 66f * u), strokeWidth = 2f * u)
+
+        // Bear head
+        drawCircle(color = furDark, center = Offset(60f * u, 38f * u), radius = 22f * u)
+        drawCircle(color = furMain, center = Offset(60f * u, 36f * u), radius = 20f * u)
+        // Ears
+        drawCircle(color = furDark, center = Offset(42f * u, 22f * u), radius = 8f * u)
+        drawCircle(color = furDark, center = Offset(78f * u, 22f * u), radius = 8f * u)
+        // Snout
+        drawCircle(color = furChest, center = Offset(60f * u, 42f * u), radius = 10f * u)
+        drawCircle(color = Color.Black, center = Offset(60f * u, 38f * u), radius = 4f * u)
+
+        // Glowing eyes with pulse
+        val eyeAlpha = 0.7f + 0.3f * sin(frame.phase * 6.28f)
+        drawCircle(color = eyeGlow.copy(alpha = 0.3f * eyeAlpha), center = Offset(52f * u, 32f * u), radius = 6f * u)
+        drawCircle(color = eyeGlow.copy(alpha = 0.3f * eyeAlpha), center = Offset(68f * u, 32f * u), radius = 6f * u)
+        drawCircle(color = eyeGlow, center = Offset(52f * u, 32f * u), radius = 3.5f * u)
+        drawCircle(color = eyeGlow, center = Offset(68f * u, 32f * u), radius = 3.5f * u)
+
+        // Paws
+        drawRoundRect(color = furDark, topLeft = Offset(26f * u, 75f * u), size = Size(20f * u, 28f * u), cornerRadius = CornerRadius(10f * u))
+        drawRoundRect(color = furDark, topLeft = Offset(74f * u, 75f * u), size = Size(20f * u, 28f * u), cornerRadius = CornerRadius(10f * u))
+    } else {
+        // Bear body (Back) - Muscular dorsal hump, rear haunches, hind paws, tail, zero facial features
+        drawCircle(color = furDark, center = Offset(60f * u, 68f * u), radius = 33f * u)
+        drawCircle(color = furMain, center = Offset(60f * u, 66f * u), radius = 31f * u)
+        // Muscular dorsal spine shading (soft natural anatomy)
+        drawLine(furDark.copy(alpha = 0.55f), start = Offset(60f * u, 46f * u), end = Offset(60f * u, 84f * u), strokeWidth = 3f * u)
+        // Shoulder blade muscle humps
+        drawOval(furDark.copy(alpha = 0.45f), topLeft = Offset(38f * u, 54f * u), size = Size(16f * u, 24f * u))
+        drawOval(furDark.copy(alpha = 0.45f), topLeft = Offset(66f * u, 54f * u), size = Size(16f * u, 24f * u))
+
+        // Rear Bear head - Cranial dome with no facial features
+        drawCircle(color = furDark, center = Offset(60f * u, 38f * u), radius = 22f * u)
+        drawCircle(color = furMain, center = Offset(60f * u, 36f * u), radius = 20f * u)
+        // Rear rounded ears with inner shading
+        drawCircle(color = furDark, center = Offset(42f * u, 22f * u), radius = 8f * u)
+        drawCircle(color = furDark, center = Offset(78f * u, 22f * u), radius = 8f * u)
+        drawCircle(color = furMain, center = Offset(42f * u, 23f * u), radius = 5.5f * u)
+        drawCircle(color = furMain, center = Offset(78f * u, 23f * u), radius = 5.5f * u)
+
+        // Soft rounded bear tail
+        drawCircle(color = furDark.copy(alpha = 0.8f), center = Offset(60f * u, 91f * u), radius = 5.5f * u)
+        drawCircle(color = furMain, center = Offset(60f * u, 90f * u), radius = 4.5f * u)
+
+        // Hind Paws
+        drawRoundRect(color = furDark, topLeft = Offset(26f * u, 75f * u), size = Size(20f * u, 28f * u), cornerRadius = CornerRadius(10f * u))
+        drawRoundRect(color = furDark, topLeft = Offset(74f * u, 75f * u), size = Size(20f * u, 28f * u), cornerRadius = CornerRadius(10f * u))
+    }
 }
 
 private fun DrawScope.drawDirePantherLayer(frame: AvatarFrame) {
@@ -2679,6 +4279,10 @@ private fun DrawScope.drawUndeadArmyCompanion(f: AvatarFrame) {
 }
 
 private fun DrawScope.drawHunterWolfCompanion(f: AvatarFrame) {
+    if (f.facingBack) {
+        drawHunterWolfBackCompanion(f)
+        return
+    }
     val u = f.u
     val fur = Color(0xFF475569)
     val furDark = Color(0xFF1E293B)
@@ -2752,6 +4356,63 @@ private fun DrawScope.drawHunterWolfCompanion(f: AvatarFrame) {
     drawCircle(Color.Black, center = Offset(x + 2f * u, headY - 0.5f * u), radius = 2f * u)
     drawCircle(eyeGold, center = Offset(x + 2.5f * u, headY - 0.5f * u), radius = 1.3f * u)
     drawCircle(Color.White, center = Offset(x + 3f * u, headY - 1f * u), radius = 0.5f * u)
+}
+
+private fun DrawScope.drawHunterWolfBackCompanion(f: AvatarFrame) {
+    val u = f.u
+    val fur = Color(0xFF475569)
+    val furDark = Color(0xFF1E293B)
+    val furLight = Color(0xFF94A3B8)
+    val collar = Color(0xFF0F766E)
+    val x = 16f * u
+    val y = 78f * u
+    val breath = sin(f.phase * 6.28f) * 1.2f * u
+    val tailWag = sin(f.phase * 6.28f) * 3f * u
+
+    // Rear-facing rump and hind legs; no chest patch or front-facing tag.
+    drawRoundRect(fur, topLeft = Offset(x - 7f * u, y - 2f * u + breath * 0.5f), size = Size(14f * u, 16f * u), cornerRadius = CornerRadius(5f * u))
+    drawOval(furDark.copy(alpha = 0.45f), topLeft = Offset(x - 4f * u, y + 1f * u), size = Size(8f * u, 11f * u))
+
+    // Preserve the front view's bushy silhouette, mirrored onto the visible
+    // rear attachment point so this reads as the same wolf after turning.
+    val tail = Path().apply {
+        moveTo(x + 6f * u, y + 8f * u)
+        quadraticTo(x + 14f * u + tailWag, y + 2f * u, x + 12f * u + tailWag, y - 6f * u)
+        quadraticTo(x + 8f * u + tailWag * 0.5f, y + 2f * u, x + 4f * u, y + 10f * u)
+        close()
+    }
+    drawPath(tail, furDark)
+    drawPath(tail, fur, style = Stroke(width = 1.2f * u))
+
+    drawRoundRect(furDark, topLeft = Offset(x - 6f * u, y + 10f * u), size = Size(5f * u, 6f * u), cornerRadius = CornerRadius(2f * u))
+    drawRoundRect(furDark, topLeft = Offset(x + 1f * u, y + 10f * u), size = Size(5f * u, 6f * u), cornerRadius = CornerRadius(2f * u))
+
+    val headY = y - 9f * u + breath
+    drawOval(fur, topLeft = Offset(x - 6f * u, headY - 4f * u), size = Size(12f * u, 10f * u))
+    val leftEar = Path().apply {
+        moveTo(x - 5f * u, headY - 2f * u)
+        lineTo(x - 6f * u, headY - 11f * u)
+        lineTo(x - 1f * u, headY - 4f * u)
+        close()
+    }
+    val rightEar = Path().apply {
+        moveTo(x + 1f * u, headY - 4f * u)
+        lineTo(x + 6f * u, headY - 11f * u)
+        lineTo(x + 5f * u, headY - 2f * u)
+        close()
+    }
+    drawPath(leftEar, furDark)
+    drawPath(rightEar, furDark)
+    drawLine(furLight.copy(alpha = 0.55f), start = Offset(x, headY - 3f * u), end = Offset(x, headY + 4f * u), strokeWidth = 1f * u)
+
+    // The collar wraps around the neck and remains visible from behind; only
+    // its gold tag belongs exclusively to the front view.
+    drawRoundRect(
+        collar,
+        topLeft = Offset(x - 5f * u, y - 4f * u + breath),
+        size = Size(11f * u, 3f * u),
+        cornerRadius = CornerRadius(1.5f * u),
+    )
 }
 
 private fun DrawScope.drawHunterFalconCompanion(f: AvatarFrame) {

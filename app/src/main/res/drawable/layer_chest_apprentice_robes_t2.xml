@@ -4,11 +4,46 @@
     android:viewportWidth="500"
     android:viewportHeight="600">
 
-    <!-- Tier 2: Apprentice Robes (Neckline dipped to Y=268 to leave chin and neck completely clear) -->
-    <!-- Lower Robe Skirt (Flowing over legs) -->
+    <!-- Tier 2: Apprentice Robes (Grounded floor robe with fully sculpted, separated footwear) -->
+    <!-- Grounded Floor Shadows under each foot -->
+    <path
+        android:fillColor="#0F172A"
+        android:fillAlpha="0.35"
+        android:pathData="M165,534 L235,534 L230,544 L170,544 Z M265,534 L335,534 L330,544 L270,544 Z" />
+
+    <!-- Left Footwear (Clear toe, width, instep, and thick sole) -->
+    <path
+        android:fillColor="#1E293B"
+        android:pathData="M174,500 L224,500 L224,528 Q199,534 174,528 Z" />
+    <path
+        android:fillColor="#334155"
+        android:pathData="M178,504 L220,504 L218,522 L180,522 Z" />
+    <!-- Left Sole Line -->
+    <path
+        android:fillColor="#0F172A"
+        android:pathData="M172,528 L226,528 L226,535 L172,535 Z" />
+
+    <!-- Right Footwear (Clear toe, width, instep, and thick sole) -->
+    <path
+        android:fillColor="#1E293B"
+        android:pathData="M276,500 L326,500 L326,528 Q301,534 276,528 Z" />
+    <path
+        android:fillColor="#334155"
+        android:pathData="M280,504 L322,504 L320,522 L282,522 Z" />
+    <!-- Right Sole Line -->
+    <path
+        android:fillColor="#0F172A"
+        android:pathData="M274,528 L328,528 L328,535 L274,535 Z" />
+
+    <!-- Lower Robe Skirt (Flowing down to arched hem at Y=504) -->
     <path
         android:fillColor="#1E3A8A"
-        android:pathData="M185,350 L315,350 L335,490 L165,490 Z" />
+        android:pathData="M185,350 L315,350 L345,504 Q250,496 155,504 Z" />
+
+    <!-- Hem Border Band -->
+    <path
+        android:fillColor="#172554"
+        android:pathData="M155,496 L345,496 L345,504 Q250,496 155,504 Z" />
 
     <!-- Robe Upper Torso & Shoulders with deep scooped neckline -->
     <path
@@ -20,20 +55,20 @@
         android:fillColor="#1D4ED8"
         android:pathData="M146,242 L176,240 L168,285 L136,275 Z M354,242 L324,240 L332,285 L364,275 Z" />
 
-    <!-- Golden Embroidered Stole (Starts below deep neckline at Y=266) -->
+    <!-- Golden Embroidered Stole (Extends down to hem at Y=496) -->
     <path
         android:fillColor="#F59E0B"
-        android:pathData="M236,266 L264,266 L268,490 L232,490 Z" />
+        android:pathData="M236,266 L264,266 L270,496 L230,496 Z" />
     <path
         android:fillColor="#1E3A8A"
-        android:pathData="M242,270 L258,270 L262,484 L238,484 Z" />
+        android:pathData="M242,270 L258,270 L264,490 L236,490 Z" />
 
     <!-- Golden Rune Symbols on Stole -->
     <path
         android:strokeColor="#FBBF24"
         android:strokeWidth="2"
         android:strokeLineCap="round"
-        android:pathData="M246,290 L254,290 M250,286 L250,298 M246,335 L254,335 M250,331 L250,343 M246,390 L254,390 M250,386 L250,398 M246,445 L254,445 M250,441 L250,453" />
+        android:pathData="M246,290 L254,290 M250,286 L250,298 M246,335 L254,335 M250,331 L250,343 M246,390 L254,390 M250,386 L250,398 M246,445 L254,445 M250,441 L250,453 M246,480 L254,480" />
 
     <!-- Leather Sash Belt with Sapphire Ring -->
     <path
