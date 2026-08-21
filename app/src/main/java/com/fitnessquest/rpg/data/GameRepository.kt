@@ -2263,6 +2263,11 @@ class GameRepository(
         val character = getCharacter()
         if (character.level < biome.levelRequired) return
         if (character.currentBiome == biome.name) return
+
+        // Enforce boss-gate rules in the backend
+        val allProgress = db.biomeProgressDao().getAll()
+        if (!ProgressionRules.canEnterBiome(biome, allProgress)) return
+
         db.characterDao().upsert(character.copy(travelTarget = biome.name, travelProgress = 0.0))
     }
 

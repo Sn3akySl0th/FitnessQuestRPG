@@ -51,7 +51,8 @@ import com.fitnessquest.rpg.ui.theme.NightBg
 enum class QuestHubAction {
     RESUME_QUEST,
     BEGIN_QUEST,
-    OPEN_TRAINING
+    OPEN_TRAINING,
+    CHALLENGE_BOSS
 }
 
 data class ActiveQuestSnapshot(
@@ -70,7 +71,8 @@ data class QuestHubState(
     val outcome: String,
     val primaryLabel: String,
     val action: QuestHubAction,
-    val workoutId: Long? = null
+    val workoutId: Long? = null,
+    val bossId: Int? = null
 )
 
 internal fun buildQuestHubState(
@@ -78,7 +80,9 @@ internal fun buildQuestHubState(
     activeQuest: ActiveQuestSnapshot?,
     recommendedExerciseCount: Int,
     biome: Biome,
-    encounter: Monster
+    encounter: Monster,
+    bossReady: Boolean = false,
+    boss: Monster? = null
 ): QuestHubState {
     val worldLine = "${biome.emoji} ${biome.label}  •  ${encounter.emoji} ${encounter.name}"
 
@@ -97,6 +101,21 @@ internal fun buildQuestHubState(
             primaryLabel = "Resume Quest",
             action = QuestHubAction.RESUME_QUEST,
             workoutId = activeQuest.workoutId ?: -1L
+        )
+    }
+
+    if (bossReady && boss != null) {
+        return QuestHubState(
+            eyebrow = "CHAPTER MILESTONE",
+            title = "Challenge ${boss.name}",
+            detail = "The path to the next biome is blocked. Conquer the boss to advance!",
+            readinessPercent = recommendation.readinessPercent,
+            caution = null,
+            worldLine = worldLine,
+            outcome = "Defeat ${boss.name} to earn Epic loot and unlock ${Biome.entries.getOrNull(biome.ordinal + 1)?.label ?: "the next zone"}.",
+            primaryLabel = "Challenge Boss",
+            action = QuestHubAction.CHALLENGE_BOSS,
+            bossId = boss.id
         )
     }
 
@@ -253,6 +272,7 @@ fun QuestHubScreen(
                                 QuestHubAction.RESUME_QUEST,
                                 QuestHubAction.BEGIN_QUEST -> onStartWorkout(selected.workoutId ?: -1L)
                                 QuestHubAction.OPEN_TRAINING -> onOpenTraining()
+                                QuestHubAction.CHALLENGE_BOSS -> onOpenBattle()
                             }
                         }
                     )

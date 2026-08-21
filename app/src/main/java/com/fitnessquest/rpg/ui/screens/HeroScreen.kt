@@ -92,7 +92,8 @@ data class HeroUiState(
 private data class HeroQuestInputs(
     val recommendation: RoutineRecommendation,
     val exerciseCount: Int,
-    val activeSession: ActiveSessionWithDetails?
+    val activeSession: ActiveSessionWithDetails?,
+    val allBiomeProgress: List<BiomeProgressEntity> = emptyList()
 )
 
 class HeroViewModel(private val container: AppContainer) : ViewModel() {
@@ -111,9 +112,9 @@ class HeroViewModel(private val container: AppContainer) : ViewModel() {
         container.repository.sessions.map { it.take(10) },
         container.repository.allClassProgress
     ) { character, owned, runes, recent, allProgress ->
-        val gearMap = if (character != null) container.repository.equippedGear(character) else emptyMap()
-        val combat = if (character != null) container.repository.combatStatsFor(character) else null
-        val setPieces = if (character != null) GameMath.setPieceCount(character, gearMap.values.toList()) else 0
+        val gearMap = container.repository.equippedGear(character)
+        val combat = container.repository.combatStatsFor(character)
+        val setPieces = GameMath.setPieceCount(character, gearMap.values.toList())
         HeroUiState(
             character = character,
             gear = gearMap,
@@ -148,6 +149,8 @@ class HeroViewModel(private val container: AppContainer) : ViewModel() {
         )
     }.combine(container.repository.activeSession) { inputs, activeSession ->
         inputs.copy(activeSession = activeSession)
+    }.combine(container.repository.allBiomeProgress) { inputs, biomeProgress ->
+        inputs.copy(allBiomeProgress = biomeProgress)
     }
 
     val uiState: StateFlow<HeroUiState> = combine(
@@ -160,6 +163,12 @@ class HeroViewModel(private val container: AppContainer) : ViewModel() {
             val biome = Biome.fromName(it.currentBiome)
             val encounters = MonsterCatalog.regularMonstersByBiome(biome)
             val encounter = encounters[it.battlesWon.mod(encounters.size)]
+            val biomeProgress = quest.allBiomeProgress.find { p -> p.biomeName == biome.name }
+            val boss = MonsterCatalog.bossForBiome(biome)
+            val bossReady = biomeProgress != null &&
+                (biomeProgress.bossUnlocked || biomeProgress.progressPoints >= ProgressionRules.bossUnlockPointsFor(biome)) &&
+                !biomeProgress.bossDefeated
+
             buildQuestHubState(
                 recommendation = quest.recommendation,
                 activeQuest = quest.activeSession?.let { active ->
@@ -171,7 +180,9 @@ class HeroViewModel(private val container: AppContainer) : ViewModel() {
                 },
                 recommendedExerciseCount = quest.exerciseCount,
                 biome = biome,
-                encounter = encounter
+                encounter = encounter,
+                bossReady = bossReady,
+                boss = boss
             )
         }
         core.copy(movementMastery = masteryList, questHub = questHub)
