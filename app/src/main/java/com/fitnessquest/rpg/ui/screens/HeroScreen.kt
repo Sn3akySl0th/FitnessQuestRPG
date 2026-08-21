@@ -51,6 +51,7 @@ import com.fitnessquest.rpg.data.ai.WorkoutRecommendationEngine
 import com.fitnessquest.rpg.data.db.*
 import com.fitnessquest.rpg.data.export.AvatarExporter
 import com.fitnessquest.rpg.data.export.ExportFormat
+import androidx.compose.ui.platform.LocalDensity
 import com.fitnessquest.rpg.data.wear.WearPresenceState
 import com.fitnessquest.rpg.domain.*
 import com.fitnessquest.rpg.ui.LocalSnackbarHostState
@@ -88,7 +89,8 @@ data class HeroUiState(
     val allClassProgress: List<ClassProgressEntity> = emptyList(),
     val movementMastery: List<MovementMasteryEntity> = emptyList(),
     val questHub: QuestHubState? = null,
-    val maxEnergy: Int = GameMath.MAX_ENERGY
+    val maxEnergy: Int = GameMath.MAX_ENERGY,
+    val wearPresence: WearPresenceState = WearPresenceState()
 )
 
 private data class HeroQuestInputs(
@@ -161,8 +163,9 @@ class HeroViewModel(private val container: AppContainer) : ViewModel() {
         coreState,
         container.repository.observeMovementMastery(),
         questInputs,
-        container.repository.observeMaxEnergy()
-    ) { core, masteryList, quest, maxEnergy ->
+        container.repository.observeMaxEnergy(),
+        container.wearPresence.state
+    ) { core, masteryList, quest, maxEnergy, wear ->
         val character = core.character
         val questHub = character?.let {
             val biome = Biome.fromName(it.currentBiome)
@@ -190,7 +193,12 @@ class HeroViewModel(private val container: AppContainer) : ViewModel() {
                 boss = boss
             )
         }
-        core.copy(movementMastery = masteryList, questHub = questHub, maxEnergy = maxEnergy)
+        core.copy(
+            movementMastery = masteryList,
+            questHub = questHub,
+            maxEnergy = maxEnergy,
+            wearPresence = wear
+        )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), HeroUiState())
 
     init {
@@ -479,6 +487,511 @@ class HeroViewModel(private val container: AppContainer) : ViewModel() {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun JobSwitchSheet(
+    state: HeroUiState,
+    isPremium: Boolean,
+    onDismiss: () -> Unit,
+    onSwitchJob: (CharacterClass) -> Unit
+) {
+    val character = state.character ?: return
+    val activeClass = character.characterClass ?: return
+    val jobs = CharacterClass.entries.sortedWith(
+        compareByDescending<CharacterClass> { it == activeClass }
+            .thenByDescending { candidate ->
+                state.allClassProgress.firstOrNull { it.clazz == candidate }?.level ?: 1
+            }
+    )
+
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text("Switch Job", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black)
+            Text(
+                "Each job retains its own level and equipped gear.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+            )
+        }
+
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(2),
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 440.dp),
+            contentPadding = PaddingValues(20.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            items(jobs, key = { it.name }) { job ->
+                val level = state.allClassProgress.firstOrNull { it.clazz == job }?.level ?: 1
+                val isActive = job == activeClass
+                val isLocked = job.requiresPremium && !isPremium
+                Surface(
+                    onClick = { if (!isLocked) onSwitchJob(job) },
+                    enabled = !isActive && !isLocked,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    color = if (isActive) Gold.copy(alpha = 0.18f) else MaterialTheme.colorScheme.surfaceVariant,
+                    border = when {
+                        isActive -> BorderStroke(1.dp, Gold)
+                        isLocked -> BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+                        else -> null
+                    }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(job.emoji, style = MaterialTheme.typography.headlineSmall)
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                job.label,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                when {
+                                    isActive -> "Active • Lv $level"
+                                    isLocked -> "✦ Premium"
+                                    else -> "Lv $level"
+                                },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (isActive) Gold else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+data class MorphOption(
+    val id: String,
+    val label: String,
+    val emoji: String,
+    val levelReq: Int = 1
+)
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun MorphSwitchSheet(
+    character: CharacterEntity,
+    onDismiss: () -> Unit,
+    onMorphChange: (String) -> Unit
+) {
+    val cls = character.characterClass ?: return
+    val options = when (cls) {
+        CharacterClass.RANGER -> listOf(
+            MorphOption("NONE", "Dismiss", "👤"),
+            MorphOption("WOLF", "Wolf", "🐺"),
+            MorphOption("FALCON", "Falcon", "🦅", 5),
+            MorphOption("BEAR", "Bear Companion", "🐻", 10)
+        )
+        CharacterClass.DRUID -> listOf(
+            MorphOption("HUMAN", "Human Form", "👤"),
+            MorphOption("BEAR", "Bear Form", "🐻"),
+            MorphOption("PANTHER", "Panther Form", "🐆", 5),
+            MorphOption("TREANT", "Treant Form", "🌲", 20),
+            MorphOption("MOONKIN", "Moonkin Form", "🦉", 35),
+            MorphOption("AVATAR", "Nature Avatar", "✨", 50)
+        )
+        CharacterClass.SUMMONER -> listOf(
+            MorphOption("NONE", "Dismiss", "👤"),
+            MorphOption("IFRIT", "Ifrit", "🔥"),
+            MorphOption("SHIVA", "Shiva", "❄️", 5),
+            MorphOption("TITAN", "Titan", "🧱", 15),
+            MorphOption("RAMUH", "Ramuh", "⚡", 30),
+            MorphOption("BAHAMUT", "Bahamut", "🐉", 50)
+        )
+        CharacterClass.DRAGOON -> listOf(
+            MorphOption("NONE", "Dismiss", "👤"),
+            MorphOption("WYVERN", "Wyvern", "🐲")
+        )
+        CharacterClass.NECROMANCER -> listOf(
+            MorphOption("NONE", "Dismiss", "👤"),
+            MorphOption("SKELETON", "Skeleton", "💀"),
+            MorphOption("ARMY", "Undead Army", "🧟", 10)
+        )
+        else -> listOf(
+            MorphOption("NONE", "Base Form", "👤")
+        )
+    }
+
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                text = when (cls) {
+                    CharacterClass.DRUID -> "Wild Shape"
+                    CharacterClass.SUMMONER -> "Summon Eidolon"
+                    CharacterClass.RANGER -> "Call Companion"
+                    CharacterClass.DRAGOON -> "Call Wyvern"
+                    CharacterClass.NECROMANCER -> "Raise Undead"
+                    else -> "Form Selection"
+                },
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Black
+            )
+        }
+
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(2),
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 440.dp),
+            contentPadding = PaddingValues(20.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            items(options, key = { it.id }) { opt ->
+                val isActive = character.druidForm == opt.id
+                val isLocked = character.level < opt.levelReq
+                Surface(
+                    onClick = { if (!isLocked) onMorphChange(opt.id) },
+                    enabled = !isActive && !isLocked,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    color = if (isActive) Gold.copy(alpha = 0.18f) else MaterialTheme.colorScheme.surfaceVariant,
+                    border = when {
+                        isActive -> BorderStroke(1.dp, Gold)
+                        isLocked -> BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+                        else -> null
+                    }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(opt.emoji, style = MaterialTheme.typography.headlineSmall)
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                opt.label,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                when {
+                                    isActive -> "Active"
+                                    isLocked -> "Lv ${opt.levelReq}"
+                                    else -> "Ready"
+                                },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (isActive) Gold else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun UnifiedHeroHeader(
+    state: HeroUiState,
+    isQuestHub: Boolean,
+    onAvatarClick: () -> Unit,
+    onOpenJobSwitcher: () -> Unit,
+    onOpenMorphSwitcher: () -> Unit,
+    onSettingsClick: () -> Unit,
+    onBackClick: () -> Unit = {},
+    onOpenHero: () -> Unit = {},
+    modifier: Modifier = Modifier
+) {
+    val character = state.character ?: return
+    val heroClass = character.characterClass ?: return
+    val activeJobLevel = state.allClassProgress
+        .firstOrNull { it.clazz == heroClass }
+        ?.level
+        ?: character.level
+
+    val biome = Biome.fromName(character.currentBiome)
+    // Horizontal gradient for that "Hub" feel, matching biome art
+    val colors = listOf(Color(biome.colorA), Color(biome.colorB))
+
+    val headerHeight = if (LocalDensity.current.fontScale >= 1.2f) 240.dp else 220.dp
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(headerHeight)
+            .background(Brush.horizontalGradient(colors))
+            .statusBarsPadding()
+            .then(if (isQuestHub) Modifier.clickable(onClick = onOpenHero) else Modifier)
+            .semantics { contentDescription = if (isQuestHub) "Open Hero details" else "Hero Header" }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Left: Avatar Showcase
+                Box(
+                    modifier = Modifier
+                        .weight(0.5f)
+                        .fillMaxHeight(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    HeroPaperDoll(
+                        clazz = heroClass,
+                        gear = state.gear,
+                        appearance = character.toAppearance(),
+                        highestRarity = GearRarity.COMMON,
+                        expression = if (character.freeStatPoints > 0) AvatarExpression.VICTORIOUS else AvatarExpression.CALM,
+                        modifier = Modifier.fillMaxSize(),
+                        onAvatarClick = onAvatarClick
+                    )
+                }
+
+                Spacer(Modifier.width(8.dp))
+
+                // Right: Hero Identity & Currency
+                Column(
+                    modifier = Modifier.weight(0.5f),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    if (isQuestHub) {
+                        Text(
+                            text = "QUEST HUB",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Gold,
+                            fontWeight = FontWeight.Black
+                        )
+                    } else {
+                        Spacer(Modifier.height(12.dp)) // Offset for lack of eyebrow
+                    }
+
+                    Text(
+                        text = character.name,
+                        style = MaterialTheme.typography.titleLarge,
+                        color = Color.White,
+                        fontWeight = FontWeight.Black,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = CharacterRace.fromStored(character.race).label,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Gold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = "${biome.emoji} ${biome.label}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White.copy(alpha = 0.78f),
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    // Currency & Watch Status
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        CompactHeaderToken(emoji = "💰", text = character.gold.toString())
+                        CompactHeaderToken(emoji = "⚡", text = "${character.energy}/${state.maxEnergy}")
+
+                        // Watch status icon
+                        WatchStatusIcon(state.wearPresence)
+                    }
+
+                    // View Hero link & Class/Morph Switchers
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (isQuestHub) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("View Hero", style = MaterialTheme.typography.labelMedium, color = Color.White)
+                                Icon(Icons.Default.ChevronRight, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                            }
+                        } else {
+                            Spacer(Modifier.weight(1f))
+                        }
+
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            // Morph Switcher (if applicable)
+                            val hasMorphs = heroClass in listOf(CharacterClass.RANGER, CharacterClass.DRUID, CharacterClass.SUMMONER, CharacterClass.DRAGOON, CharacterClass.NECROMANCER)
+                            if (hasMorphs) {
+                                val currentMorph = character.druidForm.takeIf { it != "HUMAN" && it != "NONE" }
+                                Surface(
+                                    onClick = onOpenMorphSwitcher,
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = Color(0xFF171C2B).copy(alpha = 0.9f),
+                                    border = BorderStroke(1.dp, Gold.copy(alpha = 0.55f))
+                                ) {
+                                    Text(
+                                        text = if (currentMorph != null) morphEmoji(heroClass, currentMorph) else "👤",
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                        style = MaterialTheme.typography.labelSmall
+                                    )
+                                }
+                            }
+
+                            // Job Switcher
+                            Surface(
+                                onClick = onOpenJobSwitcher,
+                                shape = RoundedCornerShape(12.dp),
+                                color = Color(0xFF171C2B).copy(alpha = 0.9f),
+                                border = BorderStroke(1.dp, Gold.copy(alpha = 0.55f))
+                            ) {
+                                Text(
+                                    text = "${heroClass.emoji} Lv $activeJobLevel  ▾",
+                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Thin glowing XP Bar at the very bottom
+            val nextXp = GameMath.xpToNextLevel(character.level)
+            val progress = (character.xp.toFloat() / nextXp.coerceAtLeast(1)).coerceIn(0f, 1f)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(3.dp)
+                    .clip(RoundedCornerShape(1.5.dp))
+                    .background(Color.White.copy(alpha = 0.1f))
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(progress)
+                        .fillMaxHeight()
+                        .background(Gold)
+                )
+            }
+        }
+
+        // Top layer actions: Back (Settings moved to Global Nav Pill)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(8.dp),
+            horizontalArrangement = Arrangement.Start,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (!isQuestHub) {
+                IconButton(
+                    onClick = onBackClick,
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.25f))
+                        .size(36.dp)
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.White, modifier = Modifier.size(20.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun WatchStatusIcon(wear: WearPresenceState) {
+    val color = when {
+        wear.watchLinked -> Color(0xFF6FE39A) // Green
+        wear.nodeCount > 0 -> Color(0xFFFFC857) // Yellow (linked but maybe not active?)
+        else -> Color(0xFFFF6B6B) // Red/Gray
+    }
+    val icon = if (wear.watchLinked) Icons.Default.Watch else Icons.Default.WatchOff
+
+    Surface(
+        shape = RoundedCornerShape(10.dp),
+        color = Color(0xFF171C2B).copy(alpha = 0.82f),
+        border = BorderStroke(1.dp, color.copy(alpha = 0.4f))
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = "Watch Status",
+            tint = color,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp).size(14.dp)
+        )
+    }
+}
+
+@Composable
+private fun CompactHeaderToken(emoji: String, text: String) {
+    Surface(
+        shape = RoundedCornerShape(10.dp),
+        color = Color(0xFF171C2B).copy(alpha = 0.82f),
+        border = BorderStroke(1.dp, Gold.copy(alpha = 0.4f))
+    ) {
+        Text(
+            text = "$emoji $text",
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+            style = MaterialTheme.typography.labelSmall,
+            color = Color.White,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1
+        )
+    }
+}
+
+private fun morphEmoji(cls: CharacterClass, form: String): String {
+    if (form == "NONE" || form == "HUMAN") return "👤"
+    return when (cls) {
+        CharacterClass.RANGER -> when (form) {
+            "WOLF" -> "🐺"
+            "FALCON" -> "🦅"
+            "BEAR" -> "🐻"
+            else -> "👤"
+        }
+        CharacterClass.DRUID -> when (form) {
+            "BEAR" -> "🐻"
+            "PANTHER" -> "🐆"
+            "TREANT" -> "🌲"
+            "MOONKIN" -> "🦉"
+            "AVATAR" -> "✨"
+            else -> "👤"
+        }
+        CharacterClass.SUMMONER -> when (form) {
+            "IFRIT" -> "🔥"
+            "SHIVA" -> "❄️"
+            "TITAN" -> "🧱"
+            "RAMUH" -> "⚡"
+            "BAHAMUT" -> "🐉"
+            else -> "👤"
+        }
+        CharacterClass.DRAGOON -> if (form == "WYVERN") "🐲" else "👤"
+        CharacterClass.NECROMANCER -> when (form) {
+            "SKELETON" -> "💀"
+            "ARMY" -> "🧟"
+            else -> "👤"
+        }
+        else -> "👤"
+    }
+}
+
 @Composable
 fun HeroScreen(
     viewModel: HeroViewModel = viewModel(factory = HeroViewModel.Factory),
@@ -510,7 +1023,6 @@ fun HeroScreen(
         campaignResetLabel = campaignResetLabel,
         claimedTrophies = claimedTrophies,
         lifetimeCardioKm = lifetimeCardioKm,
-        wearLinked = wear.watchLinked,
         initialTab = initialTab,
         actions = HeroActions(
             onRefreshCharacter = viewModel::refreshCharacter,
@@ -550,6 +1062,7 @@ data class HeroActions(
     val onClaimCampaign: (WeeklyCampaign) -> Unit = {},
     val onBack: () -> Unit = {},
     val onOpenHome: () -> Unit = {},
+    val onMorphClick: () -> Unit = {},
     val updateAppearance: (Long, Long, Long, Long, String, String, Long, String) -> Unit = { _, _, _, _, _, _, _, _ -> }
 )
 
@@ -565,7 +1078,6 @@ fun HeroScreenContent(
     campaignResetLabel: String,
     claimedTrophies: Set<String>,
     lifetimeCardioKm: Double,
-    wearLinked: Boolean,
     initialTab: Int = 0,
     actions: HeroActions
 ) {
@@ -574,6 +1086,8 @@ fun HeroScreenContent(
     var pickerSlot by remember { mutableStateOf<ItemSlot?>(null) }
     var showAvatarDialog by remember { mutableStateOf(false) }
     var rewardReveal by remember { mutableStateOf<RewardBatch?>(null) }
+    var showJobSwitcher by remember { mutableStateOf(false) }
+    var showMorphSwitcher by remember { mutableStateOf(false) }
 
     val cls = character.characterClass ?: run {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -615,12 +1129,6 @@ fun HeroScreenContent(
     val scope = rememberCoroutineScope()
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     val statsListState = rememberLazyListState()
-    val onAllocatePointsClick: () -> Unit = {
-        selectedTab = 0
-        scope.launch {
-            statsListState.animateScrollToItem(2)
-        }
-    }
 
     val equipAnimState = rememberEquipAnimationState()
     val highestEquippedRarity = remember(state.gear, state.ownedGear, state.character) {
@@ -640,23 +1148,16 @@ fun HeroScreenContent(
                         .fillMaxHeight()
                         .verticalScroll(rememberScrollState())
                 ) {
-                    HeroHeaderBanner(
-                        character = character,
-                        cls = cls,
-                        gear = state.gear,
-                        highestRarity = highestEquippedRarity,
-                        equipAnimState = equipAnimState,
+                    UnifiedHeroHeader(
+                        state = state,
+                        isQuestHub = false,
                         onAvatarClick = { showAvatarDialog = true },
-                        onDruidFormChange = actions.onDruidFormChange,
-                        onAllocateClick = onAllocatePointsClick,
-                        onBack = actions.onBack
+                        onOpenJobSwitcher = { showJobSwitcher = true },
+                        onOpenMorphSwitcher = { showMorphSwitcher = true },
+                        onSettingsClick = {}, // Handled inside UnifiedHeroHeader
+                        onBackClick = actions.onBack
                     )
-                    HeroCurrencyBarContent(character, wearLinked, state.maxEnergy)
-                    HeroNextObjectiveCard(
-                        character = character,
-                        onAllocateClick = onAllocatePointsClick,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
+                    Spacer(Modifier.height(8.dp))
                 }
 
                 VerticalDivider(color = Color.White.copy(alpha = 0.1f))
@@ -714,23 +1215,14 @@ fun HeroScreenContent(
             }
         } else {
             Column(Modifier.fillMaxSize()) {
-                HeroHeaderBanner(
-                    character = character,
-                    cls = cls,
-                    gear = state.gear,
-                    highestRarity = highestEquippedRarity,
-                    equipAnimState = equipAnimState,
+                UnifiedHeroHeader(
+                    state = state,
+                    isQuestHub = false,
                     onAvatarClick = { showAvatarDialog = true },
-                    onDruidFormChange = actions.onDruidFormChange,
-                    onAllocateClick = onAllocatePointsClick,
-                    onBack = actions.onBack
-                )
-
-                HeroCurrencyBarContent(character, wearLinked, state.maxEnergy)
-
-                HeroNextObjectiveCard(
-                    character = character,
-                    onAllocateClick = onAllocatePointsClick
+                    onOpenJobSwitcher = { showJobSwitcher = true },
+                    onOpenMorphSwitcher = { showMorphSwitcher = true },
+                    onSettingsClick = {}, // Handled inside UnifiedHeroHeader
+                    onBackClick = actions.onBack
                 )
 
                 PrimaryTabRow(
@@ -802,395 +1294,28 @@ fun HeroScreenContent(
             onDismiss = { pickerSlot = null }
         )
     }
-}
 
-@Composable
-private fun HeroHeaderBanner(
-    character: CharacterEntity,
-    cls: CharacterClass,
-    gear: Map<ItemSlot, ItemEntity>,
-    highestRarity: GearRarity = GearRarity.COMMON,
-    equipAnimState: EquipAnimationState? = null,
-    onAvatarClick: () -> Unit,
-    onDruidFormChange: (String) -> Unit,
-    onAllocateClick: () -> Unit = {},
-    onBack: () -> Unit = {}
-) {
-    val biome = Biome.fromName(character.currentBiome)
-    val colors = when (biome) {
-        Biome.MEADOWLANDS -> listOf(Color(0xFF2D5A27), Color(0xFF1B3518))
-        Biome.DARKWOOD -> listOf(Color(0xFF1B263B), Color(0xFF0D1321))
-        Biome.CRYSTAL_CAVES -> listOf(Color(0xFF4A148C), Color(0xFF1A237E))
-        Biome.EMBER_PEAKS -> listOf(Color(0xFFBF360C), Color(0xFF3E2723))
-        Biome.FROZEN_WASTES -> listOf(Color(0xFF01579B), Color(0xFF002171))
-        Biome.SHADOWFEN -> listOf(Color(0xFF263238), Color(0xFF000000))
-    }
-    val brush = remember(character.currentBiome) {
-        Brush.verticalGradient(colors)
-    }
-    
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 240.dp, max = 280.dp)
-            .background(brush)
-            .statusBarsPadding()
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Full Body Avatar View
-            Box(
-                modifier = Modifier
-                    .weight(0.45f)
-                    .fillMaxHeight(),
-                contentAlignment = Alignment.Center
-            ) {
-                HeroPaperDoll(
-                    clazz = cls,
-                    gear = gear,
-                    appearance = character.toAppearance(),
-                    highestRarity = highestRarity,
-                    equipAnimationState = equipAnimState,
-                    modifier = Modifier.fillMaxSize(),
-                    expression = if (character.freeStatPoints > 0) AvatarExpression.VICTORIOUS else AvatarExpression.CALM,
-                    onAvatarClick = onAvatarClick
-                )
+    if (showJobSwitcher) {
+        JobSwitchSheet(
+            state = state,
+            isPremium = isPremium,
+            onDismiss = { showJobSwitcher = false },
+            onSwitchJob = { selectedClass ->
+                actions.onSwitchJob(selectedClass)
+                showJobSwitcher = false
             }
-            
-            Spacer(Modifier.width(12.dp))
-            
-            Column(Modifier.weight(0.55f)) {
-                val nameFontSize = when {
-                    character.name.length > 14 -> 18.sp
-                    character.name.length > 9 -> 21.sp
-                    else -> 26.sp
-                }
-                Text(
-                    text = character.name,
-                    style = MaterialTheme.typography.headlineMedium.copy(
-                        fontSize = nameFontSize,
-                        lineHeight = (nameFontSize.value + 4).sp
-                    ),
-                    color = Color.White,
-                    fontWeight = FontWeight.Black,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = "Level ${character.level} ${cls.label}",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = Gold,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = CharacterRace.fromStored(character.race).label,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Parchment.copy(alpha = 0.7f)
-                )
-
-                Spacer(Modifier.height(4.dp))
-                val context = LocalContext.current
-                val scope = rememberCoroutineScope()
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    TextButton(
-                        onClick = {
-                            scope.launch {
-                                Toast.makeText(context, "⏳ Generating Hero Wallpaper...", Toast.LENGTH_SHORT).show()
-                                val res = AvatarExporter.exportAvatarGraphic(context, character, cls, ExportFormat.WALLPAPER, gear)
-                                res.fold(
-                                    onSuccess = { uri ->
-                                        Toast.makeText(context, "✅ Wallpaper saved to Pictures/FitQuest gallery!", Toast.LENGTH_LONG).show()
-                                        AvatarExporter.launchSetWallpaperIntent(context, uri)
-                                    },
-                                    onFailure = { err ->
-                                        Toast.makeText(context, "❌ Export failed: ${err.message}", Toast.LENGTH_LONG).show()
-                                    }
-                                )
-                            }
-                        },
-                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
-                        modifier = Modifier.height(26.dp)
-                    ) {
-                        Text("📸 Wallpaper", fontSize = 10.sp, color = Gold)
-                    }
-                    TextButton(
-                        onClick = {
-                            scope.launch {
-                                Toast.makeText(context, "⏳ Generating Watch Face Graphic...", Toast.LENGTH_SHORT).show()
-                                val res = AvatarExporter.exportAvatarGraphic(context, character, cls, ExportFormat.WATCH_FACE, gear)
-                                res.fold(
-                                    onSuccess = { uri ->
-                                        Toast.makeText(context, "✅ Watch Face saved to gallery & synced to watch!", Toast.LENGTH_LONG).show()
-                                        AvatarExporter.launchSetWallpaperIntent(context, uri)
-                                    },
-                                    onFailure = { err ->
-                                        Toast.makeText(context, "❌ Export failed: ${err.message}", Toast.LENGTH_LONG).show()
-                                    }
-                                )
-                            }
-                        },
-                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
-                        modifier = Modifier.height(26.dp)
-                    ) {
-                        Text("⌚ Watch Face", fontSize = 10.sp, color = Gold)
-                    }
-                }
-
-                // Form / Stance Controls
-                if (cls.name == "DRUID" || cls.name == "SUMMONER" || cls.name == "DRAGOON" || cls.name == "RANGER") {
-                    Spacer(Modifier.height(8.dp))
-                    Row(
-                        modifier = Modifier.horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        if (cls.name == "RANGER") {
-                            FilterChip(
-                                selected = character.druidForm == "WOLF" || character.druidForm == "HUMAN" || character.druidForm.isEmpty(),
-                                onClick = { onDruidFormChange("WOLF") },
-                                label = { Text("🐺 Wolf", fontSize = 12.sp) },
-                                modifier = Modifier.height(32.dp)
-                            )
-                            val canFalcon = character.level >= 5
-                            FilterChip(
-                                selected = character.druidForm == "FALCON",
-                                onClick = { if (canFalcon) onDruidFormChange("FALCON") },
-                                enabled = canFalcon,
-                                label = { Text("🦅 Falcon", fontSize = 12.sp) },
-                                modifier = Modifier.height(32.dp)
-                            )
-                            val canBear = character.level >= 10
-                            FilterChip(
-                                selected = character.druidForm == "BEAR",
-                                onClick = { if (canBear) onDruidFormChange("BEAR") },
-                                enabled = canBear,
-                                label = { Text("🐻 Bear", fontSize = 12.sp) },
-                                modifier = Modifier.height(32.dp)
-                            )
-                        } else {
-                            FilterChip(
-                                selected = character.druidForm == "HUMAN",
-                                onClick = { onDruidFormChange("HUMAN") },
-                                label = { Text("👤", fontSize = 12.sp) },
-                                modifier = Modifier.height(32.dp)
-                            )
-                        }
-                        
-                        if (cls.name == "DRUID") {
-                            val canBear = character.level >= 1
-                            FilterChip(
-                                selected = character.druidForm == "BEAR",
-                                onClick = { if (canBear) onDruidFormChange("BEAR") },
-                                enabled = canBear,
-                                label = { Text("🐻 Bear", fontSize = 12.sp) },
-                                modifier = Modifier.height(32.dp)
-                            )
-                            val canPanther = character.level >= 5
-                            FilterChip(
-                                selected = character.druidForm == "PANTHER",
-                                onClick = { if (canPanther) onDruidFormChange("PANTHER") },
-                                enabled = canPanther,
-                                label = { Text(if (canPanther) "🐆 Panther" else "🔒 Lv 5", fontSize = 12.sp) },
-                                modifier = Modifier.height(32.dp)
-                            )
-                            val canTreant = character.level >= 20
-                            FilterChip(
-                                selected = character.druidForm == "TREANT",
-                                onClick = { if (canTreant) onDruidFormChange("TREANT") },
-                                enabled = canTreant,
-                                label = { Text(if (canTreant) "🌲 Treant" else "🔒 Lv 20", fontSize = 12.sp) },
-                                modifier = Modifier.height(32.dp)
-                            )
-                            val canMoonkin = character.level >= 35
-                            FilterChip(
-                                selected = character.druidForm == "MOONKIN",
-                                onClick = { if (canMoonkin) onDruidFormChange("MOONKIN") },
-                                enabled = canMoonkin,
-                                label = { Text(if (canMoonkin) "🦉 Moonkin" else "🔒 Lv 35", fontSize = 12.sp) },
-                                modifier = Modifier.height(32.dp)
-                            )
-                            val canAvatar = character.level >= 50
-                            FilterChip(
-                                selected = character.druidForm == "AVATAR",
-                                onClick = { if (canAvatar) onDruidFormChange("AVATAR") },
-                                enabled = canAvatar,
-                                label = { Text(if (canAvatar) "🦅 Avatar" else "🔒 Lv 50", fontSize = 12.sp) },
-                                modifier = Modifier.height(32.dp)
-                            )
-                        } else if (cls.name == "SUMMONER") {
-                            val canIfrit = character.level >= 1
-                            FilterChip(
-                                selected = character.druidForm == "IFRIT",
-                                onClick = { if (canIfrit) onDruidFormChange("IFRIT") },
-                                enabled = canIfrit,
-                                label = { Text("🔥", fontSize = 12.sp) },
-                                modifier = Modifier.height(32.dp)
-                            )
-                            val canShiva = character.level >= 5
-                            FilterChip(
-                                selected = character.druidForm == "SHIVA",
-                                onClick = { if (canShiva) onDruidFormChange("SHIVA") },
-                                enabled = canShiva,
-                                label = { Text("❄️", fontSize = 12.sp) },
-                                modifier = Modifier.height(32.dp)
-                            )
-                        } else if (cls.name == "DRAGOON") {
-                            val canWyvern = character.level >= 1
-                            FilterChip(
-                                selected = character.druidForm == "WYVERN",
-                                onClick = { if (canWyvern) onDruidFormChange("WYVERN") },
-                                enabled = canWyvern,
-                                label = { Text("🐲", fontSize = 12.sp) },
-                                modifier = Modifier.height(32.dp)
-                            )
-                        }
-                    }
-                }
-
-                if (character.freeStatPoints > 0) {
-                    Spacer(Modifier.height(12.dp))
-                    Button(
-                        onClick = onAllocateClick,
-                        colors = ButtonDefaults.buttonColors(containerColor = Gold),
-                        modifier = Modifier.height(32.dp),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
-                        shape = RoundedCornerShape(16.dp)
-                    ) {
-                        Text("${character.freeStatPoints} Points Ready", color = NightBg, fontSize = 11.sp, fontWeight = FontWeight.Black)
-                    }
-                }
-            }
-        }
-        
-        Box(Modifier.align(Alignment.TopEnd).padding(8.dp)) {
-            SettingsIconButton()
-        }
-
-        IconButton(
-            onClick = onBack,
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .statusBarsPadding()
-                .padding(8.dp)
-                .background(Color.Black.copy(alpha = 0.35f), CircleShape)
-        ) {
-            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to Quest Hub", tint = Color.White)
-        }
-        
-        // Glowing XP Bar at the very bottom
-        val nextXp = GameMath.xpToNextLevel(character.level)
-        val progress = (character.xp.toFloat() / nextXp.coerceAtLeast(1)).coerceIn(0f, 1f)
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(4.dp)
-                .align(Alignment.BottomStart)
-                .background(Color.White.copy(alpha = 0.1f))
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(progress)
-                    .fillMaxHeight()
-                    .background(Gold)
-            )
-        }
-    }
-}
-
-@Composable
-private fun HeroCurrencyBarContent(character: CharacterEntity, wearLinked: Boolean, maxEnergy: Int = GameMath.MAX_ENERGY) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 48.dp)
-            .padding(horizontal = 16.dp, vertical = 10.dp)
-            .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        FantasyToken(emoji = "💰", text = character.gold.toString())
-        FantasyToken(
-            emoji = "⚡",
-            text = "${character.energy}/$maxEnergy",
-            color = if (character.energy < maxEnergy) Gold else Color.White
         )
-        if (character.streak > 0) {
-            FantasyToken(emoji = "🔥", text = "${character.streak}d")
-        }
-        FantasyToken(
-            emoji = if (wearLinked) "⌚" else "🚫",
-            text = if (wearLinked) "Linked" else "Offline",
-            color = if (wearLinked) Color(0xFF35C46A) else Color(0xFFE34D59)
-        )
-        Spacer(Modifier.width(16.dp))
     }
-}
 
-@Composable
-private fun HeroNextObjectiveCard(
-    character: CharacterEntity,
-    onAllocateClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    if (character.freeStatPoints <= 0) return
-
-    Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp),
-        shape = RoundedCornerShape(12.dp),
-        color = Gold.copy(alpha = 0.12f),
-        border = BorderStroke(1.dp, Gold.copy(alpha = 0.5f))
-    ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text(
-                    text = "✨",
-                    fontSize = 18.sp
-                )
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Attribute Points Ready",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = Gold
-                    )
-                    Text(
-                        text = "You have ${character.freeStatPoints} unspent points to strengthen your Hero.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.White.copy(alpha = 0.7f)
-                    )
-                }
+    if (showMorphSwitcher) {
+        MorphSwitchSheet(
+            character = character,
+            onDismiss = { showMorphSwitcher = false },
+            onMorphChange = { newForm ->
+                actions.onDruidFormChange(newForm)
+                showMorphSwitcher = false
             }
-
-            Button(
-                onClick = onAllocateClick,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 44.dp)
-                    .semantics {
-                        contentDescription = "Allocate ${character.freeStatPoints} attribute points"
-                    },
-                colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = NightBg),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Text(
-                    text = "Allocate Points",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-        }
+        )
     }
 }
 
@@ -2281,7 +2406,6 @@ fun HeroScreenPreview() {
                 campaignResetLabel = "5d 4h",
                 claimedTrophies = emptySet(),
                 lifetimeCardioKm = 12.5,
-                wearLinked = true,
                 actions = HeroActions()
             )
         }

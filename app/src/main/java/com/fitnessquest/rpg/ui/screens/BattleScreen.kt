@@ -220,9 +220,7 @@ fun BattleScreenContent(
             kind = SceneKind.BATTLE,
             title = "BATTLEFIELDS",
             tagline = "Spend energy. Claim spoils."
-        ) {
-            SettingsIconButton()
-        }
+        )
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = rememberDockContentPadding(),

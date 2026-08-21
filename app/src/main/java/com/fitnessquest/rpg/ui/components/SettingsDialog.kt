@@ -159,6 +159,9 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
 
     fun setLowPowerUi(value: Boolean) = container.prefs.setLowPowerUi(value)
 
+    fun setLeftHanded(value: Boolean) = container.prefs.setLeftHanded(value)
+    val leftHanded: StateFlow<Boolean> = container.prefs.leftHanded
+
     fun setUseLocalAi(value: Boolean) = container.prefs.setUseLocalAi(value)
 
     fun forceSync() {
@@ -469,6 +472,7 @@ fun SettingsDialog(
     val account by viewModel.account.collectAsState()
     val authMessage by viewModel.authMessage.collectAsState()
     val imperial by viewModel.imperial.collectAsState()
+    val leftHanded by viewModel.leftHanded.collectAsState()
     val activity = LocalActivity.current
     var key by remember { mutableStateOf(viewModel.currentApiKey()) }
     var email by remember { mutableStateOf("") }
@@ -730,6 +734,25 @@ fun SettingsDialog(
                         selected = imperial,
                         onClick = { viewModel.setImperial(true) },
                         label = { Text("Imperial (lb \u00B7 mi)") }
+                    )
+                }
+                HorizontalDivider()
+                Text("Navigation hand", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                Text(
+                    "Places the navigation pill on your preferred side.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    FilterChip(
+                        selected = leftHanded,
+                        onClick = { viewModel.setLeftHanded(true) },
+                        label = { Text("Left") }
+                    )
+                    FilterChip(
+                        selected = !leftHanded,
+                        onClick = { viewModel.setLeftHanded(false) },
+                        label = { Text("Right") }
                     )
                 }
                 HorizontalDivider()

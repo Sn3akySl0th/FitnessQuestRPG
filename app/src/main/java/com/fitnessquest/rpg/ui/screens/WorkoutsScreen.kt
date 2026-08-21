@@ -457,7 +457,6 @@ fun WorkoutsScreenContent(
             IconButton(onClick = actions.onHistory) {
                 Icon(Icons.Filled.History, contentDescription = "History")
             }
-            SettingsIconButton()
         }
         LazyColumn(
             modifier = Modifier.fillMaxSize(),

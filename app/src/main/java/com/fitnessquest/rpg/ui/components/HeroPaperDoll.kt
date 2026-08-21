@@ -250,12 +250,12 @@ fun HeroPaperDoll(
         if (showRotateButton) {
             Box(
                 modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(end = 12.dp, bottom = 8.dp)
-                    .size(36.dp)
+                    .align(Alignment.TopEnd)
+                    .padding(end = 10.dp, top = 10.dp)
+                    .size(30.dp)
                     .clip(CircleShape)
                     .background(Color.Black.copy(alpha = 0.65f))
-                    .border(1.2.dp, Gold.copy(alpha = 0.55f), CircleShape)
+                    .border(1.dp, Gold.copy(alpha = 0.55f), CircleShape)
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
@@ -274,7 +274,7 @@ fun HeroPaperDoll(
                     contentDescription = if (effectiveTargetFacing) "Rotate to front" else "Rotate to back",
                     tint = Gold,
                     modifier = Modifier
-                        .size(20.dp)
+                        .size(16.dp)
                         .graphicsLayer(rotationZ = turnaroundState.currentAngle)
                 )
             }

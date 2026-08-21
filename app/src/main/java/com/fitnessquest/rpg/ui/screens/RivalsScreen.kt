@@ -446,7 +446,6 @@ fun RivalsScreenContent(
                     Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
                 }
             }
-            SettingsIconButton()
         }
 
         when (current) {

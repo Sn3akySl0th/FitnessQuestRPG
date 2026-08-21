@@ -413,7 +413,6 @@ fun ShopScreenContent(
                 tagline = "Browse, equip, upgrade, and salvage."
             ) {
                 ResourceChip("G", character.gold.toString())
-                SettingsIconButton()
             }
 
             LazyVerticalGrid(

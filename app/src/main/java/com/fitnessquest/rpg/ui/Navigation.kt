@@ -145,6 +145,7 @@ fun FitQuestNav() {
     val usernameSet by container.prefs.usernameSet.collectAsState()
     val syncStatus by container.sync.status.collectAsState()
     val lowPowerUi by container.prefs.lowPowerUi.collectAsState()
+    val leftHanded by container.prefs.leftHanded.collectAsState()
 
     LaunchedEffect(account, character, usernameSet, syncStatus.isReconciling) {
         if (!onboardingComplete && !syncStatus.isReconciling) {
@@ -249,7 +250,10 @@ fun FitQuestNav() {
                 startDestination = Routes.HERO,
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(start = if (showBottomBar && isLandscape) 68.dp else 0.dp)
+                    .padding(
+                        start = if (showBottomBar && isLandscape && leftHanded) 68.dp else 0.dp,
+                        end = if (showBottomBar && isLandscape && !leftHanded) 68.dp else 0.dp
+                    )
             ) {
                 composable(Routes.HERO) {
                     QuestHubScreen(
@@ -439,9 +443,14 @@ fun FitQuestNav() {
 
             Column(
                 modifier = Modifier
-                    .align(if (isLandscape) Alignment.BottomEnd else Alignment.BottomCenter)
+                    .align(
+                        when {
+                            !isLandscape -> Alignment.BottomCenter
+                            leftHanded -> Alignment.BottomEnd
+                            else -> Alignment.BottomStart
+                        }
+                    )
                     .navigationBarsPadding()
-                    .padding(bottom = if (showBottomBar && !isLandscape) DockClearance else 0.dp)
             ) {
                 val hideBanners = currentRoute == Routes.HERO ||
                     currentRoute == Routes.SESSION ||
@@ -485,6 +494,7 @@ fun FitQuestNav() {
                         if (tab.route == Routes.HERO) tab.copy(hasBadge = hasClaimableDailyBounty) else tab
                     },
                     currentRoute = selectedDockRoute,
+                    dockOnLeft = leftHanded,
                     onTabClick = { route ->
                         navController.navigate(route) {
                             popUpTo(navController.graph.findStartDestination().id) {
@@ -494,18 +504,32 @@ fun FitQuestNav() {
                             restoreState = true
                         }
                     },
-                    modifier = Modifier.align(if (isLandscape) Alignment.CenterStart else Alignment.BottomCenter)
+                    modifier = Modifier.align(
+                        when {
+                            !isLandscape && leftHanded -> Alignment.BottomStart
+                            !isLandscape -> Alignment.BottomEnd
+                            leftHanded -> Alignment.CenterStart
+                            else -> Alignment.CenterEnd
+                        }
+                    )
                 )
             }
 
             SnackbarHost(
                 hostState = snackbarHostState,
                 modifier = Modifier
-                    .align(if (isLandscape) Alignment.BottomEnd else Alignment.BottomCenter)
+                    .align(
+                        when {
+                            !isLandscape -> Alignment.BottomCenter
+                            leftHanded -> Alignment.BottomEnd
+                            else -> Alignment.BottomStart
+                        }
+                    )
                     .navigationBarsPadding()
                     .padding(
                         bottom = if (showBottomBar && !isLandscape) 100.dp else 16.dp,
-                        end = if (isLandscape) 16.dp else 0.dp
+                        start = if (isLandscape && !leftHanded) 16.dp else 0.dp,
+                        end = if (isLandscape && leftHanded) 16.dp else 0.dp
                     )
             )
         }

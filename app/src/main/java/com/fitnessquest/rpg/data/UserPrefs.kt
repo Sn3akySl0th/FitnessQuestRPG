@@ -166,6 +166,14 @@ class UserPrefs(context: Context) {
         _showCardioIntensity.value = value
     }
 
+    private val _leftHanded = MutableStateFlow(prefs.getBoolean(KEY_LEFT_HANDED, false))
+    val leftHanded: StateFlow<Boolean> = _leftHanded
+
+    fun setLeftHanded(value: Boolean) {
+        prefs.edit { putBoolean(KEY_LEFT_HANDED, value) }
+        _leftHanded.value = value
+    }
+
     // ---- Developer sandbox ----
 
     private val _developerSandbox = MutableStateFlow(prefs.getBoolean(KEY_DEV_SANDBOX, false))
@@ -449,6 +457,7 @@ class UserPrefs(context: Context) {
         const val KEY_HAPTICS = "feedback_haptics"
         const val KEY_LOW_POWER_UI = "graphics_low_power"
         const val KEY_CARDIO_INTENSITY = "cardio_show_intensity"
+        const val KEY_LEFT_HANDED = "ui_left_handed"
         const val KEY_PREMIUM = "is_premium"
         const val KEY_DEV_SANDBOX = "developer_sandbox"
         val PREMIUM_REDEEM_CODES = setOf(

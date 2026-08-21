@@ -523,36 +523,44 @@ internal object AvatarPainter {
             }) {
                 val bodyShift = Offset(tilt.x * 12f * frame.u, tilt.y * 12f * frame.u)
                 translate(bodyShift.x, bodyShift.y) {
-                    if (frame.cls == CharacterClass.SUMMONER) {
-                        when (frame.appearance.druidForm) {
+                    val form = frame.appearance.druidForm
+                    val isDismissed = form == "NONE" || form == "HUMAN"
+
+                    if (frame.cls == CharacterClass.SUMMONER && !isDismissed) {
+                        when (form) {
                             "SHIVA" -> drawShivaCompanion(frame)
                             "BAHAMUT" -> drawBahamutCompanion(frame)
                             "IFRIT" -> drawIfritCompanion(frame)
                             else -> {
-                                if ((frame.weapon?.tier ?: 1) >= 4) drawBahamutCompanion(frame)
-                                else if ((frame.weapon?.tier ?: 1) >= 2) drawShivaCompanion(frame)
-                                else drawIfritCompanion(frame)
+                                if (form.isNotEmpty()) {
+                                    if ((frame.weapon?.tier ?: 1) >= 4) drawBahamutCompanion(frame)
+                                    else if ((frame.weapon?.tier ?: 1) >= 2) drawShivaCompanion(frame)
+                                    else drawIfritCompanion(frame)
+                                }
                             }
                         }
                     }
-                    if (frame.cls == CharacterClass.NECROMANCER) {
-                        when (frame.appearance.druidForm) {
+                    if (frame.cls == CharacterClass.NECROMANCER && !isDismissed) {
+                        when (form) {
                             "ARMY" -> drawUndeadArmyCompanion(frame)
                             "SKELETON" -> drawSkeletonCompanion(frame)
                             else -> {
-                                if ((frame.weapon?.tier ?: 1) >= 3) drawUndeadArmyCompanion(frame)
-                                else drawSkeletonCompanion(frame)
+                                if (form.isNotEmpty()) {
+                                    if ((frame.weapon?.tier ?: 1) >= 3) drawUndeadArmyCompanion(frame)
+                                    else drawSkeletonCompanion(frame)
+                                }
                             }
                         }
                     }
-                    if (frame.cls == CharacterClass.DRAGOON && frame.appearance.druidForm != "NONE") {
+                    if (frame.cls == CharacterClass.DRAGOON && !isDismissed && form != "") {
                         drawWyvernCompanion(frame)
                     }
-                    if (frame.cls == CharacterClass.RANGER) {
-                        when (frame.appearance.druidForm) {
+                    if (frame.cls == CharacterClass.RANGER && !isDismissed) {
+                        when (form) {
                             "FALCON" -> drawHunterFalconCompanion(frame)
                             "BEAR" -> drawHunterBearCompanion(frame)
-                            else -> drawHunterWolfCompanion(frame)
+                            "WOLF" -> drawHunterWolfCompanion(frame)
+                            else -> if (form.isNotEmpty()) drawHunterWolfCompanion(frame)
                         }
                     }
 
@@ -680,36 +688,44 @@ internal object AvatarPainter {
                 }
 
                 translate(bodyShift.x, bodyShift.y) {
-                    if (frame.cls == CharacterClass.SUMMONER) {
-                        when (frame.appearance.druidForm) {
+                    val form = frame.appearance.druidForm
+                    val isDismissed = form == "NONE" || form == "HUMAN"
+
+                    if (frame.cls == CharacterClass.SUMMONER && !isDismissed) {
+                        when (form) {
                             "SHIVA" -> drawShivaCompanion(frame)
                             "BAHAMUT" -> drawBahamutCompanion(frame)
                             "IFRIT" -> drawIfritCompanion(frame)
                             else -> {
-                                if ((frame.weapon?.tier ?: 1) >= 4) drawBahamutCompanion(frame)
-                                else if ((frame.weapon?.tier ?: 1) >= 2) drawShivaCompanion(frame)
-                                else drawIfritCompanion(frame)
+                                if (form.isNotEmpty()) {
+                                    if ((frame.weapon?.tier ?: 1) >= 4) drawBahamutCompanion(frame)
+                                    else if ((frame.weapon?.tier ?: 1) >= 2) drawShivaCompanion(frame)
+                                    else drawIfritCompanion(frame)
+                                }
                             }
                         }
                     }
-                    if (frame.cls == CharacterClass.NECROMANCER) {
-                        when (frame.appearance.druidForm) {
+                    if (frame.cls == CharacterClass.NECROMANCER && !isDismissed) {
+                        when (form) {
                             "ARMY" -> drawUndeadArmyCompanion(frame)
                             "SKELETON" -> drawSkeletonCompanion(frame)
                             else -> {
-                                if ((frame.weapon?.tier ?: 1) >= 3) drawUndeadArmyCompanion(frame)
-                                else drawSkeletonCompanion(frame)
+                                if (form.isNotEmpty()) {
+                                    if ((frame.weapon?.tier ?: 1) >= 3) drawUndeadArmyCompanion(frame)
+                                    else drawSkeletonCompanion(frame)
+                                }
                             }
                         }
                     }
-                    if (frame.cls == CharacterClass.DRAGOON && frame.appearance.druidForm != "NONE") {
+                    if (frame.cls == CharacterClass.DRAGOON && !isDismissed && form != "") {
                         drawWyvernCompanion(frame)
                     }
-                    if (frame.cls == CharacterClass.RANGER) {
-                        when (frame.appearance.druidForm) {
+                    if (frame.cls == CharacterClass.RANGER && !isDismissed) {
+                        when (form) {
                             "FALCON" -> drawHunterFalconCompanion(frame)
                             "BEAR" -> drawHunterBearCompanion(frame)
-                            else -> drawHunterWolfCompanion(frame)
+                            "WOLF" -> drawHunterWolfCompanion(frame)
+                            else -> if (form.isNotEmpty()) drawHunterWolfCompanion(frame)
                         }
                     }
 

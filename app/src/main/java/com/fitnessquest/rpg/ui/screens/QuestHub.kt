@@ -35,6 +35,7 @@ import com.fitnessquest.rpg.domain.CharacterRace
 import com.fitnessquest.rpg.domain.GearRarity
 import com.fitnessquest.rpg.domain.GameMath
 import com.fitnessquest.rpg.domain.Monster
+import com.fitnessquest.rpg.ui.components.AvatarCustomizationDialog
 import com.fitnessquest.rpg.ui.components.AvatarExpression
 import com.fitnessquest.rpg.ui.components.DailyBountyCard
 import com.fitnessquest.rpg.ui.components.EmbersOverlay
@@ -185,6 +186,8 @@ fun QuestHubScreen(
     var showManualStepsDialog by remember { mutableStateOf(false) }
     var showPedometerScanDialog by remember { mutableStateOf(false) }
     var showJobSwitcher by remember { mutableStateOf(false) }
+    var showMorphSwitcher by remember { mutableStateOf(false) }
+    var showAvatarDialog by remember { mutableStateOf(false) }
     val character = screenState.character
     val heroClass = character?.characterClass
 
@@ -245,6 +248,32 @@ fun QuestHubScreen(
         )
     }
 
+    if (showMorphSwitcher) {
+        MorphSwitchSheet(
+            character = character,
+            onDismiss = { showMorphSwitcher = false },
+            onMorphChange = { newForm ->
+                viewModel.setDruidForm(newForm)
+                showMorphSwitcher = false
+            }
+        )
+    }
+
+    if (showAvatarDialog) {
+        AvatarCustomizationDialog(
+            character = character,
+            isPremium = isPremium,
+            onDismiss = { showAvatarDialog = false },
+            onClassChange = { viewModel.switchJob(it) },
+            onSave = { skinColor, hairColor, underwearColor, eyeColor, hairStyle, gender, braColor, race ->
+                viewModel.updateAppearance(
+                    skinColor, hairColor, underwearColor, eyeColor, hairStyle, gender, braColor, race
+                )
+                showAvatarDialog = false
+            }
+        )
+    }
+
     EmbersOverlay(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -256,10 +285,14 @@ fun QuestHubScreen(
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             item {
-                CompactQuestHeroHeader(
+                UnifiedHeroHeader(
                     state = screenState,
-                    onOpenHero = onOpenHero,
-                    onOpenJobSwitcher = { showJobSwitcher = true }
+                    isQuestHub = true,
+                    onAvatarClick = { showAvatarDialog = true },
+                    onOpenJobSwitcher = { showJobSwitcher = true },
+                    onOpenMorphSwitcher = { showMorphSwitcher = true },
+                    onSettingsClick = {},
+                    onOpenHero = onOpenHero
                 )
             }
 
@@ -296,247 +329,6 @@ fun QuestHubScreen(
                     onOpenSaga = onOpenSaga,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
                 )
-            }
-        }
-    }
-}
-
-@Composable
-private fun CompactQuestHeroHeader(
-    state: HeroUiState,
-    onOpenHero: () -> Unit,
-    onOpenJobSwitcher: () -> Unit
-) {
-    val character = state.character ?: return
-    val heroClass = character.characterClass ?: return
-    val activeJobLevel = state.allClassProgress
-        .firstOrNull { it.clazz == heroClass }
-        ?.level
-        ?: character.level
-    val headerHeight = if (LocalDensity.current.fontScale >= 1.2f) 236.dp else 216.dp
-    val biome = Biome.fromName(character.currentBiome)
-    val colors = listOf(Color(biome.colorA), Color(biome.colorB))
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(headerHeight)
-            .background(Brush.horizontalGradient(colors))
-            .statusBarsPadding()
-            .clickable(onClick = onOpenHero)
-            .semantics { contentDescription = "Open Hero details" }
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 16.dp, vertical = 8.dp)
-        ) {
-            Row(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .weight(0.43f)
-                        .fillMaxHeight(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    HeroPaperDoll(
-                        clazz = heroClass,
-                        gear = state.gear,
-                        appearance = character.toAppearance(),
-                        highestRarity = GearRarity.COMMON,
-                        expression = AvatarExpression.CALM,
-                        modifier = Modifier.fillMaxSize(),
-                        onAvatarClick = onOpenHero
-                    )
-                }
-
-                Spacer(Modifier.width(12.dp))
-
-                Column(
-                    modifier = Modifier.weight(0.57f),
-                    verticalArrangement = Arrangement.spacedBy(2.dp)
-                ) {
-                    Text(
-                        text = "QUEST HUB",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Gold,
-                        fontWeight = FontWeight.Black
-                    )
-                    Text(
-                        text = character.name,
-                        style = MaterialTheme.typography.titleLarge,
-                        color = Color.White,
-                        fontWeight = FontWeight.Black,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = CharacterRace.fromStored(character.race).label,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Gold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = "${biome.emoji} ${biome.label}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.White.copy(alpha = 0.78f),
-                        fontWeight = FontWeight.Bold
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        CompactHeaderToken(emoji = "💰", text = character.gold.toString())
-                        CompactHeaderToken(emoji = "⚡", text = "${character.energy}/${state.maxEnergy}")
-                    }
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("View Hero", style = MaterialTheme.typography.labelMedium, color = Color.White)
-                            Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
-                        }
-                        Surface(
-                            onClick = onOpenJobSwitcher,
-                            shape = RoundedCornerShape(12.dp),
-                            color = Color(0xFF171C2B).copy(alpha = 0.9f),
-                            border = BorderStroke(1.dp, Gold.copy(alpha = 0.55f))
-                        ) {
-                            Text(
-                                text = "${heroClass.emoji} Lv $activeJobLevel  ▾",
-                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        Box(
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(6.dp)
-                .clip(CircleShape)
-                .background(Color.Black.copy(alpha = 0.25f))
-        ) {
-            SettingsIconButton()
-        }
-    }
-}
-
-@Composable
-private fun CompactHeaderToken(emoji: String, text: String) {
-    Surface(
-        shape = RoundedCornerShape(10.dp),
-        color = Color(0xFF171C2B).copy(alpha = 0.82f),
-        border = BorderStroke(1.dp, Gold.copy(alpha = 0.4f))
-    ) {
-        Text(
-            text = "$emoji $text",
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-            style = MaterialTheme.typography.labelSmall,
-            color = Color.White,
-            fontWeight = FontWeight.Bold,
-            maxLines = 1
-        )
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun JobSwitchSheet(
-    state: HeroUiState,
-    isPremium: Boolean,
-    onDismiss: () -> Unit,
-    onSwitchJob: (CharacterClass) -> Unit
-) {
-    val character = state.character ?: return
-    val activeClass = character.characterClass ?: return
-    val jobs = CharacterClass.entries.sortedWith(
-        compareByDescending<CharacterClass> { it == activeClass }
-            .thenByDescending { candidate ->
-                state.allClassProgress.firstOrNull { it.clazz == candidate }?.level ?: 1
-            }
-    )
-
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            Text("Switch Job", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black)
-            Text(
-                "Each job retains its own level and equipped gear.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-            )
-        }
-
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(max = 440.dp),
-            contentPadding = PaddingValues(20.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            items(jobs, key = { it.name }) { job ->
-                val level = state.allClassProgress.firstOrNull { it.clazz == job }?.level ?: 1
-                val isActive = job == activeClass
-                val isLocked = job.requiresPremium && !isPremium
-                Surface(
-                    onClick = { if (!isLocked) onSwitchJob(job) },
-                    enabled = !isActive && !isLocked,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(14.dp),
-                    color = if (isActive) Gold.copy(alpha = 0.18f) else MaterialTheme.colorScheme.surfaceVariant,
-                    border = when {
-                        isActive -> BorderStroke(1.dp, Gold)
-                        isLocked -> BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
-                        else -> null
-                    }
-                ) {
-                    Row(
-                        modifier = Modifier.padding(12.dp),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(job.emoji, style = MaterialTheme.typography.headlineSmall)
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                job.label,
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Text(
-                                when {
-                                    isActive -> "Active • Lv $level"
-                                    isLocked -> "✦ Premium"
-                                    else -> "Lv $level"
-                                },
-                                style = MaterialTheme.typography.labelSmall,
-                                color = if (isActive) Gold else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                            )
-                        }
-                    }
-                }
             }
         }
     }
