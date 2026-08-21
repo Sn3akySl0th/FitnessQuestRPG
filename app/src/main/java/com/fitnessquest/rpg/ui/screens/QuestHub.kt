@@ -1,10 +1,13 @@
 package com.fitnessquest.rpg.ui.screens
 
+import android.content.res.Configuration
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -20,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -293,128 +297,268 @@ fun QuestHubScreen(
         )
     }
 
-    EmbersOverlay(modifier = Modifier.fillMaxSize()) {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = rememberDockContentPadding(
-                horizontal = 0.dp,
-                top = 0.dp,
-                extraBottom = 24.dp
-            ),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            item {
-                UnifiedHeroHeader(
-                    state = screenState,
-                    isQuestHub = true,
-                    onAvatarClick = { showAvatarDialog = true },
-                    onOpenJobSwitcher = { showJobSwitcher = true },
-                    onOpenMorphSwitcher = { showMorphSwitcher = true },
-                    onSettingsClick = {},
-                    onOpenHero = onOpenHero,
-                    onOpenHeroGear = onOpenHeroGear
-                )
-            }
+    val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
 
-            if (screenState.hasGearUpgrade()) {
-                item {
-                    Surface(
-                        onClick = onOpenHeroGear,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 2.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        color = Color(0xFF142B1A),
-                        border = BorderStroke(1.dp, Color(0xFF4CAF50).copy(alpha = 0.8f))
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 10.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                modifier = Modifier.weight(1f)
+    EmbersOverlay(modifier = Modifier.fillMaxSize()) {
+        if (isLandscape) {
+            Row(modifier = Modifier.fillMaxSize()) {
+                Column(
+                    modifier = Modifier
+                        .weight(0.42f)
+                        .fillMaxHeight()
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    UnifiedHeroHeader(
+                        state = screenState,
+                        isQuestHub = true,
+                        onAvatarClick = { showAvatarDialog = true },
+                        onOpenJobSwitcher = { showJobSwitcher = true },
+                        onOpenMorphSwitcher = { showMorphSwitcher = true },
+                        onSettingsClick = {},
+                        onOpenHero = onOpenHero,
+                        onOpenHeroGear = onOpenHeroGear
+                    )
+                }
+
+                VerticalDivider(color = Color.White.copy(alpha = 0.1f))
+
+                LazyColumn(
+                    modifier = Modifier
+                        .weight(0.58f)
+                        .fillMaxHeight(),
+                    contentPadding = rememberDockContentPadding(
+                        horizontal = 0.dp,
+                        top = 8.dp,
+                        extraBottom = 24.dp
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    if (screenState.hasGearUpgrade()) {
+                        item {
+                            Surface(
+                                onClick = onOpenHeroGear,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 2.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                color = Color(0xFF142B1A),
+                                border = BorderStroke(1.dp, Color(0xFF4CAF50).copy(alpha = 0.8f))
                             ) {
-                                Text("⚔️", fontSize = 22.sp)
-                                Column {
-                                    Text(
-                                        "Gear Upgrade Available",
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color(0xFF81C784)
-                                    )
-                                    Text(
-                                        "Stronger equipment ready in your bag · Tap to equip",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = Color.White.copy(alpha = 0.75f)
-                                    )
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text("⚔️", fontSize = 22.sp)
+                                        Column {
+                                            Text(
+                                                "Gear Upgrade Available",
+                                                style = MaterialTheme.typography.titleSmall,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFF81C784)
+                                            )
+                                            Text(
+                                                "Stronger equipment ready in your bag · Tap to equip",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = Color.White.copy(alpha = 0.75f)
+                                            )
+                                        }
+                                    }
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = Color(0xFF2E7D32),
+                                        border = BorderStroke(1.dp, Color(0xFF81C784))
+                                    ) {
+                                        Text(
+                                            "Equip ➔",
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                    }
                                 }
                             }
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = Color(0xFF2E7D32),
-                                border = BorderStroke(1.dp, Color(0xFF81C784))
+                        }
+                    }
+
+                    item {
+                        screenState.questHub?.let { quest ->
+                            QuestHubCard(
+                                state = quest,
+                                onPrimaryAction = { selected ->
+                                    when (selected.action) {
+                                        QuestHubAction.RESUME_QUEST,
+                                        QuestHubAction.BEGIN_QUEST -> onStartWorkout(selected.workoutId ?: -1L)
+                                        QuestHubAction.OPEN_TRAINING -> onOpenTraining()
+                                        QuestHubAction.CHALLENGE_BOSS -> onOpenBattle()
+                                    }
+                                },
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+
+                    item {
+                        BetaWalkthroughCard(
+                            character = screenState.character,
+                            onOpenFeedback = { showFeedbackDialog = true },
+                            onClaimPioneerReward = { viewModel.claimBetaPioneerReward() },
+                            onOpenGear = onOpenHeroGear,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                        )
+                    }
+
+                    item {
+                        DailyBountyCard(
+                            bounties = bounties,
+                            resetLabel = bountyResetLabel,
+                            resetRemainingMs = bountyResetRemainingMs,
+                            onClaim = viewModel::claimBounty,
+                            onLogProgress = { bounty ->
+                                when (bounty.id) {
+                                    "b_weight" -> showWeightDialog = true
+                                    "b_steps" -> showManualStepsDialog = true
+                                    else -> viewModel.logBountyProgress(bounty)
+                                }
+                            },
+                            onOpenBattle = onOpenBattle,
+                            onOpenSaga = onOpenSaga,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                        )
+                    }
+                }
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = rememberDockContentPadding(
+                    horizontal = 0.dp,
+                    top = 0.dp,
+                    extraBottom = 24.dp
+                ),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                item {
+                    UnifiedHeroHeader(
+                        state = screenState,
+                        isQuestHub = true,
+                        onAvatarClick = { showAvatarDialog = true },
+                        onOpenJobSwitcher = { showJobSwitcher = true },
+                        onOpenMorphSwitcher = { showMorphSwitcher = true },
+                        onSettingsClick = {},
+                        onOpenHero = onOpenHero,
+                        onOpenHeroGear = onOpenHeroGear
+                    )
+                }
+
+                if (screenState.hasGearUpgrade()) {
+                    item {
+                        Surface(
+                            onClick = onOpenHeroGear,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 2.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            color = Color(0xFF142B1A),
+                            border = BorderStroke(1.dp, Color(0xFF4CAF50).copy(alpha = 0.8f))
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
-                                    "Equip ➔",
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
-                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("⚔️", fontSize = 22.sp)
+                                    Column {
+                                        Text(
+                                            "Gear Upgrade Available",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFF81C784)
+                                        )
+                                        Text(
+                                            "Stronger equipment ready in your bag · Tap to equip",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = Color.White.copy(alpha = 0.75f)
+                                        )
+                                    }
+                                }
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = Color(0xFF2E7D32),
+                                    border = BorderStroke(1.dp, Color(0xFF81C784))
+                                ) {
+                                    Text(
+                                        "Equip ➔",
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White
+                                    )
+                                }
                             }
                         }
                     }
                 }
-            }
 
-            item {
-                screenState.questHub?.let { quest ->
-                    QuestHubCard(
-                        state = quest,
-                        onPrimaryAction = { selected ->
-                            when (selected.action) {
-                                QuestHubAction.RESUME_QUEST,
-                                QuestHubAction.BEGIN_QUEST -> onStartWorkout(selected.workoutId ?: -1L)
-                                QuestHubAction.OPEN_TRAINING -> onOpenTraining()
-                                QuestHubAction.CHALLENGE_BOSS -> onOpenBattle()
+                item {
+                    screenState.questHub?.let { quest ->
+                        QuestHubCard(
+                            state = quest,
+                            onPrimaryAction = { selected ->
+                                when (selected.action) {
+                                    QuestHubAction.RESUME_QUEST,
+                                    QuestHubAction.BEGIN_QUEST -> onStartWorkout(selected.workoutId ?: -1L)
+                                    QuestHubAction.OPEN_TRAINING -> onOpenTraining()
+                                    QuestHubAction.CHALLENGE_BOSS -> onOpenBattle()
+                                }
                             }
-                        }
+                        )
+                    }
+                }
+
+                item {
+                    BetaWalkthroughCard(
+                        character = screenState.character,
+                        onOpenFeedback = { showFeedbackDialog = true },
+                        onClaimPioneerReward = { viewModel.claimBetaPioneerReward() },
+                        onOpenGear = onOpenHeroGear,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
                     )
                 }
-            }
 
-            item {
-                BetaWalkthroughCard(
-                    character = screenState.character,
-                    onOpenFeedback = { showFeedbackDialog = true },
-                    onClaimPioneerReward = { viewModel.claimBetaPioneerReward() },
-                    onOpenGear = onOpenHeroGear,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-                )
-            }
-
-            item {
-                DailyBountyCard(
-                    bounties = bounties,
-                    resetLabel = bountyResetLabel,
-                    resetRemainingMs = bountyResetRemainingMs,
-                    onClaim = viewModel::claimBounty,
-                    onLogProgress = { bounty ->
-                        when (bounty.id) {
-                            "b_weight" -> showWeightDialog = true
-                            "b_steps" -> showManualStepsDialog = true
-                            else -> viewModel.logBountyProgress(bounty)
-                        }
-                    },
-                    onOpenBattle = onOpenBattle,
-                    onOpenSaga = onOpenSaga,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-                )
+                item {
+                    DailyBountyCard(
+                        bounties = bounties,
+                        resetLabel = bountyResetLabel,
+                        resetRemainingMs = bountyResetRemainingMs,
+                        onClaim = viewModel::claimBounty,
+                        onLogProgress = { bounty ->
+                            when (bounty.id) {
+                                "b_weight" -> showWeightDialog = true
+                                "b_steps" -> showManualStepsDialog = true
+                                else -> viewModel.logBountyProgress(bounty)
+                            }
+                        },
+                        onOpenBattle = onOpenBattle,
+                        onOpenSaga = onOpenSaga,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                    )
+                }
             }
         }
     }

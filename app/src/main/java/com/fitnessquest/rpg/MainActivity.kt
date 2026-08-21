@@ -10,6 +10,10 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.fitnessquest.rpg.ui.FitQuestNav
 import com.fitnessquest.rpg.ui.theme.FitQuestTheme
 
+import android.content.pm.ActivityInfo
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
+
 class MainActivity : ComponentActivity() {
 
     @SuppressLint("InvalidFragmentVersionForActivityResult")
@@ -28,6 +32,19 @@ class MainActivity : ComponentActivity() {
 
         val container = (application as? FitQuestApp)?.container
         container?.inAppUpdate?.checkForUpdate(updateLauncher)
+
+        // Observe screen orientation lock preference
+        container?.let { appContainer ->
+            lifecycleScope.launch {
+                appContainer.prefs.lockPortrait.collect { lockPortrait ->
+                    requestedOrientation = if (lockPortrait) {
+                        ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                    } else {
+                        ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                    }
+                }
+            }
+        }
 
         setContent {
             FitQuestTheme {

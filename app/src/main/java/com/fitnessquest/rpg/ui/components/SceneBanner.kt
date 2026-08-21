@@ -92,16 +92,17 @@ fun FloatingGameDock(
         Box(
             modifier = modifier
                 .fillMaxHeight()
+                .width(68.dp)
                 .navigationBarsPadding()
                 .padding(
-                    start = if (dockOnLeft) 8.dp else 2.dp,
+                    start = if (dockOnLeft) 6.dp else 2.dp,
                     top = 8.dp,
-                    end = if (dockOnLeft) 2.dp else 8.dp,
+                    end = if (dockOnLeft) 2.dp else 6.dp,
                     bottom = 8.dp
                 )
         ) {
             Surface(
-                modifier = Modifier.fillMaxHeight(),
+                modifier = Modifier.fillMaxHeight().width(60.dp),
                 shape = RoundedCornerShape(24.dp),
                 color = NightSurface.copy(alpha = 0.96f),
                 contentColor = Parchment,
@@ -112,7 +113,7 @@ fun FloatingGameDock(
                 Column(
                     modifier = Modifier
                         .fillMaxHeight()
-                        .padding(vertical = 12.dp, horizontal = 6.dp),
+                        .padding(vertical = 10.dp, horizontal = 2.dp),
                     verticalArrangement = Arrangement.SpaceEvenly,
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {

@@ -245,7 +245,7 @@ fun FitQuestNav() {
     val currentRoute = backStackEntry?.destination?.route
 
     val isLandscape = androidx.compose.ui.platform.LocalConfiguration.current.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
-    val heroDetailRoutes = setOf(Routes.HERO_DETAILS, Routes.HERO_SAGA)
+    val heroDetailRoutes = setOf(Routes.HERO_DETAILS, Routes.HERO_SAGA, Routes.HERO_GEAR)
     val showBottomBar = currentRoute in tabs.map { it.route } || currentRoute in heroDetailRoutes
     val selectedDockRoute = if (currentRoute in heroDetailRoutes) Routes.HERO else currentRoute
     val dockInset = if (showBottomBar && !isLandscape) DockClearance else 0.dp
@@ -264,8 +264,8 @@ fun FitQuestNav() {
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(
-                        start = if (showBottomBar && isLandscape && leftHanded) 68.dp else 0.dp,
-                        end = if (showBottomBar && isLandscape && !leftHanded) 68.dp else 0.dp
+                        start = if (showBottomBar && isLandscape && leftHanded) 74.dp else 0.dp,
+                        end = if (showBottomBar && isLandscape && !leftHanded) 74.dp else 0.dp
                     )
             ) {
                 composable(Routes.HERO) {

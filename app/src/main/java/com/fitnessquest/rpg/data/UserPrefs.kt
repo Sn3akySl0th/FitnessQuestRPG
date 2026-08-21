@@ -477,6 +477,16 @@ class UserPrefs(context: Context) {
         const val KEY_USE_LOCAL_AI = "use_local_ai_by_default"
         const val KEY_LAST_SEEN_VERSION = "last_seen_version_code"
         const val KEY_STAT_POINTS_RETRO_APPLIED = "stat_points_retroactive_applied"
+        const val KEY_LOCK_PORTRAIT = "ui_lock_portrait"
+    }
+
+    // ---- Screen Orientation Lock ----
+    private val _lockPortrait = MutableStateFlow(prefs.getBoolean(KEY_LOCK_PORTRAIT, true))
+    val lockPortrait: StateFlow<Boolean> = _lockPortrait
+
+    fun setLockPortrait(value: Boolean) {
+        prefs.edit { putBoolean(KEY_LOCK_PORTRAIT, value) }
+        _lockPortrait.value = value
     }
 
     // ---- Local AI ----

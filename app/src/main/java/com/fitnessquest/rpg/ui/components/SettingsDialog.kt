@@ -129,6 +129,9 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     val healthConnect: HealthConnectProfile = container.healthConnect
     val developerSandbox: StateFlow<Boolean> = container.prefs.developerSandbox
     val useLocalAi: StateFlow<Boolean> = container.prefs.useLocalAi
+    val lockPortrait: StateFlow<Boolean> = container.prefs.lockPortrait
+
+    fun setLockPortrait(lock: Boolean) = container.prefs.setLockPortrait(lock)
 
     val loginProvider: String
 
@@ -868,9 +871,9 @@ fun SettingsDialog(
                     }
                     Text(
                         if (wear.watchLinked) {
-                            "Open FitnessRPG on the watch, then start a quest on Train."
+                            "Open Fitness Quest RPG on the watch, then start a quest on Train."
                         } else {
-                            "Keep FitnessRPG open on the watch. Phone and watch must use the same install signing (debug↔debug)."
+                            "Keep Fitness Quest RPG open on the watch. Phone and watch must use the same install signing (debug↔debug)."
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -898,7 +901,28 @@ fun SettingsDialog(
                         )
                     }
                     HorizontalDivider()
-                    Text("Graphics", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                    Text("Display & Graphics", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                    val lockPortrait by viewModel.lockPortrait.collectAsState()
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(if (lockPortrait) "🔒 Portrait Lock" else "🔄 Auto-Rotate Enabled", style = MaterialTheme.typography.bodyMedium)
+                            Text(
+                                if (lockPortrait) "Keeps the app in portrait orientation during workouts (Recommended)."
+                                else "Allows the screen to rotate dynamically into landscape.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = lockPortrait,
+                            onCheckedChange = { viewModel.setLockPortrait(it) }
+                        )
+                    }
+                    Spacer(Modifier.size(4.dp))
                     val lowPowerUi by viewModel.lowPowerUi.collectAsState()
                     Row(
                         modifier = Modifier.fillMaxWidth(),
