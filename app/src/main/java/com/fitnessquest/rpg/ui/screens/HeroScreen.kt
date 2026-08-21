@@ -703,6 +703,160 @@ fun MorphSwitchSheet(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun HeroExportSheet(
+    character: CharacterEntity,
+    cls: CharacterClass,
+    gear: Map<ItemSlot, ItemEntity>,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var isExporting by remember { mutableStateOf(false) }
+
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 8.dp)
+                .navigationBarsPadding(),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = "📸 Hero Wallpaper & Studio",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Black
+                )
+                Text(
+                    text = "Export your customized hero artwork with your current gear, class, and crest.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                )
+            }
+
+            if (isExporting) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(24.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        CircularProgressIndicator(color = Gold)
+                        Text(
+                            "Rendering high-resolution graphic...",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.White
+                        )
+                    }
+                }
+            } else {
+                // Phone Wallpaper Card
+                Surface(
+                    onClick = {
+                        scope.launch {
+                            isExporting = true
+                            Toast.makeText(context, "⏳ Generating Hero Wallpaper...", Toast.LENGTH_SHORT).show()
+                            val res = AvatarExporter.exportAvatarGraphic(context, character, cls, ExportFormat.WALLPAPER, gear)
+                            isExporting = false
+                            res.fold(
+                                onSuccess = { uri ->
+                                    Toast.makeText(context, "✅ Wallpaper saved to Pictures/FitQuest gallery!", Toast.LENGTH_LONG).show()
+                                    AvatarExporter.launchSetWallpaperIntent(context, uri)
+                                    onDismiss()
+                                },
+                                onFailure = { err ->
+                                    Toast.makeText(context, "❌ Export failed: ${err.message}", Toast.LENGTH_LONG).show()
+                                }
+                            )
+                        }
+                    },
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    border = BorderStroke(1.dp, Gold.copy(alpha = 0.4f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        Text("📱", fontSize = 28.sp)
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "Phone Wallpaper (Native Fit)",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = Gold
+                            )
+                            Text(
+                                "Full-bleed portrait tailored to your device's exact screen dimensions, safe zones, and realm backdrop.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
+                            )
+                        }
+                    }
+                }
+
+                // Watch Face Card
+                Surface(
+                    onClick = {
+                        scope.launch {
+                            isExporting = true
+                            Toast.makeText(context, "⏳ Generating Watch Face Graphic...", Toast.LENGTH_SHORT).show()
+                            val res = AvatarExporter.exportAvatarGraphic(context, character, cls, ExportFormat.WATCH_FACE, gear)
+                            AvatarExporter.syncAvatarToWear(context, character, cls, gear)
+                            isExporting = false
+                            res.fold(
+                                onSuccess = { uri ->
+                                    Toast.makeText(context, "✅ Watch Face saved to gallery & synced to watch!", Toast.LENGTH_LONG).show()
+                                    AvatarExporter.launchSetWallpaperIntent(context, uri)
+                                    onDismiss()
+                                },
+                                onFailure = { err ->
+                                    Toast.makeText(context, "❌ Export failed: ${err.message}", Toast.LENGTH_LONG).show()
+                                }
+                            )
+                        }
+                    },
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    border = BorderStroke(1.dp, Gold.copy(alpha = 0.4f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        Text("⌚", fontSize = 28.sp)
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "Watch Face Graphic (1080×1080)",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = Gold
+                            )
+                            Text(
+                                "Square avatar graphic optimized for smartwatch watch faces. Saves to gallery & syncs directly to linked watch.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+        }
+    }
+}
+
 @Composable
 fun UnifiedHeroHeader(
     state: HeroUiState,
@@ -713,6 +867,7 @@ fun UnifiedHeroHeader(
     onSettingsClick: () -> Unit,
     onBackClick: () -> Unit = {},
     onOpenHero: () -> Unit = {},
+    onExportClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val character = state.character ?: return
@@ -893,12 +1048,12 @@ fun UnifiedHeroHeader(
             }
         }
 
-        // Top layer actions: Back (Settings moved to Global Nav Pill)
+        // Top layer actions: Back and Export Wallpaper/Watch Face
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(8.dp),
-            horizontalArrangement = Arrangement.Start,
+            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (!isQuestHub) {
@@ -910,6 +1065,25 @@ fun UnifiedHeroHeader(
                         .size(36.dp)
                 ) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.White, modifier = Modifier.size(20.dp))
+                }
+            } else {
+                Spacer(Modifier.size(36.dp))
+            }
+
+            if (onExportClick != null) {
+                IconButton(
+                    onClick = onExportClick,
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.25f))
+                        .size(36.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CameraAlt,
+                        contentDescription = "Export Wallpaper & Watch Face",
+                        tint = Gold,
+                        modifier = Modifier.size(20.dp)
+                    )
                 }
             }
         }
@@ -1088,6 +1262,7 @@ fun HeroScreenContent(
     var rewardReveal by remember { mutableStateOf<RewardBatch?>(null) }
     var showJobSwitcher by remember { mutableStateOf(false) }
     var showMorphSwitcher by remember { mutableStateOf(false) }
+    var showExportSheet by remember { mutableStateOf(false) }
 
     val cls = character.characterClass ?: run {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -1155,7 +1330,8 @@ fun HeroScreenContent(
                         onOpenJobSwitcher = { showJobSwitcher = true },
                         onOpenMorphSwitcher = { showMorphSwitcher = true },
                         onSettingsClick = {}, // Handled inside UnifiedHeroHeader
-                        onBackClick = actions.onBack
+                        onBackClick = actions.onBack,
+                        onExportClick = { showExportSheet = true }
                     )
                     Spacer(Modifier.height(8.dp))
                 }
@@ -1222,7 +1398,8 @@ fun HeroScreenContent(
                     onOpenJobSwitcher = { showJobSwitcher = true },
                     onOpenMorphSwitcher = { showMorphSwitcher = true },
                     onSettingsClick = {}, // Handled inside UnifiedHeroHeader
-                    onBackClick = actions.onBack
+                    onBackClick = actions.onBack,
+                    onExportClick = { showExportSheet = true }
                 )
 
                 PrimaryTabRow(
@@ -1315,6 +1492,15 @@ fun HeroScreenContent(
                 actions.onDruidFormChange(newForm)
                 showMorphSwitcher = false
             }
+        )
+    }
+
+    if (showExportSheet) {
+        HeroExportSheet(
+            character = character,
+            cls = cls,
+            gear = state.gear,
+            onDismiss = { showExportSheet = false }
         )
     }
 }

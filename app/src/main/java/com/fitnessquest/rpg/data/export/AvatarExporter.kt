@@ -127,13 +127,19 @@ object AvatarExporter {
         gear: Map<ItemSlot, ItemEntity> = emptyMap()
     ): Result<Uri> = withContext(Dispatchers.IO) {
         runCatching {
-            val width = format.width
-            val height = format.height
+            val (width, height) = if (format == ExportFormat.WALLPAPER) {
+                val metrics = context.resources.displayMetrics
+                val screenW = metrics.widthPixels.coerceAtLeast(1080)
+                val screenH = metrics.heightPixels.coerceAtLeast(1920)
+                screenW to screenH
+            } else {
+                format.width to format.height
+            }
 
             val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(bitmap)
 
-            // Background Gradient
+            // Full-bleed Background Gradient
             val bgPaint = Paint().apply {
                 shader = if (format == ExportFormat.WATCH_FACE) {
                     RadialGradient(
@@ -144,31 +150,40 @@ object AvatarExporter {
                 } else {
                     LinearGradient(
                         0f, 0f, 0f, height.toFloat(),
-                        Color.parseColor("#1B1429"), Color.parseColor("#0A0912"),
+                        intArrayOf(
+                            Color.parseColor("#17112B"),
+                            Color.parseColor("#0E0B1A"),
+                            Color.parseColor("#050408")
+                        ),
+                        floatArrayOf(0.0f, 0.5f, 1.0f),
                         Shader.TileMode.CLAMP
                     )
                 }
             }
             canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), bgPaint)
 
-            // Outer Frame Border
-            val borderPaint = Paint().apply {
-                color = Color.parseColor("#D4AF37")
-                style = Paint.Style.STROKE
-                strokeWidth = if (format == ExportFormat.WATCH_FACE) 12f else 16f
-                isAntiAlias = true
-            }
-            val inset = if (format == ExportFormat.WATCH_FACE) 24f else 36f
+            // Watch Face Bezel Border (only on circular watch faces, not phone wallpapers)
             if (format == ExportFormat.WATCH_FACE) {
+                val borderPaint = Paint().apply {
+                    color = Color.parseColor("#D4AF37")
+                    style = Paint.Style.STROKE
+                    strokeWidth = 12f
+                    isAntiAlias = true
+                }
+                val inset = 24f
                 canvas.drawCircle(width / 2f, height / 2f, (width / 2f) - inset, borderPaint)
-            } else {
-                canvas.drawRoundRect(RectF(inset, inset, width - inset, height - inset), 48f, 48f, borderPaint)
             }
+
+            // Safe Zone Layout Calculation
+            val isWallpaper = format == ExportFormat.WALLPAPER
+            val topMargin = if (isWallpaper) height * 0.12f else 130f
+            val titleSize = if (isWallpaper) (width * 0.056f).coerceIn(54f, 80f) else 52f
+            val subtitleSize = if (isWallpaper) (width * 0.038f).coerceIn(36f, 54f) else 36f
 
             // Hero Header Text
             val titlePaint = Paint().apply {
                 color = Color.WHITE
-                textSize = if (format == ExportFormat.WATCH_FACE) 52f else 64f
+                textSize = titleSize
                 isFakeBoldText = true
                 isAntiAlias = true
                 textAlign = Paint.Align.CENTER
@@ -176,18 +191,24 @@ object AvatarExporter {
 
             val subtitlePaint = Paint().apply {
                 color = Color.parseColor("#F5D77F")
-                textSize = if (format == ExportFormat.WATCH_FACE) 36f else 44f
+                textSize = subtitleSize
                 isFakeBoldText = true
                 isAntiAlias = true
                 textAlign = Paint.Align.CENTER
             }
 
-            val startY = if (format == ExportFormat.WALLPAPER) 260f else 140f
-            canvas.drawText(character.name, width / 2f, startY, titlePaint)
-            canvas.drawText("Level ${character.level} ${cls.label}", width / 2f, startY + (if (format == ExportFormat.WATCH_FACE) 48f else 64f), subtitlePaint)
+            canvas.drawText(character.name, width / 2f, topMargin, titlePaint)
+            canvas.drawText(
+                "Level ${character.level} ${cls.label}",
+                width / 2f,
+                topMargin + (subtitleSize * 1.35f),
+                subtitlePaint
+            )
+
+            val headerBottom = topMargin + (subtitleSize * 2.0f)
 
             // RENDER THE FULL DETAILED CHARACTER AVATAR SPRITE
-            val avatarWidth = if (format == ExportFormat.WATCH_FACE) 620f else 840f
+            val avatarWidth = if (format == ExportFormat.WATCH_FACE) 620f else (width * 0.72f).coerceIn(600f, 920f)
             val avatarHeight = avatarWidth * 1.2f
             val avatarBitmap = Bitmap.createBitmap(avatarWidth.toInt(), avatarHeight.toInt(), Bitmap.Config.ARGB_8888)
             val avatarCanvas = Canvas(avatarBitmap)
@@ -219,9 +240,15 @@ object AvatarExporter {
                 }
             }
 
-            // Draw rendered avatar sprite onto main graphic canvas
+            // Draw rendered avatar sprite centered between header and dock safe area
+            val dockTop = if (isWallpaper) height * 0.76f else height - 160f
+            val availableMidHeight = (dockTop - headerBottom).coerceAtLeast(avatarHeight)
             val avatarLeft = (width - avatarWidth) / 2f
-            val avatarTop = if (format == ExportFormat.WATCH_FACE) 200f else 380f
+            val avatarTop = if (format == ExportFormat.WATCH_FACE) {
+                200f
+            } else {
+                headerBottom + ((availableMidHeight - avatarHeight) * 0.35f).coerceAtLeast(16f)
+            }
             canvas.drawBitmap(avatarBitmap, avatarLeft, avatarTop, Paint().apply { isFilterBitmap = true })
 
             // Hero Badge / Stats Bar
@@ -229,25 +256,38 @@ object AvatarExporter {
                 color = Color.parseColor("#2A1F3D")
                 style = Paint.Style.FILL
             }
-            val badgeY = if (format == ExportFormat.WATCH_FACE) height - 160f else startY + 1140f
+            val badgeBorderPaint = Paint().apply {
+                color = Color.parseColor("#5A457D")
+                style = Paint.Style.STROKE
+                strokeWidth = 3f
+                isAntiAlias = true
+            }
+            val badgeHeight = if (format == ExportFormat.WATCH_FACE) 80f else (height * 0.042f).coerceIn(80f, 110f)
+            val badgeY = if (format == ExportFormat.WATCH_FACE) {
+                height - 160f
+            } else {
+                (avatarTop + avatarHeight + (height * 0.015f)).coerceAtMost(dockTop - badgeHeight)
+            }
             val badgeRect = RectF(
-                width * 0.12f,
+                width * 0.10f,
                 badgeY,
-                width * 0.88f,
-                badgeY + (if (format == ExportFormat.WATCH_FACE) 80f else 100f)
+                width * 0.90f,
+                badgeY + badgeHeight
             )
-            canvas.drawRoundRect(badgeRect, 24f, 24f, badgePaint)
+            canvas.drawRoundRect(badgeRect, 28f, 28f, badgePaint)
+            canvas.drawRoundRect(badgeRect, 28f, 28f, badgeBorderPaint)
 
+            val badgeTextSize = if (format == ExportFormat.WATCH_FACE) 30f else (badgeHeight * 0.38f).coerceIn(32f, 44f)
             val badgeTextPaint = Paint().apply {
                 color = Color.parseColor("#E0D6F5")
-                textSize = if (format == ExportFormat.WATCH_FACE) 30f else 36f
+                textSize = badgeTextSize
                 isAntiAlias = true
                 textAlign = Paint.Align.CENTER
             }
             canvas.drawText(
                 "⚔️ STR ${character.strength}  🛡️ DEF ${character.agility}  ❤️ HP ${character.endurance * 10}",
                 width / 2f,
-                badgeY + (if (format == ExportFormat.WATCH_FACE) 52f else 62f),
+                badgeY + (badgeHeight * 0.65f),
                 badgeTextPaint
             )
 
