@@ -12,6 +12,7 @@ import com.fitnessquest.rpg.domain.visuals.BodyRegion
 import com.fitnessquest.rpg.domain.visuals.CoverageProfile
 import com.fitnessquest.rpg.domain.visuals.EquipmentVisualRegistry
 import com.fitnessquest.rpg.domain.visuals.PaperDollVisualSlot
+import com.fitnessquest.rpg.domain.visuals.defaultCoveredRegions
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
@@ -109,6 +110,16 @@ class GearSanitizationAndVisualsTest {
         assertTrue("Torso must be below trinkets", PaperDollLayerOrder.GEAR_TORSO.zIndex < PaperDollLayerOrder.GEAR_TRINKET.zIndex)
         assertTrue("Trinkets must be below weapons", PaperDollLayerOrder.GEAR_TRINKET.zIndex < PaperDollLayerOrder.GEAR_WEAPON.zIndex)
         assertTrue("Head must be below weapons", PaperDollLayerOrder.GEAR_HEAD.zIndex < PaperDollLayerOrder.GEAR_WEAPON.zIndex)
+    }
+
+    @Test
+    fun boots_hideFeetWithoutRemovingCalves() {
+        val covered = CoverageProfile.BOOTS.defaultCoveredRegions()
+
+        assertTrue(covered.contains(BodyRegion.LEFT_FOOT))
+        assertTrue(covered.contains(BodyRegion.RIGHT_FOOT))
+        assertFalse("Low boot artwork must not leave the left boot detached", covered.contains(BodyRegion.LEFT_CALF))
+        assertFalse("Low boot artwork must not leave the right boot detached", covered.contains(BodyRegion.RIGHT_CALF))
     }
 
     @Test

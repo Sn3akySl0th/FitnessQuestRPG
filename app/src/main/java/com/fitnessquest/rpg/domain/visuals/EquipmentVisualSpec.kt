@@ -388,8 +388,6 @@ fun CoverageProfile.defaultCoveredRegions(): Set<BodyRegion> = when (this) {
         BodyRegion.RIGHT_CALF
     )
     CoverageProfile.BOOTS -> setOf(
-        BodyRegion.LEFT_CALF,
-        BodyRegion.RIGHT_CALF,
         BodyRegion.LEFT_FOOT,
         BodyRegion.RIGHT_FOOT
     )
