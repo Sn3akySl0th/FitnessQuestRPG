@@ -174,9 +174,17 @@ service cloud.firestore {
     }
 
     match /beta_feedback/{feedbackId} {
-      allow create: if request.resource.data.comment is string
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+        && request.resource.data.comment is string
         && request.resource.data.comment.size() > 0
         && request.resource.data.comment.size() <= 10000;
+      allow update: if isSignedIn();
+      allow delete: if false;
+    }
+
+    match /mail/{mailId} {
+      allow create: if isSignedIn();
       allow read, update, delete: if false;
     }
 

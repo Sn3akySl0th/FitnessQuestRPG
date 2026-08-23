@@ -60,3 +60,6 @@ local_ai_model/src/main/assets/*.bin
 local_ai_model/src/main/assets/*.gguf
 local_ai_model/src/main/assets/*.task
 local_ai_model/src/main/assets/*.tflite
+
+# Cloud Functions dependencies
+functions/node_modules/

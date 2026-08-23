@@ -164,6 +164,7 @@ dependencies {
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth)
     implementation(libs.firebase.firestore)
+    implementation(libs.firebase.storage)
     implementation(libs.firebase.crashlytics)
     implementation(libs.firebase.crashlytics.ndk)
     implementation(libs.androidx.credentials)
