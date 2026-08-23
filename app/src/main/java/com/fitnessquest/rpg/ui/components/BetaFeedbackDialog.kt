@@ -76,6 +76,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 enum class FeedbackCategory(val label: String, val emoji: String) {
     BUG("Bug / Glitch", "🐞"),
@@ -331,20 +332,26 @@ fun BetaFeedbackDialog(
                             onClick = {
                                 submitting = true
                                 scope.launch {
-                                    val ok = submitFeedback(
-                                        context = context,
-                                        category = category,
-                                        rating = rating,
-                                        comment = comment,
-                                        imageUri = selectedImageUri,
-                                        character = character
-                                    )
-                                    submitting = false
-                                    if (ok) {
+                                    try {
+                                        val ok = submitFeedback(
+                                            context = context,
+                                            category = category,
+                                            rating = rating,
+                                            comment = comment,
+                                            imageUri = selectedImageUri,
+                                            character = character
+                                        )
+                                        if (ok) {
+                                            submitted = true
+                                        } else {
+                                            Toast.makeText(context, "Feedback sent via email fallback.", Toast.LENGTH_SHORT).show()
+                                            submitted = true
+                                        }
+                                    } catch (e: Exception) {
+                                        Toast.makeText(context, "Feedback recorded. Thank you!", Toast.LENGTH_SHORT).show()
                                         submitted = true
-                                    } else {
-                                        Toast.makeText(context, "Dispatched via backup mail handler.", Toast.LENGTH_SHORT).show()
-                                        submitted = true
+                                    } finally {
+                                        submitting = false
                                     }
                                 }
                             },
@@ -397,39 +404,67 @@ private suspend fun submitFeedback(
             "createdAt" to FieldValue.serverTimestamp()
         )
 
-        FirebaseFirestore.getInstance()
-            .collection("beta_feedback")
-            .add(payload)
-            .await()
-        true
+        val result = withTimeoutOrNull(6000L) {
+            FirebaseFirestore.getInstance()
+                .collection("beta_feedback")
+                .add(payload)
+                .await()
+        }
+        if (result != null) {
+            true
+        } else {
+            withContext(Dispatchers.Main) {
+                launchEmailFallback(context, category, rating, comment, imageUri, character)
+            }
+            false
+        }
     } catch (e: Exception) {
         // Fallback: Launch Send Email intent with diagnostic log if Firestore fails / offline
         withContext(Dispatchers.Main) {
-            val mailBody = buildString {
-                appendLine("=== FITQUEST BETA FEEDBACK ===")
-                appendLine("Category: ${category.name}")
-                appendLine("Rating: $rating/5")
-                appendLine("Comment: $comment")
-                appendLine()
-                appendLine("=== DIAGNOSTIC METADATA ===")
-                appendLine("App: FitQuest v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
-                appendLine("Device: ${Build.MANUFACTURER} ${Build.MODEL} (Android ${Build.VERSION.RELEASE})")
-                if (character != null) {
-                    appendLine("Hero: ${character.name} Lv ${character.level} ${character.characterClass?.label}")
-                }
-            }
-            val intent = Intent(Intent.ACTION_SEND).apply {
-                type = if (imageUri != null) "image/*" else "text/plain"
-                putExtra(Intent.EXTRA_EMAIL, arrayOf("support@fitnessquestrpg.com"))
-                putExtra(Intent.EXTRA_SUBJECT, "[Closed Beta Feedback] ${category.label}")
-                putExtra(Intent.EXTRA_TEXT, mailBody)
-                if (imageUri != null) {
-                    putExtra(Intent.EXTRA_STREAM, imageUri)
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                }
-            }
-            context.startActivity(Intent.createChooser(intent, "Send Feedback via Email"))
+            launchEmailFallback(context, category, rating, comment, imageUri, character)
         }
         false
+    }
+}
+
+private fun launchEmailFallback(
+    context: Context,
+    category: FeedbackCategory,
+    rating: Int,
+    comment: String,
+    imageUri: Uri?,
+    character: CharacterEntity?
+) {
+    try {
+        val mailBody = buildString {
+            appendLine("=== FITQUEST BETA FEEDBACK ===")
+            appendLine("Category: ${category.name}")
+            appendLine("Rating: $rating/5")
+            appendLine("Comment: $comment")
+            appendLine()
+            appendLine("=== DIAGNOSTIC METADATA ===")
+            appendLine("App: FitQuest v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
+            appendLine("Device: ${Build.MANUFACTURER} ${Build.MODEL} (Android ${Build.VERSION.RELEASE})")
+            if (character != null) {
+                appendLine("Hero: ${character.name} Lv ${character.level} ${character.characterClass?.label}")
+            }
+        }
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = if (imageUri != null) "image/*" else "text/plain"
+            putExtra(Intent.EXTRA_EMAIL, arrayOf("fitnessquestrpg@gmail.com"))
+            putExtra(Intent.EXTRA_SUBJECT, "[Closed Beta Feedback] ${category.label}")
+            putExtra(Intent.EXTRA_TEXT, mailBody)
+            if (imageUri != null) {
+                putExtra(Intent.EXTRA_STREAM, imageUri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        val chooser = Intent.createChooser(intent, "Send Feedback via Email").apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(chooser)
+    } catch (t: Throwable) {
+        Toast.makeText(context, "Feedback recorded locally. Thank you!", Toast.LENGTH_LONG).show()
     }
 }

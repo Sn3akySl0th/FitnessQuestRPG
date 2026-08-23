@@ -173,6 +173,13 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    match /beta_feedback/{feedbackId} {
+      allow create: if request.resource.data.comment is string
+        && request.resource.data.comment.size() > 0
+        && request.resource.data.comment.size() <= 10000;
+      allow read, update, delete: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }
