@@ -5,9 +5,11 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -134,28 +136,42 @@ fun WearApp(
             }
 
             state.feedback?.let { fb ->
-                Dialog(showDialog = true, onDismissRequest = onDismissFeedback) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(MaterialTheme.colors.surface)
-                            .padding(horizontal = 16.dp, vertical = 20.dp), // W-7 safe padding for round screens
-                        verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            text = fb.message,
-                            textAlign = TextAlign.Center,
-                            maxLines = 3,
-                            overflow = TextOverflow.Ellipsis,
-                            style = MaterialTheme.typography.body1
-                        )
-                        Spacer(Modifier.height(10.dp))
-                        Button(
-                            onClick = onDismissFeedback,
-                            modifier = Modifier.size(width = 80.dp, height = 36.dp)
+                LaunchedEffect(fb) {
+                    delay(3000)
+                    onDismissFeedback()
+                }
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                    contentAlignment = Alignment.TopCenter
+                ) {
+                    RoundedCornerShape(16.dp).let { shape ->
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(shape)
+                                .background(Color(0xFF1E2235).copy(alpha = 0.94f))
+                                .border(BorderStroke(1.dp, Color(0xFFE5A93C).copy(alpha = 0.8f)), shape)
+                                .clickable(onClick = onDismissFeedback)
+                                .padding(horizontal = 10.dp, vertical = 7.dp)
                         ) {
-                            Text("OK")
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("⚡", fontSize = 13.sp)
+                                Text(
+                                    text = fb.message,
+                                    textAlign = TextAlign.Center,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    style = MaterialTheme.typography.caption2,
+                                    color = Color.White,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
                         }
                     }
                 }

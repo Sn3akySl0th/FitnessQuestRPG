@@ -11,6 +11,7 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.storage.FirebaseStorage
+import com.google.firebase.storage.StorageMetadata
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -18,6 +19,8 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import java.security.SecureRandom
 import java.util.Locale
 
@@ -85,6 +88,25 @@ object BetaFeedbackRepository {
     private val random = SecureRandom()
 
     /**
+     * Ensures an authenticated Firebase user exists (signing in anonymously if needed)
+     * so Firestore and Storage rules permitting signed-in testers will succeed.
+     */
+    suspend fun ensureAuth(): String {
+        val auth = FirebaseAuth.getInstance()
+        val existing = auth.currentUser
+        if (existing != null) return existing.uid
+        return try {
+            withTimeoutOrNull(6000L) {
+                auth.signInAnonymously().await()
+            }
+            auth.currentUser?.uid ?: "anonymous"
+        } catch (e: Exception) {
+            Log.w(TAG, "Anonymous sign-in before feedback failed", e)
+            "anonymous"
+        }
+    }
+
+    /**
      * Generates a clean, human-friendly 6-digit ticket code (e.g. FQ-748291).
      */
     fun generateTicketId(): String {
@@ -96,6 +118,7 @@ object BetaFeedbackRepository {
      * Observes real-time community tickets stream from Firestore.
      */
     fun observeTickets(): Flow<List<BetaTicket>> = callbackFlow {
+        ensureAuth()
         val db = FirebaseFirestore.getInstance()
         val listener = db.collection(COLLECTION)
             .orderBy("createdAt", Query.Direction.DESCENDING)
@@ -154,7 +177,7 @@ object BetaFeedbackRepository {
     }.flowOn(Dispatchers.IO)
 
     /**
-     * Submits a new ticket to Firestore and triggers developer email notifications.
+     * Submits a new ticket to Firestore with timeouts and triggers developer notifications.
      */
     suspend fun submitTicket(
         title: String,
@@ -166,8 +189,8 @@ object BetaFeedbackRepository {
         context: Context
     ): Result<BetaTicket> = withContext(Dispatchers.IO) {
         try {
+            val uid = ensureAuth()
             val auth = FirebaseAuth.getInstance()
-            val uid = auth.currentUser?.uid ?: "anonymous"
             val email = auth.currentUser?.email
 
             val heroName = if (character != null) {
@@ -182,12 +205,17 @@ object BetaFeedbackRepository {
             var screenshotUrl: String? = null
             if (imageUri != null) {
                 try {
-                    val storageRef = FirebaseStorage.getInstance()
-                        .reference
-                        .child("beta_feedback_screenshots/${ticketId}.jpg")
-                    storageRef.putFile(imageUri).await()
-                    screenshotUrl = storageRef.downloadUrl.await().toString()
-                    Log.d(TAG, "Screenshot uploaded to Firebase Storage: $screenshotUrl")
+                    withTimeoutOrNull(10000L) {
+                        val storageRef = FirebaseStorage.getInstance()
+                            .reference
+                            .child("beta_feedback_screenshots/${ticketId}.jpg")
+                        val metadata = StorageMetadata.Builder()
+                            .setContentType("image/jpeg")
+                            .build()
+                        storageRef.putFile(imageUri, metadata).await()
+                        screenshotUrl = storageRef.downloadUrl.await().toString()
+                        Log.d(TAG, "Screenshot uploaded to Firebase Storage: $screenshotUrl")
+                    }
                 } catch (e: Exception) {
                     Log.w(TAG, "Failed to upload screenshot to Firebase Storage", e)
                 }
@@ -223,10 +251,12 @@ object BetaFeedbackRepository {
                 "createdAt" to FieldValue.serverTimestamp()
             )
 
-            val docRef = FirebaseFirestore.getInstance()
-                .collection(COLLECTION)
-                .add(payload)
-                .await()
+            val docRef = withTimeout(15000L) {
+                FirebaseFirestore.getInstance()
+                    .collection(COLLECTION)
+                    .add(payload)
+                    .await()
+            }
 
             val ticket = BetaTicket(
                 id = docRef.id,
@@ -264,8 +294,7 @@ object BetaFeedbackRepository {
         context: Context
     ): Result<Unit> = withContext(Dispatchers.IO) {
         try {
-            val auth = FirebaseAuth.getInstance()
-            val uid = auth.currentUser?.uid ?: "anonymous"
+            val uid = ensureAuth()
             val heroName = if (character != null) {
                 "${character.name} (Lv ${character.level} ${character.characterClass?.label ?: "Hero"})"
             } else {
@@ -280,14 +309,16 @@ object BetaFeedbackRepository {
                 isDeveloper = false
             )
 
-            FirebaseFirestore.getInstance()
-                .collection(COLLECTION)
-                .document(ticket.id)
-                .update(
-                    "followUps", FieldValue.arrayUnion(note.toMap()),
-                    "updatedAt", FieldValue.serverTimestamp()
-                )
-                .await()
+            withTimeout(12000L) {
+                FirebaseFirestore.getInstance()
+                    .collection(COLLECTION)
+                    .document(ticket.id)
+                    .update(
+                        "followUps", FieldValue.arrayUnion(note.toMap()),
+                        "updatedAt", FieldValue.serverTimestamp()
+                    )
+                    .await()
+            }
 
             Result.success(Unit)
         } catch (e: Exception) {
@@ -301,19 +332,22 @@ object BetaFeedbackRepository {
      */
     suspend fun toggleMeToo(ticket: BetaTicket, uid: String): Result<Unit> = withContext(Dispatchers.IO) {
         try {
-            val docRef = FirebaseFirestore.getInstance().collection(COLLECTION).document(ticket.id)
-            val alreadyVoted = ticket.meTooUids.contains(uid)
+            ensureAuth()
+            withTimeout(10000L) {
+                val docRef = FirebaseFirestore.getInstance().collection(COLLECTION).document(ticket.id)
+                val alreadyVoted = ticket.meTooUids.contains(uid)
 
-            if (alreadyVoted) {
-                docRef.update(
-                    "meTooUids", FieldValue.arrayRemove(uid),
-                    "meTooCount", FieldValue.increment(-1)
-                ).await()
-            } else {
-                docRef.update(
-                    "meTooUids", FieldValue.arrayUnion(uid),
-                    "meTooCount", FieldValue.increment(1)
-                ).await()
+                if (alreadyVoted) {
+                    docRef.update(
+                        "meTooUids", FieldValue.arrayRemove(uid),
+                        "meTooCount", FieldValue.increment(-1)
+                    ).await()
+                } else {
+                    docRef.update(
+                        "meTooUids", FieldValue.arrayUnion(uid),
+                        "meTooCount", FieldValue.increment(1)
+                    ).await()
+                }
             }
             Result.success(Unit)
         } catch (e: Exception) {

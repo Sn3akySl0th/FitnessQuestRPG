@@ -217,6 +217,17 @@ object ProgressionRules {
         return maxOf(tierBase, rarity.minLevelGate)
     }
 
+    fun canEquip(
+        catalog: ItemEntity,
+        character: CharacterEntity,
+        rarity: GearRarity = GearRarity.COMMON
+    ): Boolean {
+        if (!catalog.slot.isEquippable()) return false
+        if (catalog.classAffinity != null && catalog.classAffinity != character.characterClass) return false
+        val reqLevel = requiredLevelFor(catalog.tier, rarity)
+        return character.level >= reqLevel
+    }
+
     fun canReforge(rarity: GearRarity): Boolean =
         rarity.ordinal >= GearRarity.RARE.ordinal
 

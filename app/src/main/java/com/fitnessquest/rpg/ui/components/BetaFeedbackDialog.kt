@@ -1101,40 +1101,43 @@ private fun NewReportScreen(
                 onClick = {
                     submitting = true
                     scope.launch {
-                        val result = BetaFeedbackRepository.submitTicket(
-                            title = title,
-                            category = category,
-                            rating = rating,
-                            comment = comment,
-                            imageUri = selectedImageUri,
-                            character = character,
-                            context = context
-                        )
-                        submitting = false
-                        if (result.isSuccess) {
-                            val ticket = result.getOrNull()
-                            onTicketSubmitted(ticket?.ticketId ?: "FQ-TICKET")
-                        } else {
-                            // Fallback to email dispatch
-                            Toast.makeText(context, "Network issue: opening email fallback", Toast.LENGTH_SHORT).show()
-                            val fallbackTicket = BetaTicket(
-                                ticketId = BetaFeedbackRepository.generateTicketId(),
+                        try {
+                            val result = BetaFeedbackRepository.submitTicket(
                                 title = title,
                                 category = category,
                                 rating = rating,
                                 comment = comment,
-                                appVersion = BuildConfig.VERSION_NAME,
-                                deviceModel = "${Build.MANUFACTURER} ${Build.MODEL}",
-                                androidVersion = Build.VERSION.RELEASE
+                                imageUri = selectedImageUri,
+                                character = character,
+                                context = context
                             )
-                            val (subj, fields) = BetaFeedbackNotifier.buildNewTicketFields(fallbackTicket)
-                            BetaFeedbackNotifier.openDeveloperEmail(
-                                context = context,
-                                subject = subj,
-                                body = fields.entries.joinToString("\n") { "${it.key}: ${it.value}" },
-                                attachmentUri = selectedImageUri
-                            )
-                            onTicketSubmitted(fallbackTicket.ticketId)
+                            if (result.isSuccess) {
+                                val ticket = result.getOrNull()
+                                onTicketSubmitted(ticket?.ticketId ?: "FQ-TICKET")
+                            } else {
+                                // Fallback to email dispatch
+                                Toast.makeText(context, "Network issue: opening email fallback", Toast.LENGTH_SHORT).show()
+                                val fallbackTicket = BetaTicket(
+                                    ticketId = BetaFeedbackRepository.generateTicketId(),
+                                    title = title,
+                                    category = category,
+                                    rating = rating,
+                                    comment = comment,
+                                    appVersion = BuildConfig.VERSION_NAME,
+                                    deviceModel = "${Build.MANUFACTURER} ${Build.MODEL}",
+                                    androidVersion = Build.VERSION.RELEASE
+                                )
+                                val (subj, fields) = BetaFeedbackNotifier.buildNewTicketFields(fallbackTicket)
+                                BetaFeedbackNotifier.openDeveloperEmail(
+                                    context = context,
+                                    subject = subj,
+                                    body = fields.entries.joinToString("\n") { "${it.key}: ${it.value}" },
+                                    attachmentUri = selectedImageUri
+                                )
+                                onTicketSubmitted(fallbackTicket.ticketId)
+                            }
+                        } finally {
+                            submitting = false
                         }
                     }
                 },

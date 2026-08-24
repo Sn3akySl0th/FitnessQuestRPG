@@ -65,6 +65,8 @@ class WearSessionBridge(context: Context) : MessageClient.OnMessageReceivedListe
     private var heatStreak = 0
     private var lastRecoveryCue = false
     private var lastCalorieCue = 0
+    private var lastHighHrFeedbackAt = 0L
+    private var lastZoneRecoverFeedbackAt = 0L
     private var maxHr: Int = HrZone.estimatedMaxHr()
     private var lastPublishedState: WearSessionState? = null
     private var requestedWatchLaunchForSession = false
@@ -90,6 +92,8 @@ class WearSessionBridge(context: Context) : MessageClient.OnMessageReceivedListe
         hrWindow.clear()
         lastRecoveryCue = false
         lastCalorieCue = 0
+        lastHighHrFeedbackAt = 0L
+        lastZoneRecoverFeedbackAt = 0L
         lastPublishedState = null
         requestedWatchLaunchForSession = false
     }
@@ -202,15 +206,22 @@ class WearSessionBridge(context: Context) : MessageClient.OnMessageReceivedListe
         }
 
         if (previous != null && zone != null && previous != zone) {
+            val now = System.currentTimeMillis()
             when {
-                zone == HrZone.HIGH -> pushFeedback(
-                    WearFeedbackKind.ZONE_HIGH,
-                    "High heart! Breathe — the forge runs hot."
-                )
-                resting && (zone == HrZone.WORK || zone == HrZone.HIGH) -> pushFeedback(
-                    WearFeedbackKind.ZONE_RECOVER,
-                    "Recover on the rest. Soften the flame."
-                )
+                zone == HrZone.HIGH && (now - lastHighHrFeedbackAt >= HIGH_HR_COOLDOWN_MS) -> {
+                    lastHighHrFeedbackAt = now
+                    pushFeedback(
+                        WearFeedbackKind.ZONE_HIGH,
+                        "High heart! Breathe — the forge runs hot."
+                    )
+                }
+                resting && (zone == HrZone.WORK || zone == HrZone.HIGH) && (now - lastZoneRecoverFeedbackAt >= HIGH_HR_COOLDOWN_MS) -> {
+                    lastZoneRecoverFeedbackAt = now
+                    pushFeedback(
+                        WearFeedbackKind.ZONE_RECOVER,
+                        "Recover on the rest. Soften the flame."
+                    )
+                }
                 zone == HrZone.WORK && heatStreak >= 3 -> pushFeedback(
                     WearFeedbackKind.HEAT,
                     "Work zone + heat streak. The realm feels your pace."
@@ -274,5 +285,6 @@ class WearSessionBridge(context: Context) : MessageClient.OnMessageReceivedListe
 
     companion object {
         private const val TAG = "WearBridge"
+        private const val HIGH_HR_COOLDOWN_MS = 180_000L // 3 minutes debounce
     }
 }

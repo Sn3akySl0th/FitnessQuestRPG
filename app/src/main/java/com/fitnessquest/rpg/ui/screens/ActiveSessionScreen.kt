@@ -271,6 +271,7 @@ class ActiveSessionViewModel(private val container: AppContainer) : ViewModel() 
     val showCardioIntensity: StateFlow<Boolean> = container.prefs.showCardioIntensity
     val customCardioPrograms: StateFlow<Set<String>> = container.prefs.customCardioPrograms
 
+    fun setEffortMethod(method: EffortMethod) = container.prefs.setEffortMethod(method)
     fun setShowCardioIntensity(value: Boolean) = container.prefs.setShowCardioIntensity(value)
     fun addCustomCardioProgram(program: String) = container.prefs.addCustomCardioProgram(program)
 
@@ -1448,6 +1449,7 @@ fun ActiveSessionScreen(
             onAddCustomCardioProgram = viewModel::addCustomCardioProgram,
             onUpdateLoggedSet = viewModel::updateLoggedSet,
             onDeleteLoggedSet = viewModel::deleteLoggedSet,
+            onSetEffortMethod = viewModel::setEffortMethod,
             onLinkSuperset = viewModel::linkSupersetWithNext,
             onUnlinkSuperset = viewModel::unlinkSuperset,
             getPreviousPerformance = viewModel::getPreviousPerformance,
@@ -1488,6 +1490,7 @@ data class ActiveSessionActions(
     val onDeclineAmbush: () -> Unit = {},
     val onAcceptAmbush: ((Int) -> Unit) -> Unit = {},
     val onAddCustomCardioProgram: (String) -> Unit = {},
+    val onSetEffortMethod: (EffortMethod) -> Unit = {},
     val getPreviousPerformance: suspend (String) -> List<SetLogEntity> = { emptyList() },
     val bodyWeightKgOrNull: () -> Double? = { null }
 )
@@ -1833,6 +1836,7 @@ fun ActiveSessionScreenContent(
                         exercise = exercise,
                         imperial = imperial,
                         effortMethod = effortMethod,
+                        onSetEffortMethod = actions.onSetEffortMethod,
                         bodyWeightKg = actions.bodyWeightKgOrNull(),
                         showCardioIntensity = false,
                         onToggleCardioIntensity = {},
@@ -2367,6 +2371,7 @@ private fun ExerciseLogCard(
     exercise: SessionExercise,
     imperial: Boolean,
     effortMethod: EffortMethod,
+    onSetEffortMethod: (EffortMethod) -> Unit = {},
     bodyWeightKg: Double? = null,
     showCardioIntensity: Boolean = false,
     onToggleCardioIntensity: (Boolean) -> Unit = {},
@@ -2667,7 +2672,72 @@ private fun ExerciseLogCard(
                             Text(c1, Modifier.weight(if (effortApplies) 1f else 1.2f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
                             Text(c2, Modifier.weight(if (effortApplies) 1f else 1.2f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
                             if (effortApplies) {
-                                Text(effortMethod.label, Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
+                                var exp by remember { mutableStateOf(false) }
+                                Box(Modifier.weight(1f)) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(4.dp))
+                                            .clickable { exp = true }
+                                            .padding(vertical = 2.dp),
+                                        horizontalArrangement = Arrangement.Center,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            effortMethod.label,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            fontWeight = FontWeight.Bold,
+                                            textAlign = TextAlign.Center
+                                        )
+                                        Icon(Icons.Default.ArrowDropDown, contentDescription = "Change Effort Tracking", modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
+                                    }
+                                    DropdownMenu(expanded = exp, onDismissRequest = { exp = false }) {
+                                        EffortMethod.entries.forEach { method ->
+                                            DropdownMenuItem(
+                                                text = { Text(if (method == EffortMethod.OFF) "Disable Effort Tracking" else "${method.label} (${method.description})") },
+                                                onClick = {
+                                                    onSetEffortMethod(method)
+                                                    exp = false
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+                            } else if (!isTimed && exercise.trackingType in setOf(ExerciseTrackingType.WEIGHT_REPS, ExerciseTrackingType.BODYWEIGHT_REPS, ExerciseTrackingType.ASSISTED_REPS)) {
+                                var exp by remember { mutableStateOf(false) }
+                                Box(Modifier.weight(0.9f), contentAlignment = Alignment.Center) {
+                                    Surface(
+                                        onClick = { exp = true },
+                                        shape = RoundedCornerShape(4.dp),
+                                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f))
+                                    ) {
+                                        Text(
+                                            "+ RPE",
+                                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                            color = MaterialTheme.colorScheme.primary,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                    DropdownMenu(expanded = exp, onDismissRequest = { exp = false }) {
+                                        DropdownMenuItem(
+                                            text = { Text("Track RPE (Exertion 1–10)") },
+                                            onClick = {
+                                                onSetEffortMethod(EffortMethod.RPE)
+                                                exp = false
+                                            }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("Track RIR (Reps in Reserve 0–5+)") },
+                                            onClick = {
+                                                onSetEffortMethod(EffortMethod.RIR)
+                                                exp = false
+                                            }
+                                        )
+                                    }
+                                }
                             }
                         }
                         Spacer(Modifier.width(36.dp))

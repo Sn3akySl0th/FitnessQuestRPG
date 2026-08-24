@@ -16,7 +16,9 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -215,8 +217,10 @@ fun FloatingGameDock(
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                                modifier = Modifier.padding(start = 4.dp, end = 8.dp)
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier
+                                    .padding(start = 4.dp, end = 8.dp)
+                                    .horizontalScroll(rememberScrollState())
                             ) {
                                 tabs.forEach { tab ->
                                     val selected = currentRoute == tab.route
@@ -233,7 +237,7 @@ fun FloatingGameDock(
                                     ) {
                                         Box(
                                             modifier = Modifier
-                                                .size(40.dp)
+                                                .size(38.dp)
                                                 .clip(CircleShape)
                                                 .background(if (selected) Gold.copy(alpha = 0.2f) else Color.Transparent)
                                                 .then(if (selected) Modifier.border(1.dp, Gold, CircleShape) else Modifier),
@@ -243,7 +247,7 @@ fun FloatingGameDock(
                                                 tab.icon,
                                                 contentDescription = tab.label,
                                                 tint = if (selected) Gold else Parchment.copy(alpha = 0.6f),
-                                                modifier = Modifier.size(22.dp)
+                                                modifier = Modifier.size(20.dp)
                                             )
                                             if (tab.hasBadge) {
                                                 Box(

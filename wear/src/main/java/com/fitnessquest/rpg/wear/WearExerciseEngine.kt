@@ -75,6 +75,7 @@ class WearExerciseEngine(
     private var accumulatedRestMs = 0L
     private var lastZoneTickAt = 0L
     private var lastZone: HrZone? = null
+    private var lastHighHrGoalAt = 0L
 
     private var bpm: Int? = null
     private var calories: Double? = null
@@ -415,7 +416,11 @@ class WearExerciseEngine(
             }
         }
         if (lastZone != null && lastZone != zone && zone == HrZone.HIGH) {
-            onGoal("ZONE_HIGH", "High heart! Soften the flame.")
+            val now = System.currentTimeMillis()
+            if (now - lastHighHrGoalAt >= HIGH_HR_COOLDOWN_MS) {
+                lastHighHrGoalAt = now
+                onGoal("ZONE_HIGH", "High heart! Soften the flame.")
+            }
         }
         lastZone = zone
     }
@@ -491,6 +496,7 @@ class WearExerciseEngine(
         const val REST_HR_GOAL = 110
         private const val STEP_GOAL_CHUNK = 500L
         private const val CAL_GOAL_CHUNK = 50
+        private const val HIGH_HR_COOLDOWN_MS = 180_000L // 3 minutes debounce to prevent spam
 
         fun hrPermission(): String =
             if (Build.VERSION.SDK_INT >= 36) {

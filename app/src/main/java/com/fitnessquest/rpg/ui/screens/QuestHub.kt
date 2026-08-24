@@ -50,6 +50,7 @@ import com.fitnessquest.rpg.ui.components.HeroPaperDoll
 import com.fitnessquest.rpg.ui.components.ManualStepEntryDialog
 import com.fitnessquest.rpg.ui.components.PedometerScanDialog
 import com.fitnessquest.rpg.ui.components.SettingsIconButton
+import com.fitnessquest.rpg.ui.components.SettingsDialog
 import com.fitnessquest.rpg.ui.components.WeightLogDialog
 import com.fitnessquest.rpg.ui.components.noteBetaFeedbackSubmitted
 import com.fitnessquest.rpg.ui.components.toAppearance
@@ -198,9 +199,14 @@ fun QuestHubScreen(
     var showMorphSwitcher by remember { mutableStateOf(false) }
     var showAvatarDialog by remember { mutableStateOf(false) }
     var showFeedbackDialog by remember { mutableStateOf(false) }
+    var showSettingsDialog by remember { mutableStateOf(false) }
     val context = androidx.compose.ui.platform.LocalContext.current
     val character = screenState.character
     val heroClass = character?.characterClass
+
+    if (showSettingsDialog) {
+        SettingsDialog(onDismiss = { showSettingsDialog = false })
+    }
 
     if (showFeedbackDialog) {
         BetaFeedbackDialog(
@@ -314,7 +320,7 @@ fun QuestHubScreen(
                         onAvatarClick = { showAvatarDialog = true },
                         onOpenJobSwitcher = { showJobSwitcher = true },
                         onOpenMorphSwitcher = { showMorphSwitcher = true },
-                        onSettingsClick = {},
+                        onSettingsClick = { showSettingsDialog = true },
                         onOpenHero = onOpenHero,
                         onOpenHeroGear = onOpenHeroGear
                     )
@@ -453,7 +459,7 @@ fun QuestHubScreen(
                         onAvatarClick = { showAvatarDialog = true },
                         onOpenJobSwitcher = { showJobSwitcher = true },
                         onOpenMorphSwitcher = { showMorphSwitcher = true },
-                        onSettingsClick = {},
+                        onSettingsClick = { showSettingsDialog = true },
                         onOpenHero = onOpenHero,
                         onOpenHeroGear = onOpenHeroGear
                     )

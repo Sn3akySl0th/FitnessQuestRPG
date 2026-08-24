@@ -2087,10 +2087,8 @@ class GameRepository(
         val character = getCharacter()
         val alreadyEquipped = instanceId in character.equippedIds().values
         val rarity = GearRarity.fromName(instance.rarity)
-        val reqLevel = ProgressionRules.requiredLevelFor(catalog.tier, rarity)
         if (!alreadyEquipped) {
-            if (catalog.classAffinity != null && catalog.classAffinity != character.characterClass) return false
-            if (character.level < reqLevel) return false
+            if (!ProgressionRules.canEquip(catalog, character, rarity)) return false
         }
         db.withTransaction {
             // Unbind from any other job's saved loadout

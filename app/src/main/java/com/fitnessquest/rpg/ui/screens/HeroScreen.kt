@@ -93,6 +93,7 @@ data class HeroUiState(
     val wearPresence: WearPresenceState = WearPresenceState()
 ) {
     fun hasGearUpgrade(): Boolean {
+        val char = character ?: return false
         val equippable = listOf(
             ItemSlot.WEAPON,
             ItemSlot.HEAD,
@@ -111,7 +112,11 @@ data class HeroUiState(
                 equippedItem.atk + equippedItem.def + equippedItem.hp
             } else -1
 
-            val ownedInSlot = ownedGear.filter { it.catalog.slot == slot && it.instance.id != instance?.id }
+            val ownedInSlot = ownedGear.filter {
+                it.catalog.slot == slot &&
+                    it.instance.id != instance?.id &&
+                    ProgressionRules.canEquip(it.catalog, char, GearRarity.fromName(it.instance.rarity))
+            }
             if (equippedItem == null) {
                 ownedInSlot.isNotEmpty()
             } else {
@@ -927,7 +932,7 @@ fun UnifiedHeroHeader(
     // Horizontal gradient for that "Hub" feel, matching biome art
     val colors = listOf(Color(biome.colorA), Color(biome.colorB))
 
-    val headerHeight = if (LocalDensity.current.fontScale >= 1.2f) 240.dp else 220.dp
+    val headerHeight = if (LocalDensity.current.fontScale >= 1.2f) 255.dp else 235.dp
 
     Box(
         modifier = modifier
@@ -952,7 +957,7 @@ fun UnifiedHeroHeader(
                 // Left: Avatar Showcase
                 Box(
                     modifier = Modifier
-                        .weight(0.5f)
+                        .weight(0.48f)
                         .fillMaxHeight(),
                     contentAlignment = Alignment.Center
                 ) {
@@ -971,8 +976,8 @@ fun UnifiedHeroHeader(
 
                 // Right: Hero Identity & Currency
                 Column(
-                    modifier = Modifier.weight(0.5f),
-                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                    modifier = Modifier.weight(0.52f),
+                    verticalArrangement = Arrangement.spacedBy(3.dp)
                 ) {
                     if (isQuestHub) {
                         Text(
@@ -982,7 +987,7 @@ fun UnifiedHeroHeader(
                             fontWeight = FontWeight.Black
                         )
                     } else {
-                        Spacer(Modifier.height(12.dp)) // Offset for lack of eyebrow
+                        Spacer(Modifier.height(4.dp))
                     }
 
                     Text(
@@ -994,17 +999,12 @@ fun UnifiedHeroHeader(
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        text = CharacterRace.fromStored(character.race).label,
+                        text = "${CharacterRace.fromStored(character.race).label} • ${biome.emoji} ${biome.label}",
                         style = MaterialTheme.typography.bodySmall,
                         color = Gold,
+                        fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = "${biome.emoji} ${biome.label}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.White.copy(alpha = 0.78f),
-                        fontWeight = FontWeight.Bold
                     )
 
                     // Currency & Watch Status
@@ -1119,7 +1119,7 @@ fun UnifiedHeroHeader(
             }
         }
 
-        // Top layer actions: Back and Export Wallpaper/Watch Face
+        // Top layer actions: Back, Settings, and Export Wallpaper/Watch Face
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1141,20 +1141,40 @@ fun UnifiedHeroHeader(
                 Spacer(Modifier.size(36.dp))
             }
 
-            if (onExportClick != null) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
                 IconButton(
-                    onClick = onExportClick,
+                    onClick = onSettingsClick,
                     modifier = Modifier
                         .clip(CircleShape)
                         .background(Color.Black.copy(alpha = 0.25f))
                         .size(36.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.CameraAlt,
-                        contentDescription = "Export Wallpaper & Watch Face",
+                        imageVector = Icons.Default.Settings,
+                        contentDescription = "Settings",
                         tint = Gold,
                         modifier = Modifier.size(20.dp)
                     )
+                }
+
+                if (onExportClick != null) {
+                    IconButton(
+                        onClick = onExportClick,
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .background(Color.Black.copy(alpha = 0.25f))
+                            .size(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CameraAlt,
+                            contentDescription = "Export Wallpaper & Watch Face",
+                            tint = Gold,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 }
             }
         }
@@ -1335,6 +1355,11 @@ fun HeroScreenContent(
     var showMorphSwitcher by remember { mutableStateOf(false) }
     var showExportSheet by remember { mutableStateOf(false) }
     var showAttributeInfo by remember { mutableStateOf(false) }
+    var showSettingsDialog by remember { mutableStateOf(false) }
+
+    if (showSettingsDialog) {
+        SettingsDialog(onDismiss = { showSettingsDialog = false })
+    }
 
     if (showAttributeInfo) {
         AttributeInfoDialog(onDismiss = { showAttributeInfo = false })
@@ -1405,7 +1430,7 @@ fun HeroScreenContent(
                         onAvatarClick = { showAvatarDialog = true },
                         onOpenJobSwitcher = { showJobSwitcher = true },
                         onOpenMorphSwitcher = { showMorphSwitcher = true },
-                        onSettingsClick = {}, // Handled inside UnifiedHeroHeader
+                        onSettingsClick = { showSettingsDialog = true },
                         onBackClick = actions.onBack,
                         onExportClick = { showExportSheet = true }
                     )
@@ -1473,7 +1498,7 @@ fun HeroScreenContent(
                     onAvatarClick = { showAvatarDialog = true },
                     onOpenJobSwitcher = { showJobSwitcher = true },
                     onOpenMorphSwitcher = { showMorphSwitcher = true },
-                    onSettingsClick = {}, // Handled inside UnifiedHeroHeader
+                    onSettingsClick = { showSettingsDialog = true },
                     onBackClick = actions.onBack,
                     onExportClick = { showExportSheet = true }
                 )
@@ -1963,7 +1988,11 @@ private fun gearTab(
                         item.atk + item.def + item.hp
                     } else -1
 
-                    val ownedInSlot = state.ownedGear.filter { it.catalog.slot == slot && it.instance.id != instance?.id }
+                    val ownedInSlot = state.ownedGear.filter {
+                        it.catalog.slot == slot &&
+                            it.instance.id != instance?.id &&
+                            ProgressionRules.canEquip(it.catalog, character, GearRarity.fromName(it.instance.rarity))
+                    }
                     val hasUpgrade = if (item == null) {
                         ownedInSlot.isNotEmpty()
                     } else {
@@ -2206,7 +2235,7 @@ fun SlotPickerSheet(
         val list = owned.filter { row ->
             when (filter) {
                 SlotFilter.ALL -> true
-                SlotFilter.COMPATIBLE -> row.catalog.classAffinity == null || row.catalog.classAffinity == character.characterClass
+                SlotFilter.COMPATIBLE -> ProgressionRules.canEquip(row.catalog, character, GearRarity.fromName(row.instance.rarity))
                 SlotFilter.UPGRADED -> row.instance.upgradeLevel > 0
                 SlotFilter.RARE_PLUS -> GearRarity.fromName(row.instance.rarity).ordinal >= GearRarity.RARE.ordinal
             }
@@ -2371,8 +2400,7 @@ private fun SlotPickerGearCard(
     val rarity = GearRarity.fromName(gear.instance.rarity)
     val reqLevel = ProgressionRules.requiredLevelFor(gear.catalog.tier, rarity)
     val levelMet = character.level >= reqLevel
-    val classMatch = gear.catalog.classAffinity == null || gear.catalog.classAffinity == character.characterClass
-    val canEquip = classMatch && levelMet
+    val canEquip = ProgressionRules.canEquip(gear.catalog, character, rarity)
     val atkDiff = gear.instance.atk - (currentlyEquippedItem?.atk ?: 0)
     val defDiff = gear.instance.def - (currentlyEquippedItem?.def ?: 0)
     val hpDiff = gear.instance.hp - (currentlyEquippedItem?.hp ?: 0)

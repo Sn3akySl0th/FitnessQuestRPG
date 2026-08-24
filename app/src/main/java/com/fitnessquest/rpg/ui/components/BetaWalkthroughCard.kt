@@ -71,8 +71,6 @@ fun BetaWalkthroughCard(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val prefs = remember { context.getSharedPreferences("fitnessrpg_user_prefs", Context.MODE_PRIVATE) }
-
-    var expanded by remember { mutableStateOf(true) }
     var localRewardClaimed by remember { mutableStateOf(false) }
 
     val claimedTrophiesSet = remember(character?.claimedTrophies) {
@@ -90,6 +88,9 @@ fun BetaWalkthroughCard(
 
     val completedCount = listOf(m1Completed, m2Completed, m3Completed, m4Completed).count { it }
     val allCompleted = completedCount == 4
+    val hasPendingQuests = !allCompleted || !rewardClaimed
+
+    var expanded by remember(hasPendingQuests) { mutableStateOf(hasPendingQuests) }
 
     val gradientBrush = Brush.horizontalGradient(
         listOf(
@@ -257,6 +258,7 @@ fun BetaWalkthroughCard(
                                             onClaimPioneerReward()
                                             prefs.edit().putBoolean(PREF_BETA_REWARD_CLAIMED, true).apply()
                                             localRewardClaimed = true
+                                            expanded = false
                                             AudioEffects.playLevelUp()
                                         }
                                     },

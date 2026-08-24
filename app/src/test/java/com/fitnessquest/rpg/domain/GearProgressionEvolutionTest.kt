@@ -172,4 +172,150 @@ class GearProgressionEvolutionTest {
             assertTrue("Combo hits should be recorded for momentum", turn1.comboHits >= 1)
         }
     }
+
+    @Test
+    fun `canEquip validates class affinity and level requirements`() {
+        val warrior = CharacterEntity(characterClass = CharacterClass.WARRIOR, level = 2)
+
+        val tier1Sword = ItemEntity(
+            id = 1,
+            name = "Iron Sword",
+            emoji = "⚔️",
+            slot = ItemSlot.WEAPON,
+            tier = 1,
+            price = 50,
+            classAffinity = CharacterClass.WARRIOR
+        )
+        val tier1Staff = ItemEntity(
+            id = 2,
+            name = "Oak Staff",
+            emoji = "🪄",
+            slot = ItemSlot.WEAPON,
+            tier = 1,
+            price = 50,
+            classAffinity = CharacterClass.MAGE
+        )
+        val tier3Sword = ItemEntity(
+            id = 3,
+            name = "Knight Blade",
+            emoji = "⚔️",
+            slot = ItemSlot.WEAPON,
+            tier = 3,
+            price = 300,
+            classAffinity = CharacterClass.WARRIOR
+        )
+
+        // Warrior can equip tier 1 warrior sword at level 2
+        assertTrue(ProgressionRules.canEquip(tier1Sword, warrior, GearRarity.COMMON))
+
+        // Warrior cannot equip mage staff
+        assertFalse(ProgressionRules.canEquip(tier1Staff, warrior, GearRarity.COMMON))
+
+        // Warrior level 2 cannot equip tier 3 sword (requires level 8)
+        assertFalse(ProgressionRules.canEquip(tier3Sword, warrior, GearRarity.COMMON))
+
+        // High level warrior can equip tier 3 sword
+        val highLevelWarrior = warrior.copy(level = 10)
+        assertTrue(ProgressionRules.canEquip(tier3Sword, highLevelWarrior, GearRarity.COMMON))
+    }
+
+    @Test
+    fun `hasGearUpgrade ignores cross-class and over-level items`() {
+        val warrior = CharacterEntity(characterClass = CharacterClass.WARRIOR, level = 2)
+
+        val equippedSword = ItemEntity(
+            id = 1,
+            name = "Rusty Sword",
+            emoji = "⚔️",
+            slot = ItemSlot.WEAPON,
+            tier = 1,
+            price = 10,
+            atk = 2,
+            classAffinity = CharacterClass.WARRIOR
+        )
+        val equippedInstance = com.fitnessquest.rpg.data.db.GearInstanceEntity(
+            id = 101,
+            catalogId = 1,
+            rarity = GearRarity.COMMON.name,
+            atk = 2,
+            upgradeLevel = 0
+        )
+
+        // Better gear for a Mage (high power, but cross-class)
+        val mageStaff = ItemEntity(
+            id = 2,
+            name = "Archmage Scepter",
+            emoji = "👑",
+            slot = ItemSlot.WEAPON,
+            tier = 4,
+            price = 700,
+            atk = 25,
+            classAffinity = CharacterClass.MAGE
+        )
+        val mageInstance = com.fitnessquest.rpg.data.db.GearInstanceEntity(
+            id = 102,
+            catalogId = 2,
+            rarity = GearRarity.COMMON.name,
+            atk = 25,
+            upgradeLevel = 0
+        )
+
+        // Better gear for Warrior, but requires higher level (Tier 3 -> Lv 8, player is Lv 2)
+        val highTierSword = ItemEntity(
+            id = 3,
+            name = "Knight's Blade",
+            emoji = "⚔️",
+            slot = ItemSlot.WEAPON,
+            tier = 3,
+            price = 300,
+            atk = 13,
+            classAffinity = CharacterClass.WARRIOR
+        )
+        val highTierInstance = com.fitnessquest.rpg.data.db.GearInstanceEntity(
+            id = 103,
+            catalogId = 3,
+            rarity = GearRarity.COMMON.name,
+            atk = 13,
+            upgradeLevel = 0
+        )
+
+        val stateWithUnequippableLoot = com.fitnessquest.rpg.ui.screens.HeroUiState(
+            character = warrior,
+            gear = mapOf(ItemSlot.WEAPON to equippedSword),
+            ownedGear = listOf(
+                com.fitnessquest.rpg.data.OwnedGear(equippedInstance, equippedSword),
+                com.fitnessquest.rpg.data.OwnedGear(mageInstance, mageStaff),
+                com.fitnessquest.rpg.data.OwnedGear(highTierInstance, highTierSword)
+            )
+        )
+
+        // Must NOT show upgrade available because none of the higher power weapons can actually be equipped
+        assertFalse("Upgrade should not be flagged for cross-class or level-locked gear", stateWithUnequippableLoot.hasGearUpgrade())
+
+        // Add a genuinely equippable upgrade (Tier 1 warrior sword with higher stats)
+        val betterSword = ItemEntity(
+            id = 4,
+            name = "Sharpened Blade",
+            emoji = "⚔️",
+            slot = ItemSlot.WEAPON,
+            tier = 1,
+            price = 60,
+            atk = 6,
+            classAffinity = CharacterClass.WARRIOR
+        )
+        val betterInstance = com.fitnessquest.rpg.data.db.GearInstanceEntity(
+            id = 104,
+            catalogId = 4,
+            rarity = GearRarity.COMMON.name,
+            atk = 6,
+            upgradeLevel = 0
+        )
+
+        val stateWithValidUpgrade = stateWithUnequippableLoot.copy(
+            ownedGear = stateWithUnequippableLoot.ownedGear + com.fitnessquest.rpg.data.OwnedGear(betterInstance, betterSword)
+        )
+
+        // MUST show upgrade available now
+        assertTrue("Upgrade should be flagged when a valid equippable upgrade is owned", stateWithValidUpgrade.hasGearUpgrade())
+    }
 }
