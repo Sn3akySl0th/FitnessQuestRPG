@@ -209,13 +209,17 @@ fun FitQuestNav() {
     LaunchedEffect(permissionsRepairShown) {
         if (!permissionsRepairShown) {
             val ctx = context
-            val activityGranted = if (Build.VERSION.SDK_INT >= 29) {
-                ContextCompat.checkSelfPermission(ctx, "android.permission.ACTIVITY_RECOGNITION") == PackageManager.PERMISSION_GRANTED
-            } else true
-            val notificationGranted = if (Build.VERSION.SDK_INT >= 33) {
-                ContextCompat.checkSelfPermission(ctx, "android.permission.POST_NOTIFICATIONS") == PackageManager.PERMISSION_GRANTED
-            } else true
-            val healthGranted = container.healthConnect.hasCoreReadPermissions()
+            val activityGranted = runCatching {
+                if (Build.VERSION.SDK_INT >= 29) {
+                    ContextCompat.checkSelfPermission(ctx, "android.permission.ACTIVITY_RECOGNITION") == PackageManager.PERMISSION_GRANTED
+                } else true
+            }.getOrDefault(true)
+            val notificationGranted = runCatching {
+                if (Build.VERSION.SDK_INT >= 33) {
+                    ContextCompat.checkSelfPermission(ctx, "android.permission.POST_NOTIFICATIONS") == PackageManager.PERMISSION_GRANTED
+                } else true
+            }.getOrDefault(true)
+            val healthGranted = runCatching { container.healthConnect.hasCoreReadPermissions() }.getOrDefault(false)
             
             if (!activityGranted || !notificationGranted || !healthGranted) {
                 showPermissionsConsolidator = true

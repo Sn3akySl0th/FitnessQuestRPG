@@ -49,13 +49,15 @@ class WearPresence(app: Application) : MessageClient.OnMessageReceivedListener {
     fun start() {
         if (started) return
         started = true
-        messageClient.addListener(this)
-        capabilityClient.addListener(
-            {
-                scope.launch { refresh() }
-            },
-            WearCapabilities.WEAR
-        )
+        runCatching { messageClient.addListener(this) }
+        runCatching {
+            capabilityClient.addListener(
+                {
+                    scope.launch { refresh() }
+                },
+                WearCapabilities.WEAR
+            )
+        }
         pollJob = scope.launch {
             while (isActive) {
                 refresh()

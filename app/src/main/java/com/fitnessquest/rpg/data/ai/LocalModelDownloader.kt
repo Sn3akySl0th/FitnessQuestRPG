@@ -85,7 +85,8 @@ class LocalModelDownloader(private val context: Context) {
     private var activeCall: okhttp3.Call? = null
 
     fun getModelFile(modelId: String): File {
-        val modelsDir = File(context.getExternalFilesDir(null), "models")
+        val baseDir = context.getExternalFilesDir(null) ?: context.filesDir
+        val modelsDir = File(baseDir, "models")
         if (!modelsDir.exists()) modelsDir.mkdirs()
         val cleanId = modelId.lowercase().replace(Regex("[^a-z0-9_]"), "_")
         return File(modelsDir, "local_llm_${cleanId}.bin")

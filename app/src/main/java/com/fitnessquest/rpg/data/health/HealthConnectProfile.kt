@@ -92,9 +92,11 @@ object HeightFormat {
 class HealthConnectProfile(private val context: Context) {
 
     private val client by lazy {
-        if (HealthConnectClient.getSdkStatus(context) == HealthConnectClient.SDK_AVAILABLE) {
-            HealthConnectClient.getOrCreate(context)
-        } else null
+        runCatching {
+            if (HealthConnectClient.getSdkStatus(context) == HealthConnectClient.SDK_AVAILABLE) {
+                HealthConnectClient.getOrCreate(context)
+            } else null
+        }.getOrNull()
     }
 
     val permissions = setOf(
@@ -104,29 +106,31 @@ class HealthConnectProfile(private val context: Context) {
         HealthPermission.getReadPermission(StepsRecord::class)
     )
 
-    fun sdkStatus() = HealthConnectClient.getSdkStatus(context)
+    fun sdkStatus(): Int = runCatching {
+        HealthConnectClient.getSdkStatus(context)
+    }.getOrDefault(HealthConnectClient.SDK_UNAVAILABLE)
 
-    suspend fun hasCoreReadPermissions(): Boolean {
-        val granted = client?.permissionController?.getGrantedPermissions() ?: return false
-        return granted.contains(HealthPermission.getReadPermission(HeightRecord::class)) &&
-               granted.contains(HealthPermission.getReadPermission(WeightRecord::class))
-    }
+    suspend fun hasCoreReadPermissions(): Boolean = runCatching {
+        val granted = client?.permissionController?.getGrantedPermissions() ?: return@runCatching false
+        granted.contains(HealthPermission.getReadPermission(HeightRecord::class)) &&
+        granted.contains(HealthPermission.getReadPermission(WeightRecord::class))
+    }.getOrDefault(false)
 
-    suspend fun hasStepsPermission(): Boolean {
-        return client?.permissionController?.getGrantedPermissions()
+    suspend fun hasStepsPermission(): Boolean = runCatching {
+        client?.permissionController?.getGrantedPermissions()
             ?.contains(HealthPermission.getReadPermission(StepsRecord::class)) == true
-    }
+    }.getOrDefault(false)
 
-    suspend fun hasWeightWritePermission(): Boolean {
-        return client?.permissionController?.getGrantedPermissions()
+    suspend fun hasWeightWritePermission(): Boolean = runCatching {
+        client?.permissionController?.getGrantedPermissions()
             ?.contains(HealthPermission.getWritePermission(WeightRecord::class)) == true
-    }
+    }.getOrDefault(false)
 
     /** Returns true if *all* requested permissions are granted. */
-    suspend fun hasAllPermissions(): Boolean {
-        return client?.permissionController?.getGrantedPermissions()
+    suspend fun hasAllPermissions(): Boolean = runCatching {
+        client?.permissionController?.getGrantedPermissions()
             ?.containsAll(permissions) == true
-    }
+    }.getOrDefault(false)
 
     /**
      * Reads total steps recorded in Health Connect for a specific date (local timezone).

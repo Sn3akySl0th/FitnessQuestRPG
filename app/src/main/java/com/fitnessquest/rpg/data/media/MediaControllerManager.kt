@@ -20,7 +20,9 @@ data class MediaState(
 
 class MediaControllerManager(private val context: Context) {
 
-    private val sessionManager = context.getSystemService(Context.MEDIA_SESSION_SERVICE) as MediaSessionManager
+    private val sessionManager = runCatching {
+        context.getSystemService(Context.MEDIA_SESSION_SERVICE) as? MediaSessionManager
+    }.getOrNull()
     private var activeController: MediaController? = null
 
     private val _state = MutableStateFlow(MediaState())
@@ -63,9 +65,10 @@ class MediaControllerManager(private val context: Context) {
     }
 
     private fun findActiveSession() {
+        val sm = sessionManager ?: return
         try {
             // This requires NotificationListenerService permission or being the system UI
-            val sessions = sessionManager.getActiveSessions(
+            val sessions = sm.getActiveSessions(
                 ComponentName(context, "com.fitnessquest.rpg.data.media.NotificationService") // Placeholder or actual service
             )
             val controller = sessions.firstOrNull { 
@@ -80,8 +83,8 @@ class MediaControllerManager(private val context: Context) {
                 activeController?.registerCallback(callback)
                 updateState()
             }
-        } catch (e: SecurityException) {
-            // Cannot get sessions without permission
+        } catch (e: Exception) {
+            // Cannot get sessions without permission or restricted by device policy
         }
     }
 

@@ -78,11 +78,13 @@ class FitQuestApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        val crashlytics = FirebaseCrashlytics.getInstance().apply {
-            setCustomKey("version_name", BuildConfig.VERSION_NAME)
-            setCustomKey("version_code", BuildConfig.VERSION_CODE)
-            log("FitQuest startup begin")
-        }
+        val crashlytics = runCatching {
+            FirebaseCrashlytics.getInstance().apply {
+                setCustomKey("version_name", BuildConfig.VERSION_NAME)
+                setCustomKey("version_code", BuildConfig.VERSION_CODE)
+                log("FitQuest startup begin")
+            }
+        }.getOrNull()
         container = AppContainer(this)
         com.fitnessquest.rpg.data.sync.OutboxWorker.enqueue(this)
         AudioEffects.soundEnabled = container.prefs.sound.value
@@ -119,24 +121,26 @@ class FitQuestApp : Application() {
 
     private fun startSafely(
         name: String,
-        crashlytics: FirebaseCrashlytics,
+        crashlytics: FirebaseCrashlytics?,
         block: () -> Unit,
     ) {
         runCatching(block).onFailure { error ->
-            crashlytics.log("Startup task failed: $name")
-            crashlytics.recordException(error)
+            android.util.Log.e("FitQuestApp", "Startup task failed: $name", error)
+            crashlytics?.log("Startup task failed: $name")
+            crashlytics?.recordException(error)
         }
     }
 
     private fun CoroutineScope.launchStartup(
         name: String,
-        crashlytics: FirebaseCrashlytics,
+        crashlytics: FirebaseCrashlytics?,
         block: suspend () -> Unit
     ) {
         launch {
             runCatching { block() }.onFailure { error ->
-                crashlytics.log("Startup coroutine failed: $name")
-                crashlytics.recordException(error)
+                android.util.Log.e("FitQuestApp", "Startup coroutine failed: $name", error)
+                crashlytics?.log("Startup coroutine failed: $name")
+                crashlytics?.recordException(error)
             }
         }
     }
