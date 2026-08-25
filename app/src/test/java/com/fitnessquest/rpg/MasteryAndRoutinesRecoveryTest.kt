@@ -210,9 +210,9 @@ class MasteryAndRoutinesRecoveryTest {
     @Test
     fun all_migrations_are_contiguous_and_complete() {
         val migrations = AppDatabase.ALL_MIGRATIONS
-        assertEquals("Should have 30 migrations from v1 to v31", 30, migrations.size)
+        assertEquals("Should have 31 migrations from v1 to v32", 31, migrations.size)
 
-        for (i in 1..30) {
+        for (i in 1..31) {
             val migration = migrations.find { it.startVersion == i && it.endVersion == i + 1 }
             assertNotNull("Missing migration from v$i to v${i + 1}", migration)
         }
@@ -226,7 +226,8 @@ class MasteryAndRoutinesRecoveryTest {
             "set_logs" to mutableSetOf("id", "sessionId", "exerciseName", "category", "weightKg", "reps", "xp"),
             "biome_progress" to mutableSetOf("biomeName", "layer"),
             "gear_instances" to mutableSetOf("id", "catalogId", "atk", "def", "hp"),
-            "workout_exercises" to mutableSetOf("id", "workoutId", "exerciseName", "category", "targetSets", "targetReps")
+            "workout_exercises" to mutableSetOf("id", "workoutId", "exerciseName", "category", "targetSets", "targetReps"),
+            "sessions" to mutableSetOf("id", "name", "startedAt", "endedAt", "xpEarned", "goldEarned", "energyEarned", "setCount")
         )
 
         val dbProxy = Proxy.newProxyInstance(
@@ -287,6 +288,12 @@ class MasteryAndRoutinesRecoveryTest {
         // Verify set_logs auto-repaired
         assertTrue(existingColumns["set_logs"]?.contains("setType") == true)
         assertTrue(existingColumns["set_logs"]?.contains("speedKmh") == true)
+
+        // Verify workout_exercises & sessions auto-repaired
+        assertTrue(existingColumns["workout_exercises"]?.contains("targetWeightKg") == true)
+        assertTrue(existingColumns["workout_exercises"]?.contains("supersetId") == true)
+        assertTrue(existingColumns["sessions"]?.contains("completionToken") == true)
+        assertTrue(existingColumns["sessions"]?.contains("completionReceiptJson") == true)
     }
 
     @Test
@@ -342,6 +349,67 @@ class MasteryAndRoutinesRecoveryTest {
 
         assertTrue(existingColumns["character"]?.contains("dailyGambleCount") == true)
         assertTrue(existingColumns["character"]?.contains("lastGambleResetEpochMs") == true)
+    }
+
+    @Test
+    fun migration_31_to_32_recreates_workout_exercises_and_sessions_columns() {
+        val executedSqls = mutableListOf<String>()
+        val existingColumns = mutableMapOf<String, MutableSet<String>>(
+            "workout_exercises" to mutableSetOf("id", "workoutId", "exerciseName", "category", "targetSets", "targetReps"),
+            "sessions" to mutableSetOf("id", "name", "startedAt", "endedAt", "xpEarned", "goldEarned", "energyEarned", "setCount")
+        )
+
+        val dbProxy = Proxy.newProxyInstance(
+            SupportSQLiteDatabase::class.java.classLoader,
+            arrayOf(SupportSQLiteDatabase::class.java)
+        ) { _, method, args ->
+            when (method.name) {
+                "execSQL" -> {
+                    val sql = args[0] as String
+                    executedSqls.add(sql)
+                    if (sql.startsWith("ALTER TABLE") && sql.contains("ADD COLUMN")) {
+                        val parts = sql.split(" ")
+                        val tableName = parts[2]
+                        val columnName = parts[5]
+                        existingColumns.getOrPut(tableName) { mutableSetOf() }.add(columnName)
+                    }
+                    null
+                }
+                "query" -> {
+                    val sql = args[0] as String
+                    val table = sql.substringAfter("PRAGMA table_info(").substringBefore(")")
+                    val cols = existingColumns[table] ?: emptySet()
+                    var index = -1
+                    val colList = cols.toList()
+                    Proxy.newProxyInstance(
+                        Cursor::class.java.classLoader,
+                        arrayOf(Cursor::class.java)
+                    ) { _, cMethod, _ ->
+                        when (cMethod.name) {
+                            "getColumnIndex" -> 0
+                            "moveToNext" -> {
+                                index++
+                                index < colList.size
+                            }
+                            "getString" -> colList.getOrNull(index) ?: ""
+                            "close" -> null
+                            else -> null
+                        }
+                    }
+                }
+                else -> null
+            }
+        } as SupportSQLiteDatabase
+
+        // Execute MIGRATION_31_32
+        AppDatabase.MIGRATION_31_32.migrate(dbProxy)
+
+        assertTrue(existingColumns["sessions"]?.contains("completionToken") == true)
+        assertTrue(existingColumns["sessions"]?.contains("completionReceiptJson") == true)
+        assertTrue(existingColumns["workout_exercises"]?.contains("targetWeightKg") == true)
+        assertTrue(existingColumns["workout_exercises"]?.contains("supersetId") == true)
+        assertTrue(executedSqls.any { it.contains("CREATE TABLE IF NOT EXISTS `workout_exercises_new`") })
+        assertTrue(executedSqls.any { it.contains("CREATE INDEX IF NOT EXISTS `index_workout_exercises_workoutId`") })
     }
 
     @Test

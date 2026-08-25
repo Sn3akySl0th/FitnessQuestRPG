@@ -55,7 +55,7 @@ class Converters {
         PendingSyncEntity::class,
         MovementMasteryEntity::class,
     ],
-    version = 31,
+    version = 32,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -548,6 +548,48 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        internal val MIGRATION_31_32 = object : Migration(31, 32) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Ensure sessions table has completionToken & completionReceiptJson plus unique index
+                db.addColumnIfNotExists("sessions", "completionToken", "TEXT")
+                db.addColumnIfNotExists("sessions", "completionReceiptJson", "TEXT")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_sessions_completion_token` ON `sessions` (`completionToken`)")
+
+                // Ensure workout_exercises has all optional columns before recreation
+                db.addColumnIfNotExists("workout_exercises", "targetWeightKg", "REAL")
+                db.addColumnIfNotExists("workout_exercises", "supersetId", "TEXT")
+
+                // Remove orphaned workout exercises before establishing foreign key constraint
+                db.execSQL("DELETE FROM workout_exercises WHERE workoutId NOT IN (SELECT id FROM workouts)")
+
+                // Recreate workout_exercises table with Foreign Key to workouts(id) ON DELETE CASCADE and index
+                db.execSQL(
+                    """CREATE TABLE IF NOT EXISTS `workout_exercises_new` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `workoutId` INTEGER NOT NULL,
+                        `exerciseName` TEXT NOT NULL,
+                        `category` TEXT NOT NULL,
+                        `targetSets` INTEGER NOT NULL,
+                        `targetReps` INTEGER NOT NULL,
+                        `targetWeightKg` REAL,
+                        `sortOrder` INTEGER NOT NULL,
+                        `supersetId` TEXT,
+                        FOREIGN KEY(`workoutId`) REFERENCES `workouts`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )"""
+                )
+                db.execSQL(
+                    """INSERT INTO `workout_exercises_new` (
+                        `id`, `workoutId`, `exerciseName`, `category`, `targetSets`, `targetReps`, `targetWeightKg`, `sortOrder`, `supersetId`
+                    ) SELECT
+                        `id`, `workoutId`, `exerciseName`, `category`, `targetSets`, `targetReps`, `targetWeightKg`, `sortOrder`, `supersetId`
+                    FROM `workout_exercises`"""
+                )
+                db.execSQL("DROP TABLE `workout_exercises`")
+                db.execSQL("ALTER TABLE `workout_exercises_new` RENAME TO `workout_exercises`")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_workout_exercises_workoutId` ON `workout_exercises` (`workoutId`)")
+            }
+        }
+
         internal val ALL_MIGRATIONS: Array<Migration> = arrayOf(
             MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4,
             MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10,
@@ -555,7 +597,7 @@ abstract class AppDatabase : RoomDatabase() {
             MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20,
             MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25,
             MIGRATION_25_26, MIGRATION_26_27, MIGRATION_27_28, MIGRATION_28_29, MIGRATION_29_30,
-            MIGRATION_30_31
+            MIGRATION_30_31, MIGRATION_31_32
         )
 
         private fun SupportSQLiteDatabase.addColumnIfNotExists(table: String, column: String, definition: String) {
@@ -605,6 +647,13 @@ abstract class AppDatabase : RoomDatabase() {
 
             // Workout exercises self-healing
             db.addColumnIfNotExists("workout_exercises", "targetWeightKg", "REAL")
+            db.addColumnIfNotExists("workout_exercises", "supersetId", "TEXT")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_workout_exercises_workoutId` ON `workout_exercises` (`workoutId`)")
+
+            // Sessions self-healing
+            db.addColumnIfNotExists("sessions", "completionToken", "TEXT")
+            db.addColumnIfNotExists("sessions", "completionReceiptJson", "TEXT")
+            db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_sessions_completion_token` ON `sessions` (`completionToken`)")
 
             // Set logs self-healing
             db.addColumnIfNotExists("set_logs", "setType", "TEXT NOT NULL DEFAULT 'NORMAL'")
