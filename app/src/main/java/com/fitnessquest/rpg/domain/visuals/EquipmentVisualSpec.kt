@@ -685,6 +685,12 @@ object EquipmentVisualRegistry {
      * Consumed uniformly by both 2D drawable pipelines and procedural Canvas renderers.
      */
     fun resolveVisualDescriptor(item: ItemEntity): EquipmentVisualDescriptor {
+        WeaponVisualCatalog.resolve(item)?.let { catalogDescriptor ->
+            return catalogDescriptor.copy(
+                proceduralSignature = resolveProceduralSignature(item, catalogDescriptor.canonicalKey),
+            )
+        }
+
         val itemKey = normalizeItemKey(item.name)
         val nameLower = item.name.lowercase()
         val isPolearm = listOf("spear", "lance", "pike", "halberd", "harpoon").any(nameLower::contains) ||
@@ -787,6 +793,13 @@ object EquipmentVisualRegistry {
                 secondaryColor = androidx.compose.ui.graphics.Color(0xFF6B5138),
                 glowColor = androidx.compose.ui.graphics.Color(0xFF38BDF8) // Cyan mana crystal
             )
+            itemKey == "travelers_staff" || nameLower.contains("traveler") && nameLower.contains("staff") -> EquipmentVisualDescriptor(
+                canonicalKey = "travelers_staff",
+                archetype = VisualArchetype.STAFF_TRAVELER,
+                primaryColor = androidx.compose.ui.graphics.Color(0xFF6B4E37),
+                secondaryColor = androidx.compose.ui.graphics.Color(0xFF4A3525),
+                accentColor = androidx.compose.ui.graphics.Color(0xFF8A7A68) // Worn iron ferrule
+            )
             itemKey == "oakheart_staff" || nameLower.contains("oakheart") || item.style == ItemStyle.STAFF -> EquipmentVisualDescriptor(
                 canonicalKey = itemKey,
                 archetype = VisualArchetype.STAFF_WOODEN,
@@ -887,13 +900,14 @@ object EquipmentVisualRegistry {
                 glowColor = androidx.compose.ui.graphics.Color(0xFF67E8F9)
             )
             else -> {
-                val (main, dark, glow) = resolveDefaultPalette(item)
+                val palette = UniqueGearPalettes.forItem(item, itemKey)
                 EquipmentVisualDescriptor(
                     canonicalKey = itemKey,
                     archetype = VisualArchetype.GENERIC,
-                    primaryColor = main,
-                    secondaryColor = dark,
-                    glowColor = glow
+                    primaryColor = palette.primary,
+                    secondaryColor = palette.secondary,
+                    accentColor = palette.accent,
+                    glowColor = palette.glow,
                 )
             }
         }
@@ -1005,10 +1019,20 @@ enum class VisualArchetype {
     GREATSWORD_GENERIC,
     SWORD_KNIGHT,
     SWORD_GENERIC,
+    SWORD_RAPIER,
     BOW_SHORT,
     BOW_GENERIC,
+    BOW_RECURVE,
+    BOW_LONGBOW,
+    BOW_WARBOW,
     WAND_ARCANE,
     STAFF_WOODEN,
+    STAFF_TRAVELER,
+    STAFF_NECRO,
+    STAFF_DRUID,
+    STAFF_RUNED,
+    DAGGER_GENERIC,
+    MACE_GENERIC,
     ROBE_COBALT_APPRENTICE,
     ROBE_VIOLET_RUNEWEAVE,
     ROBE_GENERIC,
@@ -1084,7 +1108,10 @@ fun VisualArchetype.defaultOrientationContract(): EquipmentOrientationContract {
         )
 
         VisualArchetype.SWORD_KNIGHT,
-        VisualArchetype.SWORD_GENERIC -> EquipmentOrientationContract(
+        VisualArchetype.SWORD_GENERIC,
+        VisualArchetype.SWORD_RAPIER,
+        VisualArchetype.DAGGER_GENERIC,
+        VisualArchetype.MACE_GENERIC -> EquipmentOrientationContract(
             front = heldRight,
             back = OrientationPresentation(
                 VisualAttachmentMode.SIDE_CARRY,
@@ -1094,7 +1121,10 @@ fun VisualArchetype.defaultOrientationContract(): EquipmentOrientationContract {
         )
 
         VisualArchetype.BOW_SHORT,
-        VisualArchetype.BOW_GENERIC -> EquipmentOrientationContract(
+        VisualArchetype.BOW_GENERIC,
+        VisualArchetype.BOW_RECURVE,
+        VisualArchetype.BOW_LONGBOW,
+        VisualArchetype.BOW_WARBOW -> EquipmentOrientationContract(
             front = heldRight,
             back = OrientationPresentation(
                 VisualAttachmentMode.SIDE_CARRY,
@@ -1110,7 +1140,11 @@ fun VisualArchetype.defaultOrientationContract(): EquipmentOrientationContract {
             )
         )
 
-        VisualArchetype.STAFF_WOODEN -> EquipmentOrientationContract(
+        VisualArchetype.STAFF_WOODEN,
+        VisualArchetype.STAFF_TRAVELER,
+        VisualArchetype.STAFF_NECRO,
+        VisualArchetype.STAFF_DRUID,
+        VisualArchetype.STAFF_RUNED -> EquipmentOrientationContract(
             front = heldRight,
             back = OrientationPresentation(
                 VisualAttachmentMode.BACK_MOUNTED,
@@ -1165,7 +1199,8 @@ data class EquipmentVisualDescriptor(
     val accentColor: androidx.compose.ui.graphics.Color? = null,
     val glowColor: androidx.compose.ui.graphics.Color? = null,
     val orientationContract: EquipmentOrientationContract = archetype.defaultOrientationContract(),
-    val proceduralSignature: ProceduralVisualSignature = ProceduralVisualSignature.DEFAULT
+    val proceduralSignature: ProceduralVisualSignature = ProceduralVisualSignature.DEFAULT,
+    val weaponHeadMotif: WeaponHeadMotif = WeaponHeadMotif.NONE,
 )
 
 enum class ProceduralSilhouette { BALANCED, ANGULAR, CURVED, FORTIFIED }

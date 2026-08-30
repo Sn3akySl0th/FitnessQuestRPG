@@ -1,3 +1,11 @@
+0.14.0
+- Procedural battle loot: rolled gear with affixes, item level, and named armor set tags from battles, bosses, and chests.
+- Loot Atlas: in-app drop guides for biomes, bosses, and monsters plus searchable armor set farming hints.
+- Named set bonuses: unique 2/4/5-piece combat bonuses with a class affinity rider when your job matches the set.
+- Warrior and Paladin shields: new T1-T4 shield line; one-handed weapons pair with shields, two-handed weapons block shields.
+- Gear inspect polish: farm hints, set breakdowns, stat comparison vs equipped, and upgrade/reforge on Hero and Shop.
+- Shop rebalance: merchant sells stackables; equippable gear primarily drops from battles, workouts, bosses, and gamble.
+
 0.13.0
 - Closed Beta Launch: Rebranded to Fitness Quest RPG with interactive 4-step welcome guide for all first-time pioneers.
 - 1-Tap Gear Upgrade Flow: Added quick-access upgrade banner on Quest Hub, direct route navigation, and slot comparison indicators.

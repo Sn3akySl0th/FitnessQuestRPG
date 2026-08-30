@@ -12,6 +12,18 @@ object WhatNewContent {
      */
     val releases = listOf(
         ChangeLog(
+            version = "0.14.0",
+            date = "August 2026",
+            changes = listOf(
+                "⚔️ Procedural Battle Loot: Enemies and bosses now drop rolled gear with random affixes, item level, and named armor set tags — battles are the main gear path.",
+                "🗺️ Loot Atlas: See what each biome, boss, and monster can drop. Search armor sets like Nightveil or Ironbound to learn where to farm them.",
+                "🧩 Named Set Bonuses: Equip matching set pieces for unique 2/4/5-piece combat bonuses, plus a class affinity rider when your job matches the set.",
+                "🛡️ Warrior & Paladin Shields: New buckler-to-bulwark shield line. Pair with one-handed weapons; greatswords and bows auto-unequip your shield.",
+                "🔍 Gear Inspect Upgrades: Compare stats vs equipped gear, see farm hints, set breakdowns, and clearer upgrade/reforge actions on Hero and Shop.",
+                "🏪 Shop Focus: Merchant now sells consumables, runes, and materials — equippable gear comes from workouts, battles, bosses, and gamble rolls."
+            )
+        ),
+        ChangeLog(
             version = "0.13.0",
             date = "August 2026",
             changes = listOf(

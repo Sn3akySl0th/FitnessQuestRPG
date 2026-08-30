@@ -7,10 +7,11 @@ import com.fitnessquest.rpg.domain.CharacterClass
 import com.fitnessquest.rpg.domain.CharacterRace
 import com.fitnessquest.rpg.domain.build
 import com.fitnessquest.rpg.domain.ItemStyle
-import com.fitnessquest.rpg.domain.visuals.PaperDollLayerOrder
+import com.fitnessquest.rpg.domain.visuals.WeaponHeadMotif
 import com.fitnessquest.rpg.domain.visuals.BodyRegion
 import com.fitnessquest.rpg.domain.visuals.CoverageProfile
 import com.fitnessquest.rpg.domain.visuals.EquipmentVisualRegistry
+import com.fitnessquest.rpg.domain.visuals.PaperDollLayerOrder
 import com.fitnessquest.rpg.domain.visuals.PaperDollVisualSlot
 import com.fitnessquest.rpg.domain.visuals.defaultCoveredRegions
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -128,6 +129,69 @@ class GearSanitizationAndVisualsTest {
         assertEquals("training_shortbow", EquipmentVisualRegistry.normalizeItemKey("Training Bow"))
         assertEquals("apprentice_wand", EquipmentVisualRegistry.normalizeItemKey("Novice Wand"))
         assertEquals("bent_shiv", EquipmentVisualRegistry.normalizeItemKey("Worn Dagger"))
+    }
+
+    @Test
+    fun casterWeaponVisuals_distinguishUniversalGearFromNecromancerStaves() {
+        val travelersStaff = ItemCatalog.all.first { it.name == "Traveler's Staff" }
+        val apprenticeWand = ItemCatalog.all.first { it.name == "Apprentice Wand" }
+        val boneStaff = ItemCatalog.all.first { it.name == "Bone Staff" }
+        val graveoak = ItemCatalog.all.first { it.name == "Graveoak Staff" }
+        val eclipse = ItemCatalog.all.first { it.name == "Eclipse Phylactery" }
+        val baton = ItemCatalog.all.first { it.name == "Resonant Baton" }
+        val crook = ItemCatalog.all.first { it.name == "Moonwell Crook" }
+        val oakheart = ItemCatalog.all.first { it.name == "Oakheart Staff" }
+
+        assertEquals(
+            com.fitnessquest.rpg.domain.visuals.VisualArchetype.STAFF_TRAVELER,
+            EquipmentVisualRegistry.resolveVisualDescriptor(travelersStaff).archetype,
+        )
+        assertEquals(
+            com.fitnessquest.rpg.domain.visuals.VisualArchetype.WAND_ARCANE,
+            EquipmentVisualRegistry.resolveVisualDescriptor(apprenticeWand).archetype,
+        )
+        assertEquals(
+            com.fitnessquest.rpg.domain.visuals.VisualArchetype.STAFF_WOODEN,
+            EquipmentVisualRegistry.resolveVisualDescriptor(oakheart).archetype,
+        )
+        assertEquals(CharacterClass.NECROMANCER, boneStaff.classAffinity)
+        assertEquals(
+            com.fitnessquest.rpg.domain.visuals.VisualArchetype.STAFF_NECRO,
+            EquipmentVisualRegistry.resolveVisualDescriptor(boneStaff).archetype,
+        )
+        assertEquals(
+            WeaponHeadMotif.SKULL_BONE,
+            EquipmentVisualRegistry.resolveVisualDescriptor(boneStaff).weaponHeadMotif,
+        )
+        assertEquals(WeaponHeadMotif.GRAVE_WOOD, EquipmentVisualRegistry.resolveVisualDescriptor(graveoak).weaponHeadMotif)
+        assertEquals(WeaponHeadMotif.PHYLACTERY, EquipmentVisualRegistry.resolveVisualDescriptor(eclipse).weaponHeadMotif)
+        assertEquals(WeaponHeadMotif.BATON_RINGS, EquipmentVisualRegistry.resolveVisualDescriptor(baton).weaponHeadMotif)
+        assertEquals(WeaponHeadMotif.BRANCH_HOOK, EquipmentVisualRegistry.resolveVisualDescriptor(crook).weaponHeadMotif)
+        assertNotEquals(
+            EquipmentVisualRegistry.resolveVisualDescriptor(travelersStaff).primaryColor,
+            EquipmentVisualRegistry.resolveVisualDescriptor(oakheart).primaryColor,
+        )
+    }
+
+    @Test
+    fun catalogWeapons_resolveToDistinctVisualIdentities() {
+        val weapons = ItemCatalog.all
+            .filter { it.slot == ItemSlot.WEAPON }
+            .distinctBy { EquipmentVisualRegistry.normalizeItemKey(it.name) }
+        val signatures = weapons.map { weapon ->
+            val descriptor = EquipmentVisualRegistry.resolveVisualDescriptor(weapon)
+            "${descriptor.archetype}|${descriptor.weaponHeadMotif}|${descriptor.primaryColor.value}|${descriptor.glowColor?.value ?: 0}"
+        }
+        val duplicateGroups = signatures.groupingBy { it }.eachCount().filter { it.value > 1 }
+        assertTrue(
+            "Duplicate visual signatures found: $duplicateGroups",
+            duplicateGroups.isEmpty(),
+        )
+        assertEquals(
+            "Each catalog weapon should have a unique visual signature",
+            weapons.size,
+            signatures.toSet().size,
+        )
     }
 
     @Test

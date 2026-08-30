@@ -2697,6 +2697,11 @@ private fun DrawScope.drawSlungBackWeapon(
             drawCircle(Color.White.copy(alpha = 0.6f), radius = 1.2f * f.u, center = f.p(57f, 35f))
             drawLine(leatherStrap, start = f.p(40f, 68f), end = f.p(57f, 46f), strokeWidth = 2f * f.u)
         }
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.STAFF_TRAVELER -> {
+            drawRoundRect(descriptor.primaryColor, topLeft = f.p(43f, 78f), size = f.s(3.4f, 46f), cornerRadius = CornerRadius(1.7f * f.u))
+            drawRoundRect(descriptor.secondaryColor, topLeft = f.p(55f, 32f), size = f.s(6f, 7f), cornerRadius = CornerRadius(3f * f.u))
+            drawLine(leatherStrap, start = f.p(40f, 68f), end = f.p(57f, 46f), strokeWidth = 2f * f.u)
+        }
         else -> {
             when (weapon.style) {
                 ItemStyle.MACE -> {
@@ -3252,29 +3257,18 @@ private fun DrawScope.drawWeapon(f: AvatarFrame, weapon: ItemEntity) {
         ProceduralSilhouette.CURVED -> -0.3f
         ProceduralSilhouette.FORTIFIED -> 0.9f
     }
-    val necroPolearm = (weapon.style == ItemStyle.STAFF || weapon.style == ItemStyle.WAND) &&
-        (weapon.classAffinity == CharacterClass.NECROMANCER || f.cls == CharacterClass.NECROMANCER)
+    val necroPolearm = descriptor.archetype == com.fitnessquest.rpg.domain.visuals.VisualArchetype.STAFF_NECRO
 
     if (necroPolearm) {
-        drawSkullStaff(f, handX = handX, tier = weapon.tier)
+        drawRoundRect(descriptor.primaryColor, f.p(handX - 1.5f, 18f), f.s(3f, 64f), CornerRadius(1.5f * f.u))
+        drawWeaponHeadMotifAvatar(f, descriptor.weaponHeadMotif, descriptor, handX, weapon.tier)
         return
     }
     if (descriptor.archetype == com.fitnessquest.rpg.domain.visuals.VisualArchetype.SPEAR_GENERIC) {
         drawProceduralSpear(f, weapon, descriptor, handX)
         return
     }
-    if (descriptor.archetype in setOf(
-            com.fitnessquest.rpg.domain.visuals.VisualArchetype.UNARMED_WRAP,
-            com.fitnessquest.rpg.domain.visuals.VisualArchetype.TONFA,
-            com.fitnessquest.rpg.domain.visuals.VisualArchetype.INSTRUMENT,
-            com.fitnessquest.rpg.domain.visuals.VisualArchetype.AXE,
-            com.fitnessquest.rpg.domain.visuals.VisualArchetype.SCYTHE,
-            com.fitnessquest.rpg.domain.visuals.VisualArchetype.HAMMER,
-            com.fitnessquest.rpg.domain.visuals.VisualArchetype.CLUB,
-            com.fitnessquest.rpg.domain.visuals.VisualArchetype.SCEPTER,
-            com.fitnessquest.rpg.domain.visuals.VisualArchetype.ARCANE_FOCUS,
-        )
-    ) {
+    if (descriptor.archetype in WeaponVisualArchetypes.semantic) {
         drawSemanticWeapon(f, weapon, descriptor, handX)
         return
     }
@@ -3494,6 +3488,88 @@ private fun DrawScope.drawSemanticWeapon(
             }
             drawPath(crystal, accent)
             drawPath(crystal, Color.White.copy(alpha = 0.65f), style = Stroke(width = 0.8f * f.u))
+        }
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.WAND_ARCANE -> {
+            drawRoundRect(descriptor.primaryColor, f.p(handX - 1.1f, 58f), f.s(2.2f, 18f), CornerRadius(1.1f * f.u))
+            drawWeaponHeadMotifAvatar(f, descriptor.weaponHeadMotif, descriptor, handX, weapon.tier, topY = 53f)
+        }
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.STAFF_WOODEN -> {
+            drawRoundRect(descriptor.primaryColor, f.p(handX - 1.4f, 18f), f.s(2.8f, 62f), CornerRadius(1.4f * f.u))
+            if (descriptor.weaponHeadMotif == com.fitnessquest.rpg.domain.visuals.WeaponHeadMotif.NONE) {
+                drawCircle(glow.copy(alpha = 0.3f), 8f * f.u, f.p(handX, 15f))
+                drawCircle(glow, 4.8f * f.u, f.p(handX, 15f))
+            } else {
+                drawWeaponHeadMotifAvatar(f, descriptor.weaponHeadMotif, descriptor, handX, weapon.tier)
+            }
+        }
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.STAFF_TRAVELER -> {
+            drawRoundRect(descriptor.primaryColor, f.p(handX - 1.5f, 16f), f.s(3f, 66f), CornerRadius(1.5f * f.u))
+            drawRect(descriptor.secondaryColor, f.p(handX - 1.8f, 38f), f.s(3.6f, 2.2f))
+            drawRect(descriptor.secondaryColor, f.p(handX - 1.8f, 58f), f.s(3.6f, 2.2f))
+            drawRoundRect(descriptor.secondaryColor, f.p(handX - 3.2f, 10f), f.s(6.4f, 7f), CornerRadius(3.2f * f.u))
+            drawCircle(descriptor.accentColor ?: descriptor.secondaryColor, 1.4f * f.u, f.p(handX, 13.5f))
+        }
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.STAFF_DRUID,
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.STAFF_RUNED -> {
+            drawRoundRect(descriptor.primaryColor, f.p(handX - 1.4f, 18f), f.s(2.8f, 62f), CornerRadius(1.4f * f.u))
+            drawWeaponHeadMotifAvatar(f, descriptor.weaponHeadMotif, descriptor, handX, weapon.tier)
+        }
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.SWORD_GENERIC,
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.SWORD_KNIGHT,
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.SWORD_RAPIER -> {
+            val halfWidth = if (descriptor.archetype == com.fitnessquest.rpg.domain.visuals.VisualArchetype.SWORD_RAPIER) 1.6f else 2.2f
+            val topY = if (weapon.tier >= 3) 34f else 44f
+            val blade = Path().apply {
+                moveTo((handX - halfWidth) * f.u, 72f * f.u)
+                lineTo((handX - halfWidth) * f.u, (topY + 6f) * f.u)
+                lineTo(handX * f.u, topY * f.u)
+                lineTo((handX + halfWidth) * f.u, (topY + 6f) * f.u)
+                lineTo((handX + halfWidth) * f.u, 72f * f.u)
+                close()
+            }
+            drawPath(blade, descriptor.secondaryColor)
+            drawRoundRect(descriptor.accentColor ?: Color(0xFFB07E24), f.p(handX - 6f, 71f), f.s(12f, 3.5f), CornerRadius(1.7f * f.u))
+            drawWeaponHeadMotifAvatar(f, descriptor.weaponHeadMotif, descriptor, handX, weapon.tier, topY = topY - 4f)
+        }
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.GREATSWORD_GENERIC,
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.GREATSWORD_DRAGON -> {
+            val halfWidth = 3.5f
+            val blade = Path().apply {
+                moveTo((handX - halfWidth) * f.u, 70f * f.u)
+                lineTo((handX - halfWidth) * f.u, 22f * f.u)
+                lineTo(handX * f.u, 10f * f.u)
+                lineTo((handX + halfWidth) * f.u, 22f * f.u)
+                lineTo((handX + halfWidth) * f.u, 70f * f.u)
+                close()
+            }
+            drawPath(blade, descriptor.secondaryColor)
+            drawRoundRect(descriptor.accentColor ?: Color(0xFFF0C040), f.p(handX - 7.5f, 70f), f.s(15f, 4f), CornerRadius(2f * f.u))
+            drawWeaponHeadMotifAvatar(f, descriptor.weaponHeadMotif, descriptor, handX, weapon.tier, topY = 8f)
+        }
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.BOW_SHORT,
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.BOW_GENERIC,
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.BOW_RECURVE,
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.BOW_LONGBOW,
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.BOW_WARBOW -> {
+            val curve = when (descriptor.archetype) {
+                com.fitnessquest.rpg.domain.visuals.VisualArchetype.BOW_RECURVE -> 16f
+                com.fitnessquest.rpg.domain.visuals.VisualArchetype.BOW_LONGBOW -> 10f
+                com.fitnessquest.rpg.domain.visuals.VisualArchetype.BOW_WARBOW -> 14f
+                com.fitnessquest.rpg.domain.visuals.VisualArchetype.BOW_SHORT -> 12f
+                else -> 13f
+            }
+            val bow = Path().apply {
+                moveTo((handX + 1.5f) * f.u, 52f * f.u)
+                quadraticTo((handX + curve) * f.u, 70f * f.u, (handX + 1.5f) * f.u, 88f * f.u)
+            }
+            drawPath(bow, descriptor.primaryColor, style = Stroke(2.6f * f.u))
+            drawLine(descriptor.accentColor ?: Color(0xFFE8E4D8), f.p(handX + 1.5f, 52f), f.p(handX + 1.5f, 88f), 0.9f * f.u)
+            descriptor.glowColor?.let { drawCircle(it, 1.8f * f.u, f.p(handX + curve * 0.7f, 70f)) }
+        }
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.DAGGER_GENERIC -> drawDagger(f, handX = handX, tier = weapon.tier, length = 18f)
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.MACE_GENERIC -> {
+            drawRoundRect(descriptor.primaryColor, f.p(handX - 1.5f, 46f), f.s(3f, 32f), CornerRadius(1.5f * f.u))
+            drawCircle(descriptor.secondaryColor, 7.5f * f.u, f.p(handX, 42f))
         }
         else -> Unit
     }

@@ -16,6 +16,7 @@ import com.fitnessquest.rpg.data.db.ItemEntity
 import com.fitnessquest.rpg.data.db.ItemSlot
 import com.fitnessquest.rpg.domain.CharacterClass
 import com.fitnessquest.rpg.domain.ItemStyle
+import com.fitnessquest.rpg.domain.visuals.WeaponHeadMotif
 import com.fitnessquest.rpg.domain.WearArchetype
 
 /**
@@ -54,7 +55,7 @@ fun ItemIcon(item: ItemEntity, modifier: Modifier = Modifier) {
     }
 }
 
-private class IconFrame(val u: Float, val item: ItemEntity) {
+internal class IconFrame(val u: Float, val item: ItemEntity) {
     val pal: GearPalette = GearVisuals.palette(item)
     fun p(x: Float, y: Float) = Offset(x * u, y * u)
     fun s(w: Float, h: Float) = Size(w * u, h * u)
@@ -364,25 +365,7 @@ private fun DrawScope.drawWeaponIcon(f: IconFrame) {
     val tier = f.item.tier
     val legendary = tier >= 4
     val descriptor = com.fitnessquest.rpg.domain.visuals.EquipmentVisualRegistry.resolveVisualDescriptor(f.item)
-    val necroStaff = ((f.item.style == ItemStyle.STAFF) || (f.item.style == ItemStyle.WAND)) &&
-        (f.item.classAffinity == CharacterClass.NECROMANCER)
-    if (necroStaff) {
-        drawSkullStaffIcon(f, tier)
-        return
-    }
-    if (descriptor.archetype in setOf(
-            com.fitnessquest.rpg.domain.visuals.VisualArchetype.SPEAR_GENERIC,
-            com.fitnessquest.rpg.domain.visuals.VisualArchetype.UNARMED_WRAP,
-            com.fitnessquest.rpg.domain.visuals.VisualArchetype.TONFA,
-            com.fitnessquest.rpg.domain.visuals.VisualArchetype.INSTRUMENT,
-            com.fitnessquest.rpg.domain.visuals.VisualArchetype.AXE,
-            com.fitnessquest.rpg.domain.visuals.VisualArchetype.SCYTHE,
-            com.fitnessquest.rpg.domain.visuals.VisualArchetype.HAMMER,
-            com.fitnessquest.rpg.domain.visuals.VisualArchetype.CLUB,
-            com.fitnessquest.rpg.domain.visuals.VisualArchetype.SCEPTER,
-            com.fitnessquest.rpg.domain.visuals.VisualArchetype.ARCANE_FOCUS,
-        )
-    ) {
+    if (descriptor.archetype in WeaponVisualArchetypes.semantic) {
         drawSemanticWeaponIcon(f, descriptor)
         return
     }
@@ -576,52 +559,63 @@ private fun DrawScope.drawSemanticWeaponIcon(
             drawPath(crystal, accent)
             drawPath(crystal, Color.White.copy(alpha = 0.65f), style = Stroke(width = 2f * f.u))
         }
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.WAND_ARCANE -> {
+            drawRoundRect(descriptor.primaryColor, f.p(46.5f, 42f), f.s(7f, 48f), CornerRadius(3.5f * f.u))
+            drawRect(descriptor.secondaryColor, f.p(45.5f, 58f), f.s(9f, 8f))
+            drawWeaponHeadMotifIcon(f, descriptor.weaponHeadMotif, descriptor, f.item.tier, topX = 50f, topY = 28f)
+        }
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.STAFF_WOODEN -> drawStaffShaftIcon(f, descriptor, f.item.tier, withOrb = descriptor.weaponHeadMotif == WeaponHeadMotif.NONE)
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.STAFF_TRAVELER -> {
+            drawRoundRect(descriptor.primaryColor, f.p(46f, 12f), f.s(8f, 80f), CornerRadius(4f * f.u))
+            drawRect(descriptor.secondaryColor, f.p(44f, 38f), f.s(12f, 4f))
+            drawRect(descriptor.secondaryColor, f.p(44f, 62f), f.s(12f, 4f))
+            drawRoundRect(descriptor.secondaryColor, f.p(41f, 4f), f.s(18f, 14f), CornerRadius(7f * f.u))
+            drawCircle(descriptor.accentColor ?: descriptor.secondaryColor, 3f * f.u, f.p(50f, 11f))
+        }
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.STAFF_NECRO,
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.STAFF_DRUID,
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.STAFF_RUNED -> drawStaffShaftIcon(f, descriptor, f.item.tier, withOrb = false)
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.SWORD_GENERIC,
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.SWORD_KNIGHT -> drawSwordBladeIcon(f, descriptor, thin = false)
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.SWORD_RAPIER -> drawSwordBladeIcon(f, descriptor, thin = true)
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.GREATSWORD_GENERIC,
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.GREATSWORD_DRAGON -> {
+            val blade = Path().apply {
+                moveTo(43f * f.u, 66f * f.u)
+                lineTo(43f * f.u, 16f * f.u)
+                lineTo(50f * f.u, 4f * f.u)
+                lineTo(57f * f.u, 16f * f.u)
+                lineTo(57f * f.u, 66f * f.u)
+                close()
+            }
+            drawPath(blade, descriptor.secondaryColor)
+            drawPath(blade, descriptor.primaryColor, style = Stroke(2.5f * f.u))
+            drawRoundRect(descriptor.accentColor ?: Color(0xFFB07E24), f.p(32f, 62f), f.s(36f, 8f), CornerRadius(4f * f.u))
+            drawWeaponHeadMotifIcon(f, descriptor.weaponHeadMotif, descriptor, f.item.tier, topX = 50f, topY = 2f)
+        }
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.BOW_SHORT -> drawBowIcon(f, descriptor, curve = 28f, height = 70f)
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.BOW_RECURVE -> drawBowIcon(f, descriptor, curve = 42f, height = 76f)
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.BOW_LONGBOW -> drawBowIcon(f, descriptor, curve = 22f, height = 88f)
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.BOW_WARBOW,
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.BOW_GENERIC -> drawBowIcon(f, descriptor, curve = 34f, height = 82f)
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.DAGGER_GENERIC -> {
+            val blade = Path().apply {
+                moveTo(45.5f * f.u, 58f * f.u)
+                lineTo(45.5f * f.u, 22f * f.u)
+                lineTo(50f * f.u, 10f * f.u)
+                lineTo(54.5f * f.u, 22f * f.u)
+                lineTo(54.5f * f.u, 58f * f.u)
+                close()
+            }
+            drawPath(blade, descriptor.secondaryColor)
+            drawRoundRect(descriptor.primaryColor, f.p(39f, 56f), f.s(22f, 6f), CornerRadius(3f * f.u))
+            drawWeaponHeadMotifIcon(f, descriptor.weaponHeadMotif, descriptor, f.item.tier, topX = 50f, topY = 8f)
+        }
+        com.fitnessquest.rpg.domain.visuals.VisualArchetype.MACE_GENERIC -> {
+            drawRoundRect(descriptor.primaryColor, f.p(46.5f, 36f), f.s(7f, 54f), CornerRadius(3.5f * f.u))
+            drawCircle(descriptor.secondaryColor, 19f * f.u, f.p(50f, 24f))
+            drawWeaponHeadMotifIcon(f, descriptor.weaponHeadMotif, descriptor, f.item.tier, topX = 50f, topY = 10f)
+        }
         else -> Unit
     }
-}
-
-private fun DrawScope.drawSkullStaffIcon(f: IconFrame, tier: Int) {
-    val bone = Color(0xFFE8E0D0)
-    val boneShade = Color(0xFF9A9080)
-    val socket = Color(0xFF0E1012)
-    val glow = Color(0xFF7CF0C0)
-    val rare = tier >= 3
-    val legendary = tier >= 4
-
-    drawRoundRect(boneShade, topLeft = f.p(45f, 32f), size = f.s(10f, 60f), cornerRadius = CornerRadius(5f * f.u))
-    drawRoundRect(bone, topLeft = f.p(47.5f, 32f), size = f.s(4f, 60f), cornerRadius = CornerRadius(2f * f.u))
-    drawRect(Color(0xFF2A1E38), topLeft = f.p(43f, 48f), size = f.s(14f, 5f))
-    drawRect(Color(0xFF2A1E38), topLeft = f.p(43f, 70f), size = f.s(14f, 5f))
-
-    if (legendary) {
-        drawCircle(glow.copy(alpha = 0.25f), radius = 22f * f.u, center = f.p(50f, 18f))
-    }
-
-    drawOval(bone, topLeft = f.p(32f, 4f), size = f.s(36f, 28f))
-    drawOval(boneShade.copy(alpha = 0.5f), topLeft = f.p(34f, 16f), size = f.s(10f, 12f))
-    drawOval(boneShade.copy(alpha = 0.5f), topLeft = f.p(56f, 16f), size = f.s(10f, 12f))
-    drawRoundRect(bone, topLeft = f.p(36f, 26f), size = f.s(28f, 16f), cornerRadius = CornerRadius(4f * f.u))
-    for (i in -2..2) {
-        val tx = 50f + i * 5f
-        drawRect(Color.White.copy(alpha = 0.9f), topLeft = f.p(tx - 1.5f, 28f), size = f.s(3f, 8f))
-    }
-    drawOval(socket, topLeft = f.p(36f, 12f), size = f.s(12f, 14f))
-    drawOval(socket, topLeft = f.p(52f, 12f), size = f.s(12f, 14f))
-    if (rare) {
-        val r = if (legendary) 4.5f else 3.5f
-        drawCircle(glow, radius = r * f.u, center = f.p(42f, 19f))
-        drawCircle(glow, radius = r * f.u, center = f.p(58f, 19f))
-        if (legendary) {
-            drawCircle(Color.White, radius = 1.6f * f.u, center = f.p(42f, 19f))
-            drawCircle(Color.White, radius = 1.6f * f.u, center = f.p(58f, 19f))
-        }
-    }
-    val nose = Path().apply {
-        moveTo(50f * f.u, 20f * f.u)
-        lineTo(45f * f.u, 28f * f.u)
-        lineTo(55f * f.u, 28f * f.u)
-        close()
-    }
-    drawPath(nose, socket)
-    drawOval(boneShade, topLeft = f.p(32f, 4f), size = f.s(36f, 28f), style = Stroke(width = 2.2f * f.u))
 }

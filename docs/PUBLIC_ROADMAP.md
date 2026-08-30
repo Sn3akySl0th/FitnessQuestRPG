@@ -1,6 +1,6 @@
 # FitQuest Public Roadmap
 
-Last updated: August 12, 2026
+Last updated: August 29, 2026
 
 FitQuest turns real workouts into RPG progress. This roadmap shows what is already in progress, what is planned next, and the larger systems we want to build over time.
 
@@ -19,6 +19,7 @@ The next major focus is boss-gated biome progression, followed by Movement Maste
 
 ### Fixed Recently
 
+- **Procedural Loot, Loot Atlas & Named Armor Sets (v0.14.0)**: Battles, bosses, and chests now drop rolled gear with affixes, item level, and named set tags. Added in-app Loot Atlas drop guides (biome, boss, monster) with searchable set farming hints. Named 2/4/5-piece set bonuses and class affinity riders apply in combat. Warrior and Paladin shields pair with one-handed weapons; two-handed weapons block shields. Merchant shop focuses on stackables while equippable gear comes from gameplay drops.
 - **Avatar V2 Overhaul (5-Piece Sets, Dyes, 3D Parallax & Flutter Physics)**: Full 5-piece head-to-toe gear visualization with custom high-definition vector layers for Legs and Boots across all tiers. Added Back slot cloaks, capes, and celestial wings with idle breathing flutter physics. Implemented 3D gyroscopic motion parallax (holographic card depth displacement) across the 14-layer Z-stack, procedural Diablo-style material dye engine (`IRON`, `GOLD`, `BLOOD_STEEL`, `GLACIAL`, `VOID`, `VERDANT`, `CELESTIAL`), and tactile spring squash-and-stretch tap recoil.
 - **Paper-Doll Avatar Showcase & 14-Layer Visual Compositor**: Centered hero paper doll character showcase with dynamic pedestal backdrop, equip animation burst effects, and seamless fallback to vector avatar rendering. Full 14-layer Z-order compositing pipeline ready for custom 2D gear assets with automatic rarity tinting and visual anchors.
 - **Mythic Gear Rarity Tier & High-Tier Auras**: Added Mythic tier (2.00× stats multiplier) with radiant crimson energy shimmers, glowing rune pedestals, animated gradient frames, and high-tier equipment effects.
