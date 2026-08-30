@@ -25,11 +25,11 @@ class FoundationSystemsTest {
         )
 
         val rng = Random(123)
-        val commonRoll = ProceduralStatEngine.generateStats(template, GearRarity.COMMON, rng)
+        val commonRoll = ProceduralStatEngine.generateStats(template, GearRarity.COMMON, rng = rng)
         assertTrue("Common ATK should roll around base variance", commonRoll.atk in 8..15)
         assertTrue("Quality percent should be bounded", commonRoll.qualityPercent in 75..100)
 
-        val legendaryRoll = ProceduralStatEngine.generateStats(template, GearRarity.LEGENDARY, rng)
+        val legendaryRoll = ProceduralStatEngine.generateStats(template, GearRarity.LEGENDARY, rng = rng)
         assertTrue("Legendary ATK should be significantly higher than Common", legendaryRoll.atk > commonRoll.atk)
         assertTrue("Legendary should have bonus affixes", legendaryRoll.def >= commonRoll.def || legendaryRoll.hp >= commonRoll.hp)
     }
@@ -112,19 +112,20 @@ class FoundationSystemsTest {
         val stackPool = listOf(iron)
         val gearPool = emptyList<ItemEntity>()
 
+        val hero = CharacterEntity(level = 5, characterClass = CharacterClass.WARRIOR)
         // 2 sets -> 0 materials
-        val lowSets = LootTables.rollWorkoutLoot(level = 5, setCount = 2, prCount = 0, gearPool = gearPool, stackPool = stackPool)
+        val lowSets = LootTables.rollWorkoutLoot(level = 5, setCount = 2, prCount = 0, character = hero, gearPool = gearPool, stackPool = stackPool)
         val lowMats = lowSets.grants.filterIsInstance<LootGrant.Stack>()
         assertTrue("Low sets without PR should not grant materials", lowMats.isEmpty())
 
         // 6 sets -> at least 2 materials
-        val midSets = LootTables.rollWorkoutLoot(level = 5, setCount = 6, prCount = 0, gearPool = gearPool, stackPool = stackPool)
+        val midSets = LootTables.rollWorkoutLoot(level = 5, setCount = 6, prCount = 0, character = hero, gearPool = gearPool, stackPool = stackPool)
         val midMats = midSets.grants.filterIsInstance<LootGrant.Stack>()
         assertFalse(midMats.isEmpty())
         assertTrue("6 sets should grant at least 2 materials", (midMats.firstOrNull()?.quantity ?: 0) >= 2)
 
         // 10 sets + PR -> 4 materials
-        val highSets = LootTables.rollWorkoutLoot(level = 5, setCount = 10, prCount = 1, gearPool = gearPool, stackPool = stackPool)
+        val highSets = LootTables.rollWorkoutLoot(level = 5, setCount = 10, prCount = 1, character = hero, gearPool = gearPool, stackPool = stackPool)
         val highMats = highSets.grants.filterIsInstance<LootGrant.Stack>()
         assertFalse(highMats.isEmpty())
         assertTrue("10 sets + PR should grant 4 materials", (highMats.firstOrNull()?.quantity ?: 0) >= 4)

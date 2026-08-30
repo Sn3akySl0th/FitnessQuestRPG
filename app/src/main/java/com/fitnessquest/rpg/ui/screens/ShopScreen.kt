@@ -28,7 +28,6 @@ import com.fitnessquest.rpg.data.db.ArmorSlots
 import com.fitnessquest.rpg.data.db.gearBonusText
 import com.fitnessquest.rpg.data.db.itemBonusText
 import com.fitnessquest.rpg.domain.GearRarity
-import com.fitnessquest.rpg.domain.GearSockets
 import com.fitnessquest.rpg.domain.GearTrait
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Sort
@@ -100,14 +99,20 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.ui.unit.sp
 import com.fitnessquest.rpg.domain.Consumables
+import com.fitnessquest.rpg.domain.GearComparison
+import com.fitnessquest.rpg.domain.GearSockets
 import com.fitnessquest.rpg.domain.ItemCatalog
 import com.fitnessquest.rpg.domain.ProgressionRules
 import com.fitnessquest.rpg.domain.RewardBatch
 import com.fitnessquest.rpg.ui.theme.Gold
 import com.fitnessquest.rpg.ui.LocalSnackbarHostState
 import com.fitnessquest.rpg.ui.appContainer
-import com.fitnessquest.rpg.ui.components.ItemIcon
+import com.fitnessquest.rpg.ui.components.GearCompactTile
+import com.fitnessquest.rpg.ui.components.GearInspectActions
+import com.fitnessquest.rpg.ui.components.GearInspectSheet
+import com.fitnessquest.rpg.ui.components.GearInspectTarget
 import com.fitnessquest.rpg.ui.components.RewardRevealDialog
+import com.fitnessquest.rpg.ui.components.StackableMarketTile
 import com.fitnessquest.rpg.ui.components.ResourceChip
 import com.fitnessquest.rpg.ui.components.SceneBanner
 import com.fitnessquest.rpg.ui.components.SceneKind
@@ -165,8 +170,21 @@ private data class DisplayItem(
 ) {
 
     val key: String = instance?.let { "gear-${it.id}" } ?: "item-${item.id}"
-    val power: Int get() = item.atk + item.def + (item.hp / 4) + (instance?.upgradeLevel ?: 0) * 2
+
+    fun power(runeCatalog: Map<Long, ItemEntity>): Int =
+        GearComparison.breakdown(item, instance, runeCatalog).totalPower
 }
+
+private fun DisplayItem.toInspectTarget(): GearInspectTarget = GearInspectTarget(
+    item = item,
+    instance = instance,
+    owned = owned,
+    equipped = equipped,
+    inUseByJob = inUseByJob,
+)
+
+private fun filledSocketCount(instance: GearInstanceEntity?): Int =
+    instance?.runeIds()?.size ?: 0
 
 class ShopViewModel(private val container: AppContainer) : ViewModel() {
     val uiState: StateFlow<ShopUiState> = combine(
@@ -383,10 +401,9 @@ fun ShopScreenContent(
     val stackRows = remember(state.items) {
         state.items.filter { it.slot.isStackable() && it.quantity > 0 }.map { DisplayItem(it, owned = true) }
     }
-    val shopRows = remember(state.items, character, canAffordOnly) {
+    val shopRows = remember(state.items) {
         state.items
-            .filter { it.tier <= 3 && it.classAffinity == null }
-            .filter { (!canAffordOnly || character.gold >= it.price) }
+            .filter { it.slot.isStackable() }
             .map { DisplayItem(it) }
     }
 
@@ -396,10 +413,13 @@ fun ShopScreenContent(
         MarketTab.Armory -> ownedRows
         MarketTab.Forge -> ownedRows
     }
+    val runeCatalog = remember(state.items) {
+        state.items.filter { it.slot == ItemSlot.RUNE }.associateBy { it.id }
+    }
     val visibleRows = sourceRows
         .filter { row -> selectedSlot == null || row.item.slot == selectedSlot }
         .filter { row -> row.matches(filter) }
-        .sortedWith(sort.comparator())
+        .sortedWith(sort.comparator(runeCatalog))
 
     Scaffold { padding ->
         Column(
@@ -557,41 +577,92 @@ fun ShopScreenContent(
                 }
 
                 items(visibleRows, key = { it.key }) { row ->
-                    ItemGridCard(
-                        row = row,
-                        selected = row.instance?.id in selectedFuseIds,
-                        forgeMode = tab == MarketTab.Forge,
-                        character = character,
-                        onClick = { selectedItem = row },
-                        onSelect = {
-                            val id = row.instance?.id ?: return@ItemGridCard
-                            selectedFuseIds = if (id in selectedFuseIds) {
-                                selectedFuseIds - id
-                            } else if (selectedFuseIds.size < 3) {
-                                selectedFuseIds + id
-                            } else {
-                                selectedFuseIds
+                    val rarity = row.instance?.rarity?.let { GearRarity.fromName(it) } ?: GearRarity.COMMON
+                    val equippedId = character.equippedIds()[row.item.slot]
+                    val equippedRow = ownedRows.firstOrNull { it.instance?.id == equippedId }
+                    val comparison = if (row.item.slot.isEquippable()) {
+                        GearComparison.compareGear(
+                            item = row.item,
+                            instance = row.instance,
+                            equipped = equippedRow?.instance?.let { OwnedGear(it, equippedRow.item) },
+                            equippedCatalog = equippedRow?.item,
+                            runeCatalog = runeCatalog,
+                        )
+                    } else {
+                        null
+                    }
+                    if (row.item.slot.isEquippable()) {
+                        GearCompactTile(
+                            item = row.item,
+                            instance = row.instance,
+                            rarity = rarity,
+                            comparison = comparison,
+                            filledSocketCount = filledSocketCount(row.instance),
+                            maxSockets = GearSockets.slotsForTier(row.item.tier),
+                            equipped = row.equipped,
+                            runeCatalog = runeCatalog,
+                            selected = row.instance?.id in selectedFuseIds,
+                            forgeMode = tab == MarketTab.Forge,
+                            onClick = {
+                                if (tab == MarketTab.Forge && row.instance != null) {
+                                    val id = row.instance.id
+                                    selectedFuseIds = if (id in selectedFuseIds) {
+                                        selectedFuseIds - id
+                                    } else if (selectedFuseIds.size < 3) {
+                                        selectedFuseIds + id
+                                    } else {
+                                        selectedFuseIds
+                                    }
+                                } else {
+                                    selectedItem = row
+                                }
                             }
-                        }
-                    )
+                        )
+                    } else {
+                        StackableMarketTile(item = row.item, onClick = { selectedItem = row })
+                    }
                 }
             }
         }
     }
 
-    selectedItem?.let { row ->
+    selectedItem?.let { selected ->
+        val row = ownedRows.firstOrNull { it.key == selected.key } ?: selected
         val equippedId = character.equippedIds()[row.item.slot]
         val equippedRow = if (equippedId != null) ownedRows.firstOrNull { it.instance?.id == equippedId } else null
         val availableRunes = state.items.filter { it.slot == ItemSlot.RUNE && it.quantity > 0 }
+        val comparison = if (row.item.slot.isEquippable() && !row.equipped) {
+            GearComparison.compareGear(
+                item = row.item,
+                instance = row.instance,
+                equipped = equippedRow?.instance?.let { OwnedGear(it, equippedRow.item) },
+                equippedCatalog = equippedRow?.item,
+                runeCatalog = runeCatalog,
+            )
+        } else {
+            null
+        }
+        val inspectActions = GearInspectActions(
+            showBuy = tab == MarketTab.Shop && !row.owned,
+            showEquip = row.item.slot.isEquippable() && row.instance != null,
+            showUpgrade = row.item.slot.isEquippable() && row.instance != null,
+            showSalvage = row.item.slot.isEquippable() && row.instance != null,
+            showSellGear = row.item.slot.isEquippable() && row.instance != null,
+            showReforge = row.item.slot.isEquippable() && row.instance != null,
+            showConsumableUse = row.item.slot == ItemSlot.CONSUMABLE,
+            showOpenChest = row.item.slot == ItemSlot.LOOT_CHEST,
+            showSellMaterial = row.item.slot == ItemSlot.MATERIAL,
+        )
         ModalBottomSheet(onDismissRequest = { selectedItem = null }) {
-            ItemDetailSheet(
-                row = row,
-                equippedItem = equippedRow?.item,
+            GearInspectSheet(
+                target = row.toInspectTarget(),
                 character = character,
-                tab = tab,
+                comparison = comparison,
+                equippedName = equippedRow?.item?.name,
                 usable = usable(row.item),
                 runesCatalog = state.items.filter { it.slot == ItemSlot.RUNE },
                 availableRunes = availableRunes,
+                actions = inspectActions,
                 onBuy = {
                     actions.onBuy(row.item.id) { ok ->
                         actions.onNotify(if (ok) "${row.item.name} added." else "Not enough gold.")
@@ -643,18 +714,25 @@ fun ShopScreenContent(
                     }
                     selectedItem = null
                 },
+                onReforge = {
+                    row.instance?.id?.let { id ->
+                        actions.onReforgeGear(id) { result ->
+                            result.onSuccess { actions.onNotify("Traits reforged!") }
+                                .onFailure { actions.onNotify(it.message ?: "Reforge failed.") }
+                        }
+                    }
+                },
                 onSocketRune = { slotIdx, runeId ->
                     row.instance?.id?.let { instId ->
                         actions.onSocketRune(instId, slotIdx, runeId)
-                        actions.onNotify("Rune socketed!")
                     }
                 },
                 onClearRune = { slotIdx ->
                     row.instance?.id?.let { instId ->
                         actions.onClearRune(instId, slotIdx)
-                        actions.onNotify("Rune removed.")
                     }
-                }
+                },
+                onRuneFeedback = actions.onNotify,
             )
         }
     }
@@ -796,117 +874,6 @@ private fun LabelRow(icon: ImageVector, text: String) {
 }
 
 @Composable
-private fun ItemGridCard(
-    row: DisplayItem,
-    selected: Boolean,
-    forgeMode: Boolean,
-    character: CharacterEntity,
-    onClick: () -> Unit,
-    onSelect: () -> Unit,
-) {
-    val rarity = row.instance?.rarity?.let { GearRarity.fromName(it) } ?: GearRarity.COMMON
-    val traits = GearTrait.parseTraits(row.instance?.traitIds)
-    val border = when {
-        selected -> MaterialTheme.colorScheme.primary
-        rarity != GearRarity.COMMON -> rarity.color
-        row.item.tier >= 4 -> Color(0xFFF0C040)
-        row.item.tier == 3 -> MaterialTheme.colorScheme.tertiary
-        else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
-    }
-    Surface(
-        modifier = Modifier
-            .height(180.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .clickable(onClick = if (forgeMode && row.instance != null) onSelect else onClick),
-        shape = RoundedCornerShape(14.dp),
-        color = if (rarity != GearRarity.COMMON) rarity.color.copy(alpha = 0.05f) else MaterialTheme.colorScheme.surface,
-        border = BorderStroke(if (selected || rarity != GearRarity.COMMON) 1.5.dp else 1.dp, border)
-    ) {
-        Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ItemBadge(row.item, rarity)
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        row.item.name,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        color = if (rarity != GearRarity.COMMON) rarity.color else Color.White
-                    )
-                    Text(row.item.slot.label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
-                }
-            }
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                TinyPill(rarity.displayName, color = rarity.color)
-                TinyPill("T${row.item.tier}")
-                val reqLevel = ProgressionRules.requiredLevelFor(row.item.tier, rarity)
-                if (character.level < reqLevel) {
-                    TinyPill("Req. Lv $reqLevel", color = Color(0xFFEF5350))
-                }
-                if (row.instance != null && row.instance.upgradeLevel > 0) TinyPill("+${row.instance.upgradeLevel}")
-                if (row.equipped) TinyPill("Equipped", color = Gold)
-                if (row.inUseByJob != null) TinyPill("✦ In Use: ${row.inUseByJob.label}", color = Color(0xFF64B5F6))
-                if (row.item.quantity > 0) TinyPill("x${row.item.quantity}")
-                for (trait in traits) {
-                    TinyPill("${trait.emoji} ${trait.displayName}", color = Gold)
-                }
-            }
-            val bonusText = if (row.instance != null) gearBonusText(row.instance) else itemBonusText(row.item)
-            Text(
-                bonusText.ifBlank { row.item.description },
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-            Spacer(Modifier.weight(1f))
-            TextButton(onClick = onClick, modifier = Modifier.align(Alignment.End)) {
-                Icon(Icons.Filled.OpenInFull, contentDescription = null, modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(4.dp))
-                Text("Details")
-            }
-        }
-    }
-}
-
-@Composable
-private fun ItemBadge(item: ItemEntity, rarity: GearRarity = GearRarity.COMMON) {
-    Surface(
-        shape = CircleShape,
-        color = if (rarity != GearRarity.COMMON) rarity.color.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceVariant,
-        border = BorderStroke(1.dp, if (rarity != GearRarity.COMMON) rarity.color else Color.Transparent),
-        modifier = Modifier.size(44.dp)
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            if (item.slot.isStackable()) {
-                Text(item.emoji, style = MaterialTheme.typography.titleLarge)
-            } else {
-                ItemIcon(item, Modifier.size(34.dp))
-            }
-        }
-    }
-}
-
-@Composable
-private fun TinyPill(text: String, color: Color = MaterialTheme.colorScheme.onSurfaceVariant) {
-    Surface(
-        shape = RoundedCornerShape(20.dp),
-        color = color.copy(alpha = 0.12f),
-        border = BorderStroke(0.5.dp, color.copy(alpha = 0.35f))
-    ) {
-        Text(
-            text,
-            modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Bold,
-            color = color,
-            maxLines = 1
-        )
-    }
-}
-
-@Composable
 private fun EmptyInventoryState(tab: MarketTab) {
     SectionCard {
         Text(
@@ -922,333 +889,6 @@ private fun EmptyInventoryState(tab: MarketTab) {
     }
 }
 
-@Composable
-private fun ItemDetailSheet(
-    row: DisplayItem,
-    equippedItem: ItemEntity?,
-    character: CharacterEntity,
-    tab: MarketTab,
-    usable: Boolean,
-    runesCatalog: List<ItemEntity>,
-    availableRunes: List<ItemEntity>,
-    onBuy: () -> Unit,
-    onEquip: () -> Unit,
-    onUse: () -> Unit,
-    onOpen: () -> Unit,
-    onSellMaterial: () -> Unit,
-    onSellGear: () -> Unit,
-    onSalvage: () -> Unit,
-    onUpgrade: () -> Unit,
-    onSocketRune: (Int, Long) -> Unit,
-    onClearRune: (Int) -> Unit,
-) {
-    val isClassLocked = row.item.classAffinity != null && row.item.classAffinity != character.characterClass
-    val isTierLocked = !usable
-    val rarity = row.instance?.rarity?.let { GearRarity.fromName(it) } ?: GearRarity.COMMON
-    val traits = GearTrait.parseTraits(row.instance?.traitIds)
-    val maxSockets = row.instance?.let { GearSockets.slotsForTier(row.item.tier) } ?: 0
-    var socketTargetIdx by remember { mutableStateOf<Int?>(null) }
-
-    Column(
-        Modifier
-            .padding(horizontal = 20.dp, vertical = 8.dp)
-            .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            ItemBadge(row.item, rarity)
-            Column(Modifier.weight(1f)) {
-                Text(
-                    row.item.name,
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    color = if (rarity != GearRarity.COMMON) rarity.color else Color.White
-                )
-                Text(itemMeta(row), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            TinyPill(rarity.displayName, color = rarity.color)
-            TinyPill("Tier ${row.item.tier}")
-            val reqLevel = ProgressionRules.requiredLevelFor(row.item.tier, rarity)
-            if (character.level < reqLevel) {
-                TinyPill("Req. Level $reqLevel", color = Color(0xFFEF5350))
-            }
-            if (row.instance != null) TinyPill("${row.instance.rarity.lowercase().replaceFirstChar { it.uppercase() }} +${row.instance.upgradeLevel}")
-            if (row.inUseByJob != null) TinyPill("✦ In Use: ${row.inUseByJob.label}", color = Color(0xFF64B5F6))
-            row.instance?.originBiome?.takeIf { it.isNotBlank() }?.let { TinyPill(it.replace('_', ' ').lowercase().replaceFirstChar { c -> c.uppercase() }) }
-            row.item.classAffinity?.let { TinyPill("${it.label} only") }
-        }
-        Text(
-            row.item.description.ifBlank { "A useful piece of your growing arsenal." },
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-
-        // Traits display
-        if (traits.isNotEmpty()) {
-            SectionCard(title = "Gear Traits") {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    for (trait in traits) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text(trait.emoji, fontSize = 20.sp)
-                            Column {
-                                Text(trait.displayName, fontWeight = FontWeight.Bold, color = Gold)
-                                Text(trait.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // Rune sockets section
-        if (maxSockets > 0 && row.instance != null) {
-            SectionCard(title = "Rune Sockets ($maxSockets slots)") {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    for (idx in 0 until maxSockets) {
-                        val runeId = if (idx == 0) row.instance.rune1Id else row.instance.rune2Id
-                        val rune = runesCatalog.find { it.id == runeId }
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Text("Socket ${idx + 1}:", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-                                if (rune != null) {
-                                    Text("${rune.emoji} ${rune.name}", color = Gold, fontWeight = FontWeight.Bold)
-                                } else {
-                                    Text("Empty", color = Color.Gray)
-                                }
-                            }
-                            if (rune != null) {
-                                OutlinedButton(onClick = { onClearRune(idx) }, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)) {
-                                    Text("Unsocket", style = MaterialTheme.typography.labelSmall)
-                                }
-                            } else {
-                                Button(
-                                    onClick = { socketTargetIdx = idx },
-                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
-                                ) {
-                                    Text("+ Socket", style = MaterialTheme.typography.labelSmall)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        if (isClassLocked || isTierLocked) {
-            SectionCard {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("🔒", fontSize = 20.sp)
-                    Column {
-                        Text("Requirement Locked", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = Color(0xFFF87171))
-                        if (isClassLocked) {
-                            Text(
-                                "Requires ${row.item.classAffinity?.label ?: "Class"}. Your hero is a ${character.characterClass?.label ?: "Hero"}.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        if (isTierLocked) {
-                            Text(
-                                tierUnlockRequirementText(row.item.tier),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        if (row.item.slot.isEquippable()) {
-            val atkDiff = row.item.atk - (equippedItem?.atk ?: 0)
-            val defDiff = row.item.def - (equippedItem?.def ?: 0)
-            val hpDiff = row.item.hp - (equippedItem?.hp ?: 0)
-
-            SectionCard(title = "Stats & Comparison") {
-                Text(itemBonusText(row.item).ifBlank { "No direct combat stats." }, style = MaterialTheme.typography.bodyMedium)
-
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = "vs. Currently Equipped (${equippedItem?.name ?: "None"})",
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = Gold
-                )
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    StatDeltaBadge("ATK", atkDiff)
-                    StatDeltaBadge("DEF", defDiff)
-                    StatDeltaBadge("HP", hpDiff)
-                }
-
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    "Equippable by: ${row.item.classAffinity?.label ?: "All classes"}",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                row.instance?.let {
-                    val cost = com.fitnessquest.rpg.domain.ProgressionRules.upgradeGoldCost(row.item.tier, it.upgradeLevel)
-                    val mats = com.fitnessquest.rpg.domain.ProgressionRules.upgradeMaterialCost(row.item.tier, it.upgradeLevel)
-                    val materialName = upgradeMaterialName(row.item)
-                    Text(
-                        "Next upgrade: $cost gold + $mats $materialName",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        }
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            when {
-                tab == MarketTab.Shop && !row.owned -> {
-                    Button(onClick = onBuy, enabled = character.gold >= row.item.price && usable) {
-                        Icon(Icons.Filled.ShoppingBag, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("${row.item.price} gold")
-                    }
-                }
-                row.item.slot == ItemSlot.CONSUMABLE -> {
-                    Button(onClick = onUse, enabled = row.item.id != Consumables.STREAK_FREEZE) {
-                        Icon(Icons.Filled.Bolt, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text(if (row.item.id == Consumables.STREAK_FREEZE) "Auto-used" else "Use")
-                    }
-                }
-                row.item.slot == ItemSlot.LOOT_CHEST -> {
-                    Button(onClick = onOpen) {
-                        Icon(Icons.Filled.OpenInFull, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("Open")
-                    }
-                }
-                row.item.slot == ItemSlot.MATERIAL -> {
-                    OutlinedButton(onClick = onSellMaterial) {
-                        Icon(Icons.Filled.Paid, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("Sell one")
-                    }
-                }
-                row.item.slot.isEquippable() && row.instance != null -> {
-                    val isEquippedAnywhere = row.equipped || row.inUseByJob != null
-                    Button(onClick = onEquip, enabled = usable) {
-                        Icon(if (row.equipped) Icons.Filled.Delete else Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text(if (row.equipped) "Unequip" else "Equip")
-                    }
-                    OutlinedButton(onClick = onUpgrade) {
-                        Icon(Icons.Filled.Upgrade, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("Upgrade")
-                    }
-                    OutlinedButton(onClick = onSalvage, enabled = !isEquippedAnywhere) {
-                        Icon(Icons.Filled.AutoFixHigh, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("Salvage")
-                    }
-                    OutlinedButton(onClick = onSellGear, enabled = !isEquippedAnywhere) {
-                        Icon(Icons.Filled.Toll, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("Sell")
-                    }
-                }
-            }
-        }
-        Spacer(Modifier.height(16.dp))
-    }
-
-    // Rune Picker Dialog
-    socketTargetIdx?.let { slotIdx ->
-        AlertDialog(
-            onDismissRequest = { socketTargetIdx = null },
-            title = { Text("Socket Rune into Slot ${slotIdx + 1}") },
-            text = {
-                if (availableRunes.isEmpty()) {
-                    Text("You don't have any runes in your inventory. Complete workouts or defeat monsters to earn runes!")
-                } else {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Choose a rune to socket:", style = MaterialTheme.typography.bodySmall)
-                        for (rune in availableRunes) {
-                            Surface(
-                                onClick = {
-                                    onSocketRune(slotIdx, rune.id)
-                                    socketTargetIdx = null
-                                },
-                                shape = RoundedCornerShape(8.dp),
-                                color = MaterialTheme.colorScheme.surfaceVariant,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(10.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    Text(rune.emoji, fontSize = 20.sp)
-                                    Column(Modifier.weight(1f)) {
-                                        Text(rune.name, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
-                                        Text(rune.description, style = MaterialTheme.typography.labelSmall, color = Gold)
-                                    }
-                                    Text("x${rune.quantity}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { socketTargetIdx = null }) {
-                    Text("Close")
-                }
-            }
-        )
-    }
-}
-
-private fun upgradeMaterialName(item: ItemEntity): String {
-    val materialId = ProgressionRules.primaryMaterialFor(item)
-    return ItemCatalog.all.firstOrNull { it.id == materialId }?.name ?: "materials"
-}
-
-@Composable
-private fun StatDeltaBadge(label: String, delta: Int) {
-    val (color, prefix) = when {
-        delta > 0 -> Color(0xFF4ADE80) to "+"
-        delta < 0 -> Color(0xFFF87171) to ""
-        else -> MaterialTheme.colorScheme.onSurfaceVariant to "+"
-    }
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(8.dp))
-            .background(color.copy(alpha = 0.15f))
-            .border(1.dp, color.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
-            .padding(horizontal = 8.dp, vertical = 4.dp)
-    ) {
-        Text(
-            "$label $prefix$delta",
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Bold,
-            color = color
-        )
-    }
-}
-
-private fun tierUnlockRequirementText(tier: Int): String = when (tier) {
-    2 -> "Tier 2 unlocks at Hero Level 3 or reaching Darkwood."
-    3 -> "Tier 3 unlocks by defeating 1 Boss or winning 20 Battles."
-    4 -> "Tier 4 unlocks by defeating 3 Biome Bosses."
-    5 -> "Tier 5 unlocks by clearing all biomes and reaching Layer 2."
-    else -> "Tier $tier gear is currently locked by progression rules."
-}
 
 
 private fun DisplayItem.matches(filter: ItemFilter): Boolean = when (filter) {
@@ -1261,20 +901,13 @@ private fun DisplayItem.matches(filter: ItemFilter): Boolean = when (filter) {
     ItemFilter.Consumables -> item.slot == ItemSlot.CONSUMABLE
 }
 
-private fun ItemSort.comparator(): Comparator<DisplayItem> = when (this) {
+private fun ItemSort.comparator(runeCatalog: Map<Long, ItemEntity>): Comparator<DisplayItem> = when (this) {
     ItemSort.Tier -> compareByDescending<DisplayItem> { it.item.tier }.thenBy { it.item.name }
-    ItemSort.Power -> compareByDescending<DisplayItem> { it.power }.thenBy { it.item.name }
+    ItemSort.Power -> compareByDescending<DisplayItem> { it.power(runeCatalog) }.thenBy { it.item.name }
     ItemSort.Slot -> compareBy<DisplayItem> { it.item.slot.ordinal }.thenByDescending { it.item.tier }.thenBy { it.item.name }
     ItemSort.Price -> compareByDescending<DisplayItem> { it.item.price }.thenBy { it.item.name }
     ItemSort.Quantity -> compareByDescending<DisplayItem> { it.item.quantity }.thenBy { it.item.name }
 }
-
-private fun itemMeta(row: DisplayItem): String = buildList {
-    add(row.item.slot.label)
-    add("Tier ${row.item.tier}")
-    if (row.item.quantity > 0) add("x${row.item.quantity}")
-    if (row.equipped) add("Equipped")
-}.joinToString(" - ")
 
 private fun ItemSlot.icon(): ImageVector = when (this) {
     ItemSlot.WEAPON -> Icons.Filled.Bolt

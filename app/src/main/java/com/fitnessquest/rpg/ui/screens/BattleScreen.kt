@@ -14,12 +14,17 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -36,6 +41,7 @@ import com.fitnessquest.rpg.data.db.ItemSlot
 import com.fitnessquest.rpg.domain.Biome
 import com.fitnessquest.rpg.domain.CombatStats
 import com.fitnessquest.rpg.domain.GameMath
+import com.fitnessquest.rpg.domain.LootIntel
 import com.fitnessquest.rpg.domain.Monster
 import com.fitnessquest.rpg.domain.MonsterCatalog
 import com.fitnessquest.rpg.data.db.BiomeProgressEntity
@@ -49,7 +55,11 @@ import com.fitnessquest.rpg.domain.Units
 import com.fitnessquest.rpg.ui.appContainer
 import com.fitnessquest.rpg.ui.rememberDockContentPadding
 import com.fitnessquest.rpg.ui.components.BossProgressCard
+import com.fitnessquest.rpg.ui.components.BiomeLootGuideSheet
 import com.fitnessquest.rpg.ui.components.InteractiveWorldMap
+import com.fitnessquest.rpg.ui.components.LootAtlasSheet
+import com.fitnessquest.rpg.ui.components.LootInfoIconButton
+import com.fitnessquest.rpg.ui.components.MonsterLootGuideSheet
 import com.fitnessquest.rpg.ui.components.ResourceChip
 import com.fitnessquest.rpg.ui.components.SceneBanner
 import com.fitnessquest.rpg.ui.components.SceneKind
@@ -188,6 +198,7 @@ data class BattleActions(
     val onRefreshCharacter: () -> Unit = {}
 )
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BattleScreenContent(
     state: BattleSelectUiState,
@@ -207,6 +218,23 @@ fun BattleScreenContent(
     val biome = Biome.fromName(c.currentBiome)
     val boss = MonsterCatalog.bossForBiome(biome)
     val travelTarget = c.travelTarget?.let { Biome.fromName(it) }
+    var lootMonster by remember { mutableStateOf<Monster?>(null) }
+    var showBiomeLoot by remember { mutableStateOf(false) }
+    var showLootAtlas by remember { mutableStateOf(false) }
+
+    lootMonster?.let { monster ->
+        MonsterLootGuideSheet(
+            monster = monster,
+            biome = biome,
+            onDismiss = { lootMonster = null },
+        )
+    }
+    if (showBiomeLoot) {
+        BiomeLootGuideSheet(biome = biome, onDismiss = { showBiomeLoot = false })
+    }
+    if (showLootAtlas) {
+        LootAtlasSheet(currentBiome = biome, onDismiss = { showLootAtlas = false })
+    }
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -260,12 +288,22 @@ fun BattleScreenContent(
                     playerLevel = c.level,
                     enabled = canFight,
                     onChallenge = actions.onFight,
+                    onViewLoot = { showBiomeLoot = true },
                 )
             }
 
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Roaming Monsters", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("Roaming Monsters", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        TextButton(onClick = { showLootAtlas = true }) {
+                            Text("Loot Atlas", color = Gold, fontWeight = FontWeight.Bold)
+                        }
+                    }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         ResourceChip("\u26A1", "${c.energy} energy")
                         ResourceChip("\u2694\uFE0F", "costs ${GameMath.BATTLE_ENERGY_COST} per battle")
@@ -292,9 +330,11 @@ fun BattleScreenContent(
             items(MonsterCatalog.regularMonstersByBiome(biome), key = { it.id }) { monster ->
                 MonsterCard(
                     monster = monster,
+                    biome = biome,
                     playerLevel = c.level,
                     combat = combat,
-                    enabled = canFight
+                    enabled = canFight,
+                    onViewLoot = { lootMonster = monster },
                 ) { actions.onFight(monster.id) }
             }
         }
@@ -369,11 +409,14 @@ private fun StepsCard(
 @Composable
 private fun MonsterCard(
     monster: Monster,
+    biome: Biome,
     playerLevel: Int,
     combat: CombatStats?,
     enabled: Boolean,
+    onViewLoot: () -> Unit,
     onFight: () -> Unit
 ) {
+    val lootHint = remember(monster.id) { LootIntel.monsterProfile(monster, biome).summary }
     SectionCard {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(monster.emoji, style = MaterialTheme.typography.headlineMedium)
@@ -404,6 +447,7 @@ private fun MonsterCard(
                     }
                 }
             }
+            LootInfoIconButton(contentDescription = "View loot for ${monster.name}", onClick = onViewLoot)
             Button(onClick = onFight, enabled = enabled) { Text("Fight") }
         }
         Text(
@@ -423,6 +467,11 @@ private fun MonsterCard(
             "Reward: ${monster.goldReward} 💰 · ${monster.xpReward} XP",
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.primary
+        )
+        Text(
+            lootHint,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
         )
         val estimate = battleEstimate(monster, playerLevel, combat)
         Text(

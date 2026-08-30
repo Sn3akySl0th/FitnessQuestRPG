@@ -20,16 +20,19 @@ object ProceduralStatEngine {
     fun generateStats(
         catalog: ItemEntity,
         rarity: GearRarity = GearRarity.COMMON,
+        itemLevel: Int = 0,
+        wideVariance: Boolean = false,
         rng: Random = Random.Default
     ): ProceduralStatResult {
-        val baseAtk = rarity.scaleStat(catalog.atk)
-        val baseDef = rarity.scaleStat(catalog.def)
-        val baseHp = rarity.scaleStat(catalog.hp)
+        val levelScale = 1.0 + itemLevel.coerceAtLeast(0) * 0.03
+        val baseAtk = (rarity.scaleStat(catalog.atk) * levelScale).roundToInt()
+        val baseDef = (rarity.scaleStat(catalog.def) * levelScale).roundToInt()
+        val baseHp = (rarity.scaleStat(catalog.hp) * levelScale).roundToInt()
 
-        // 1. Roll base stat variance (90% to 115% of rarity-scaled value)
-        var rolledAtk = rollWithVariance(baseAtk, rng)
-        var rolledDef = rollWithVariance(baseDef, rng)
-        var rolledHp = rollWithVariance(baseHp, rng)
+        // Roll base stat variance — wider on procedural drops for Diablo-style spread.
+        var rolledAtk = rollWithVariance(baseAtk, wideVariance, rng)
+        var rolledDef = rollWithVariance(baseDef, wideVariance, rng)
+        var rolledHp = rollWithVariance(baseHp, wideVariance, rng)
 
         // 2. Roll bonus procedural affixes based on rarity
         val bonusRolls = when (rarity) {
@@ -71,10 +74,13 @@ object ProceduralStatEngine {
         )
     }
 
-    private fun rollWithVariance(base: Int, rng: Random): Int {
+    private fun rollWithVariance(base: Int, wideVariance: Boolean, rng: Random): Int {
         if (base <= 0) return 0
-        // Variance factor between 0.90 and 1.15
-        val factor = (rng.nextInt(90, 116)) / 100.0
-        return (base * factor).roundToInt().coerceAtLeast(1)
+        val factor = if (wideVariance) {
+            rng.nextInt(70, 131) / 100.0
+        } else {
+            rng.nextInt(90, 116) / 100.0
+        }
+        return (base * factor).roundToInt().coerceAtLeast(if (base > 0) 1 else 0)
     }
 }

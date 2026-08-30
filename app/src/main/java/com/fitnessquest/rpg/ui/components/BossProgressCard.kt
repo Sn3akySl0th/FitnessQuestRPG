@@ -45,6 +45,8 @@ import com.fitnessquest.rpg.domain.Biome
 import com.fitnessquest.rpg.domain.CombatStats
 import com.fitnessquest.rpg.domain.GameMath
 import com.fitnessquest.rpg.domain.Monster
+import com.fitnessquest.rpg.domain.BossRelics
+import com.fitnessquest.rpg.domain.LootRates
 import com.fitnessquest.rpg.domain.ProgressionRules
 import com.fitnessquest.rpg.ui.effects.AudioEffects
 import com.fitnessquest.rpg.ui.effects.HapticEffects
@@ -62,6 +64,7 @@ fun BossProgressCard(
     playerLevel: Int,
     enabled: Boolean,
     onChallenge: (Int) -> Unit,
+    onViewLoot: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val haptic = LocalHapticFeedback.current
@@ -180,7 +183,17 @@ fun BossProgressCard(
                 }
 
                 // State Badge
-                when {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    onViewLoot?.let { viewLoot ->
+                        LootInfoIconButton(
+                            contentDescription = "View boss loot for ${boss.name}",
+                            onClick = viewLoot,
+                        )
+                    }
+                    when {
                     isDefeated -> {
                         Surface(
                             shape = RoundedCornerShape(8.dp),
@@ -227,12 +240,19 @@ fun BossProgressCard(
                     }
                 }
             }
+            }
 
             // Description / Lore
             Text(
                 text = boss.description,
                 style = MaterialTheme.typography.bodySmall,
                 color = Color.White.copy(alpha = 0.75f),
+            )
+            Text(
+                text = "Drops: ${BossRelics.displayNameFor(biome)} · T${LootRates.biomeBossGearTier(biome)} gear · " +
+                    "${LootRates.BOSS_FARM_RELIC_CHANCE}% relic on re-fights",
+                style = MaterialTheme.typography.labelSmall,
+                color = Gold.copy(alpha = 0.85f),
             )
 
             // State-specific content: Progress Bar or Challenge Options

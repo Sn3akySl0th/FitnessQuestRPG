@@ -339,7 +339,17 @@ data class GearInstanceEntity(
     /** Comma-separated trait ids until the trait registry gets its own table. */
     val traitIds: String = "",
     /** Biome enum name where this item originated, if known. */
-    val originBiome: String? = null
+    val originBiome: String? = null,
+    /** Player-facing rolled name, e.g. "Savage Plate Helm of the Bear". */
+    val displayName: String? = null,
+    /** Procedural base type key for generator loot. */
+    val baseTypeId: String? = null,
+    /** Monster/workout level when this item was generated. */
+    val itemLevel: Int = 0,
+    /** Comma-separated affix ids from [com.fitnessquest.rpg.domain.GearAffixPool]. */
+    val affixIds: String = "",
+    /** Named set id for set bonus tracking, e.g. "ironbound". */
+    val setId: String? = null,
 ) {
     fun runeIds(): List<Long> = listOfNotNull(rune1Id, rune2Id)
 }

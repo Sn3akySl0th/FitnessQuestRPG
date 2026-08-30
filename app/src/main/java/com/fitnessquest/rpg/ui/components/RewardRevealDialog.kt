@@ -215,7 +215,14 @@ fun RewardRevealDialog(
                 )
             },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    EquipmentItemIcon(
+                        item = gearReward.item,
+                        modifier = Modifier.size(72.dp)
+                    )
                     Text(gearReward.item.description, style = MaterialTheme.typography.bodyMedium)
                     val stats = buildList {
                         if (gearReward.item.atk > 0) add("+${gearReward.item.atk} ATK")
@@ -285,7 +292,8 @@ private fun RewardItemCard(
         )
     }
 
-    val (badge, label, color) = rewardPresentation(reward)
+    val label = rewardLabel(reward)
+    val color = rewardColor(reward)
     val isHighRarity = (reward as? Reward.Gear)?.let { it.rarity.ordinal >= com.fitnessquest.rpg.domain.GearRarity.RARE.ordinal } == true
 
     Box(
@@ -307,13 +315,7 @@ private fun RewardItemCard(
             verticalArrangement = Arrangement.Center,
             modifier = Modifier.padding(6.dp)
         ) {
-            Text(
-                text = badge,
-                fontSize = if (badge.length <= 2 || reward is Reward.Gear || reward is Reward.Stackable) 30.sp else 16.sp,
-                fontWeight = FontWeight.Black,
-                color = color,
-                maxLines = 1
-            )
+            RewardVisual(reward = reward, color = color)
             Spacer(Modifier.height(4.dp))
             Text(
                 text = label,
@@ -328,20 +330,74 @@ private fun RewardItemCard(
     }
 }
 
-private fun rewardPresentation(reward: Reward): Triple<String, String, Color> = when (reward) {
-    is Reward.Gold -> Triple("💰", "+${reward.amount}", Gold)
-    is Reward.Xp -> Triple("⭐", "+${reward.amount} XP", Color(0xFF9C7BE3))
-    is Reward.Energy -> Triple("⚡", "+${reward.amount}", Color(0xFF4ADE80))
-    is Reward.XpBoost -> Triple("✨", "+${reward.amount} XP Boost", Color(0xFF4A6FD8))
-    is Reward.Gear -> Triple(
-        reward.item.emoji,
-        if (reward.rarity != com.fitnessquest.rpg.domain.GearRarity.COMMON) "[${reward.rarity.displayName}] ${reward.item.name}" else reward.item.name,
-        reward.rarity.color
-    )
-    is Reward.Stackable -> Triple(reward.item.emoji, "${reward.item.name} x${reward.quantity}", Color.White)
-    is Reward.LevelUp -> Triple("LV", "Level ${reward.newLevel}!", Gold)
-    is Reward.NewPr -> Triple("PR", "New Record!", Color(0xFFF6AD55))
-    is Reward.BiomeUnlocked -> Triple("MAP", reward.biomeLabel, Color(0xFF6BC96B))
-    is Reward.TitleUnlocked -> Triple("TITLE", reward.title, Gold)
-    is Reward.SkillPoint -> Triple("SP", "Skill Point", Color(0xFF9C7BE3))
+@Composable
+private fun RewardVisual(reward: Reward, color: Color) {
+    when (reward) {
+        is Reward.Gear -> EquipmentItemIcon(
+            item = reward.item,
+            modifier = Modifier.size(42.dp)
+        )
+        is Reward.Stackable -> Text(
+            text = reward.item.emoji,
+            fontSize = 30.sp,
+            fontWeight = FontWeight.Black,
+            color = color,
+            maxLines = 1
+        )
+        else -> {
+            val badge = rewardTextBadge(reward)
+            Text(
+                text = badge,
+                fontSize = if (badge.length <= 2) 30.sp else 16.sp,
+                fontWeight = FontWeight.Black,
+                color = color,
+                maxLines = 1
+            )
+        }
+    }
+}
+
+private fun rewardLabel(reward: Reward): String = when (reward) {
+    is Reward.Gold -> "+${reward.amount}"
+    is Reward.Xp -> "+${reward.amount} XP"
+    is Reward.Energy -> "+${reward.amount}"
+    is Reward.XpBoost -> "+${reward.amount} XP Boost"
+    is Reward.Gear -> if (reward.rarity != com.fitnessquest.rpg.domain.GearRarity.COMMON) {
+        "[${reward.rarity.displayName}] ${reward.item.name}"
+    } else {
+        reward.item.name
+    }
+    is Reward.Stackable -> "${reward.item.name} x${reward.quantity}"
+    is Reward.LevelUp -> "Level ${reward.newLevel}!"
+    is Reward.NewPr -> "New Record!"
+    is Reward.BiomeUnlocked -> reward.biomeLabel
+    is Reward.TitleUnlocked -> reward.title
+    is Reward.SkillPoint -> "Skill Point"
+}
+
+private fun rewardColor(reward: Reward): Color = when (reward) {
+    is Reward.Gold -> Gold
+    is Reward.Xp -> Color(0xFF9C7BE3)
+    is Reward.Energy -> Color(0xFF4ADE80)
+    is Reward.XpBoost -> Color(0xFF4A6FD8)
+    is Reward.Gear -> reward.rarity.color
+    is Reward.Stackable -> Color.White
+    is Reward.LevelUp -> Gold
+    is Reward.NewPr -> Color(0xFFF6AD55)
+    is Reward.BiomeUnlocked -> Color(0xFF6BC96B)
+    is Reward.TitleUnlocked -> Gold
+    is Reward.SkillPoint -> Color(0xFF9C7BE3)
+}
+
+private fun rewardTextBadge(reward: Reward): String = when (reward) {
+    is Reward.Gold -> "💰"
+    is Reward.Xp -> "⭐"
+    is Reward.Energy -> "⚡"
+    is Reward.XpBoost -> "✨"
+    is Reward.LevelUp -> "LV"
+    is Reward.NewPr -> "PR"
+    is Reward.BiomeUnlocked -> "MAP"
+    is Reward.TitleUnlocked -> "TITLE"
+    is Reward.SkillPoint -> "SP"
+    is Reward.Gear, is Reward.Stackable -> ""
 }

@@ -16,6 +16,7 @@ import com.fitnessquest.rpg.data.db.ItemEntity
 import com.fitnessquest.rpg.data.db.ItemSlot
 import com.fitnessquest.rpg.domain.CharacterClass
 import com.fitnessquest.rpg.domain.ItemStyle
+import com.fitnessquest.rpg.domain.WearArchetype
 
 /**
  * Draws a gear item exactly as it appears on the hero: same silhouettes and
@@ -316,10 +317,45 @@ private fun DrawScope.drawFeetIcon(f: IconFrame) {
 }
 
 private fun DrawScope.drawTrinketIcon(f: IconFrame) {
-    val tc = GearVisuals.trinketColor(f.item.id)
-    drawCircle(tc.copy(alpha = 0.35f), radius = 34f * f.u, center = f.p(50f, 52f))
-    drawCircle(tc, radius = 22f * f.u, center = f.p(50f, 52f))
-    drawCircle(Color.White.copy(alpha = 0.7f), radius = 7f * f.u, center = f.p(43f, 45f))
+    val dye = com.fitnessquest.rpg.domain.visuals.EquipmentDye.fromItem(f.item)
+    val tc = dye.tintColor ?: GearVisuals.trinketColor(f.item.id)
+    when (WearArchetype.resolve(f.item)) {
+        WearArchetype.SHIELD -> {
+            drawRoundRect(tc.copy(alpha = 0.35f), topLeft = f.p(28f, 22f), size = f.s(44f, 52f), cornerRadius = CornerRadius(6f * f.u))
+            drawRoundRect(tc, topLeft = f.p(32f, 26f), size = f.s(36f, 44f), cornerRadius = CornerRadius(5f * f.u))
+            drawCircle(Color(0xFFD4AF37), radius = 6f * f.u, center = f.p(50f, 48f))
+        }
+        WearArchetype.RING -> {
+            drawOval(tc.copy(alpha = 0.25f), topLeft = f.p(30f, 38f), size = f.s(40f, 28f))
+            drawOval(tc, topLeft = f.p(34f, 42f), size = f.s(32f, 20f), style = Stroke(width = 5f * f.u))
+            drawCircle(Color.White.copy(alpha = 0.65f), radius = 4f * f.u, center = f.p(42f, 40f))
+        }
+        WearArchetype.AMULET -> {
+            drawCircle(tc.copy(alpha = 0.3f), radius = 26f * f.u, center = f.p(50f, 30f))
+            drawCircle(tc, radius = 10f * f.u, center = f.p(50f, 30f))
+            drawLine(tc, f.p(50f, 40f), f.p(50f, 62f), 3f * f.u)
+            drawCircle(tc, radius = 8f * f.u, center = f.p(50f, 68f))
+        }
+        WearArchetype.BELT -> {
+            drawRoundRect(tc, topLeft = f.p(18f, 46f), size = f.s(64f, 12f), cornerRadius = CornerRadius(4f * f.u))
+            drawRoundRect(Color(0xFFD4AF37), topLeft = f.p(42f, 42f), size = f.s(16f, 20f), cornerRadius = CornerRadius(3f * f.u))
+        }
+        WearArchetype.CAPE -> {
+            val cape = Path().apply {
+                moveTo(38f * f.u, 30f * f.u)
+                lineTo(62f * f.u, 30f * f.u)
+                lineTo(68f * f.u, 78f * f.u)
+                lineTo(32f * f.u, 78f * f.u)
+                close()
+            }
+            drawPath(cape, tc)
+        }
+        else -> {
+            drawCircle(tc.copy(alpha = 0.35f), radius = 34f * f.u, center = f.p(50f, 52f))
+            drawCircle(tc, radius = 22f * f.u, center = f.p(50f, 52f))
+            drawCircle(Color.White.copy(alpha = 0.7f), radius = 7f * f.u, center = f.p(43f, 45f))
+        }
+    }
 }
 
 // ---- Weapons ----

@@ -39,6 +39,7 @@ import com.fitnessquest.rpg.domain.Biome
 import com.fitnessquest.rpg.domain.CharacterClass
 import com.fitnessquest.rpg.domain.CombatStats
 import com.fitnessquest.rpg.domain.Consumables
+import com.fitnessquest.rpg.domain.EquipRules
 import com.fitnessquest.rpg.domain.ExerciseCategories
 import com.fitnessquest.rpg.domain.GameMath
 import com.fitnessquest.rpg.domain.GearRarity
@@ -102,10 +103,13 @@ data class OwnedGear(
         return catalog.copy(id = instance.id, atk = atk, def = def, hp = hp, owned = true)
     }
 
-    /** Returns catalog row carrying the true rolled instance stats. */
+    /** Returns catalog row carrying the true rolled instance stats and display name. */
     fun asDisplayItem(): ItemEntity {
-        return catalog.copy(id = instance.id, atk = instance.atk, def = instance.def, hp = instance.hp, owned = true)
+        val name = instance.displayName?.takeIf { it.isNotBlank() } ?: catalog.name
+        return catalog.copy(id = instance.id, name = name, atk = instance.atk, def = instance.def, hp = instance.hp, owned = true)
     }
+
+    fun displayName(): String = instance.displayName?.takeIf { it.isNotBlank() } ?: catalog.name
 }
 
 data class GearInventoryRepairResult(
@@ -1277,6 +1281,7 @@ class GameRepository(
                 level = updated.level,
                 setCount = withXp.size,
                 prCount = prs.count { it.isNew },
+                character = updated,
                 gearPool = eligibleGearTemplates(updated, workoutTier),
                 stackPool = stackTemplates(),
                 maxTier = workoutTier
@@ -1284,14 +1289,13 @@ class GameRepository(
             // Guarantee at least 1 piece of equippable starter gear on the hero's first completed workout
             val isFirstWorkout = !character.firstWorkoutDone || updated.sessionsCompleted <= 1
             val loot = if (isFirstWorkout && rawLoot.grants.none { it is LootGrant.Gear }) {
-                val starterGear = eligibleGearTemplates(updated, workoutTier).firstOrNull()
-                    ?: ItemCatalog.all.firstOrNull { it.slot.isEquippable() && it.tier == 1 }
-                if (starterGear != null) {
-                    val guaranteedGear = LootGrant.Gear(starterGear, GearRarity.UNCOMMON, emptyList())
-                    rawLoot.copy(grants = rawLoot.grants + guaranteedGear)
-                } else {
-                    rawLoot
-                }
+                LootTables.rollProceduralGear(
+                    character = updated,
+                    itemLevel = updated.level.coerceAtLeast(1),
+                    maxTier = workoutTier,
+                    source = LootSource.WORKOUT,
+                    gearPool = eligibleGearTemplates(updated, workoutTier),
+                )?.let { guaranteed -> rawLoot.copy(grants = rawLoot.grants + guaranteed) } ?: rawLoot
             } else {
                 rawLoot
             }
@@ -1655,6 +1659,7 @@ class GameRepository(
         )
         val contents = LootTables.openChest(
             tier = tier,
+            character = character,
             gearPool = eligibleGearTemplates(character, tier),
             stackPool = stackTemplates()
         )
@@ -1710,15 +1715,12 @@ class GameRepository(
     suspend fun buyItem(itemId: Long): Boolean = shopMutex.withLock {
         db.withTransaction {
             val item = db.itemDao().get(itemId) ?: return@withTransaction false
-            if (item.slot.isEquippable() && item.tier > 3) return@withTransaction false
+            if (item.slot.isEquippable()) return@withTransaction false
             val character = getCharacter()
             if (character.gold < item.price) return@withTransaction false
             when {
                 item.slot.isStackable() -> {
                     db.itemDao().update(item.copy(owned = true, quantity = item.quantity + 1))
-                }
-                item.slot.isEquippable() -> {
-                    createGearInstance(item)
                 }
                 else -> return@withTransaction false
             }
@@ -1731,11 +1733,28 @@ class GameRepository(
         catalog: ItemEntity,
         originBiome: String? = null,
         rarity: GearRarity = GearRarity.COMMON,
-        traits: List<com.fitnessquest.rpg.domain.GearTrait> = emptyList()
+        traits: List<com.fitnessquest.rpg.domain.GearTrait> = emptyList(),
+        displayName: String? = null,
+        baseTypeId: String? = null,
+        itemLevel: Int = 0,
+        affixIds: String = "",
+        setId: String? = null,
+        rolledAtk: Int? = null,
+        rolledDef: Int? = null,
+        rolledHp: Int? = null,
     ): GearInstanceEntity {
         val finalTraits = if (traits.isNotEmpty()) traits else com.fitnessquest.rpg.domain.GearTrait.rollTraitsForRarity(rarity)
         val traitStr = finalTraits.joinToString(",") { it.id }
-        val proceduralStats = com.fitnessquest.rpg.domain.ProceduralStatEngine.generateStats(catalog, rarity)
+        val proceduralStats = if (rolledAtk != null || rolledDef != null || rolledHp != null) {
+            com.fitnessquest.rpg.domain.ProceduralStatResult(
+                atk = rolledAtk ?: 0,
+                def = rolledDef ?: 0,
+                hp = rolledHp ?: 0,
+                qualityPercent = 85,
+            )
+        } else {
+            com.fitnessquest.rpg.domain.ProceduralStatEngine.generateStats(catalog, rarity)
+        }
         val id = db.gearInstanceDao().insert(
             GearInstanceEntity(
                 catalogId = catalog.id,
@@ -1744,11 +1763,32 @@ class GameRepository(
                 hp = proceduralStats.hp,
                 rarity = rarity.name,
                 traitIds = traitStr,
-                originBiome = originBiome
+                originBiome = originBiome,
+                displayName = displayName,
+                baseTypeId = baseTypeId,
+                itemLevel = itemLevel,
+                affixIds = affixIds,
+                setId = setId,
             )
         )
         return db.gearInstanceDao().get(id)!!
     }
+
+    private suspend fun createGearFromGrant(grant: LootGrant.Gear, originBiome: String?): GearInstanceEntity =
+        createGearInstance(
+            catalog = grant.catalog,
+            originBiome = originBiome,
+            rarity = grant.rarity,
+            traits = grant.traits,
+            displayName = grant.displayName,
+            baseTypeId = grant.baseTypeId,
+            itemLevel = grant.itemLevel,
+            affixIds = grant.affixIds.joinToString(","),
+            setId = grant.setId,
+            rolledAtk = grant.rolledAtk,
+            rolledDef = grant.rolledDef,
+            rolledHp = grant.rolledHp,
+        )
 
     suspend fun useConsumable(itemId: Long): String? {
         val item = db.itemDao().get(itemId) ?: return null
@@ -1815,6 +1855,7 @@ class GameRepository(
             )
             val contents = LootTables.openChest(
                 tier = tier,
+                character = character,
                 gearPool = eligibleGearTemplates(character, tier),
                 stackPool = stackTemplates()
             )
@@ -1872,21 +1913,16 @@ class GameRepository(
             return Result.failure(IllegalStateException("Need $cost gold to gamble."))
         }
         val maxTier = ProgressionRules.maxUnlockedGearTier(character, db.biomeProgressDao().getAll())
-        val pool = db.itemDao().getAll().filter { it.slot.isEquippable() && it.tier <= maxTier && (it.classAffinity == null || it.classAffinity == character.characterClass) }
+        val pool = eligibleGearTemplates(character, maxTier)
         val slotPool = if (targetSlots != null) pool.filter { it.slot in targetSlots } else pool
-        val chosenCatalog = (slotPool.ifEmpty { pool }).randomOrNull()
-            ?: return Result.failure(IllegalStateException("No gear templates available."))
-
-        val todayEpochDay = now / (86400 * 1000L)
-        val workedOutToday = character.lastWorkoutDay == todayEpochDay
-        val rarity = LootTables.rollRarity(
+        val gearPool = slotPool.ifEmpty { pool }
+        val grant = LootTables.rollProceduralGear(
+            character = character,
+            itemLevel = character.level.coerceAtLeast(1),
+            maxTier = maxTier,
             source = LootSource.CHEST,
-            characterLevel = character.level,
-            workoutStreak = character.streak,
-            workedOutToday = workedOutToday
-        )
-        val traits = GearTrait.rollTraitsForRarity(rarity)
-        val proceduralStats = com.fitnessquest.rpg.domain.ProceduralStatEngine.generateStats(chosenCatalog, rarity)
+            gearPool = gearPool,
+        ) ?: return Result.failure(IllegalStateException("No gear templates available."))
 
         var newInstance: GearInstanceEntity? = null
         db.withTransaction {
@@ -1903,18 +1939,7 @@ class GameRepository(
                     lastGambleResetEpochMs = now
                 )
             )
-            val id = db.gearInstanceDao().insert(
-                GearInstanceEntity(
-                    catalogId = chosenCatalog.id,
-                    atk = proceduralStats.atk,
-                    def = proceduralStats.def,
-                    hp = proceduralStats.hp,
-                    rarity = rarity.name,
-                    traitIds = traits.joinToString(",") { it.id },
-                    originBiome = freshChar.currentBiome
-                )
-            )
-            newInstance = db.gearInstanceDao().get(id)
+            newInstance = createGearFromGrant(grant, freshChar.currentBiome)
         }
         return newInstance?.let { Result.success(it) } ?: Result.failure(IllegalStateException("Failed to generate gear."))
     }
@@ -2084,6 +2109,7 @@ class GameRepository(
         val instance = db.gearInstanceDao().get(instanceId) ?: return false
         val catalog = db.itemDao().get(instance.catalogId) ?: return false
         if (!catalog.slot.isEquippable()) return false
+        if (equipBlockReason(instanceId) != null) return false
         val character = getCharacter()
         val alreadyEquipped = instanceId in character.equippedIds().values
         val rarity = GearRarity.fromName(instance.rarity)
@@ -2099,8 +2125,18 @@ class GameRepository(
                 }
             }
             fun toggle(current: Long?): Long? = if (current == instanceId) null else instanceId
+            var clearedTrinket = character.trinketId
+            if (!alreadyEquipped && catalog.slot == ItemSlot.WEAPON && EquipRules.isTwoHandedWeapon(catalog)) {
+                character.trinketId?.let { trinketInstanceId ->
+                    val trinketInst = db.gearInstanceDao().get(trinketInstanceId)
+                    val trinketCat = trinketInst?.let { db.itemDao().get(it.catalogId) }
+                    if (trinketCat != null && EquipRules.isShield(trinketCat)) {
+                        clearedTrinket = null
+                    }
+                }
+            }
             val updated = when (catalog.slot) {
-                ItemSlot.WEAPON -> character.copy(weaponId = toggle(character.weaponId))
+                ItemSlot.WEAPON -> character.copy(weaponId = toggle(character.weaponId), trinketId = clearedTrinket)
                 ItemSlot.HEAD -> character.copy(headId = toggle(character.headId))
                 ItemSlot.CHEST -> character.copy(chestId = toggle(character.chestId))
                 ItemSlot.HANDS -> character.copy(handsId = toggle(character.handsId))
@@ -2214,14 +2250,37 @@ class GameRepository(
         }
         val masteries = db.movementMasteryDao().getAll(1L)
         val masteryBonus = MasteryPerks.calculateTotalBonus(masteries)
+        val instanceById = character.equippedIds().mapNotNull { (_, instanceId) ->
+            instanceId?.let { id -> db.gearInstanceDao().get(id)?.let { id to it } }
+        }.toMap()
         return GameMath.combatStats(
             character,
             equipped,
             runeSpd = spd,
             runeCrit = crit,
             siphonHeal = siphon,
-            masteryBonus = masteryBonus
+            masteryBonus = masteryBonus,
+            instanceById = instanceById,
         )
+    }
+
+    suspend fun equipBlockReason(instanceId: Long): String? {
+        val instance = db.gearInstanceDao().get(instanceId) ?: return "Item not found."
+        val catalog = db.itemDao().get(instance.catalogId) ?: return "Item not found."
+        if (!catalog.slot.isEquippable()) return null
+        val character = getCharacter()
+        if (instanceId in character.equippedIds().values) return null
+        if (catalog.slot == ItemSlot.TRINKET && EquipRules.isShield(catalog)) {
+            character.weaponId?.let { weaponInstanceId ->
+                val weaponInst = db.gearInstanceDao().get(weaponInstanceId) ?: return@let
+                val weapon = db.itemDao().get(weaponInst.catalogId) ?: return@let
+                EquipRules.shieldBlockedReason(weapon)?.let { return it }
+            }
+        }
+        if (!ProgressionRules.canEquip(catalog, character, GearRarity.fromName(instance.rarity))) {
+            return "Requirements not met for this gear."
+        }
+        return null
     }
 
     suspend fun equippedTraits(character: CharacterEntity): List<com.fitnessquest.rpg.domain.GearTrait> {
@@ -2242,6 +2301,7 @@ class GameRepository(
         val loot = LootTables.rollMomentLoot(
             trigger = trigger,
             level = character.level,
+            character = character,
             gearPool = eligibleGearTemplates(character, tier),
             stackPool = stackTemplates(),
             maxTier = tier
@@ -2270,7 +2330,7 @@ class GameRepository(
 
         for (g in loot.grants) {
             when (g) {
-                is LootGrant.Gear -> createGearInstance(g.catalog, character.currentBiome, g.rarity)
+                is LootGrant.Gear -> createGearFromGrant(g, character.currentBiome)
                 is LootGrant.Stack -> {
                     val row = db.itemDao().get(g.catalog.id) ?: g.catalog
                     db.itemDao().update(row.copy(owned = true, quantity = row.quantity + g.quantity))
@@ -2284,7 +2344,7 @@ class GameRepository(
                 is LootGrant.ChestOpened -> {
                     for (c in g.contents) {
                         when (c) {
-                            is LootGrant.Gear -> createGearInstance(c.catalog, character.currentBiome, c.rarity)
+                            is LootGrant.Gear -> createGearFromGrant(c, character.currentBiome)
                             is LootGrant.Stack -> {
                                 val row = db.itemDao().get(c.catalog.id) ?: c.catalog
                                 db.itemDao().update(row.copy(owned = true, quantity = row.quantity + c.quantity))
@@ -2457,6 +2517,7 @@ class GameRepository(
                 val tier = lootTierFor(LootSource.BATTLE, character, monster.tier)
                 val loot = LootTables.rollBattleLoot(
                     monster = monster,
+                    character = character,
                     gearPool = eligibleGearTemplates(character, tier),
                     stackPool = stackTemplates()
                 )
@@ -2541,6 +2602,7 @@ class GameRepository(
                 val tier = lootTierFor(LootSource.AMBUSH, character, monster.tier + 1)
                 LootTables.rollAmbushLoot(
                     level = character.level,
+                    character = character,
                     gearPool = eligibleGearTemplates(character, tier),
                     stackPool = stackTemplates(),
                     maxTier = tier,
@@ -2568,6 +2630,7 @@ class GameRepository(
                 val tier = lootTierFor(LootSource.BATTLE, character, monster.tier)
                 LootTables.rollBattleLoot(
                     monster = monster,
+                    character = character,
                     gearPool = eligibleGearTemplates(character, tier),
                     stackPool = stackTemplates(),
                 )

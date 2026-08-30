@@ -31,6 +31,7 @@ import com.fitnessquest.rpg.domain.CharacterClass
 import com.fitnessquest.rpg.domain.CharacterRace
 import com.fitnessquest.rpg.domain.build
 import com.fitnessquest.rpg.domain.ItemStyle
+import com.fitnessquest.rpg.domain.WearArchetype
 import com.fitnessquest.rpg.domain.visuals.BodyRegion
 import com.fitnessquest.rpg.domain.visuals.ProceduralMaterialFinish
 import com.fitnessquest.rpg.domain.visuals.ProceduralOrnament
@@ -2039,10 +2040,26 @@ internal fun DrawScope.drawTrinketLayer(f: AvatarFrame) {
             drawRect(capePal.main, topLeft = f.p(35f, 49f), size = f.s(3f, 8f))
             drawRect(capePal.main, topLeft = f.p(62f, 49f), size = f.s(3f, 8f))
         } else {
-            val tc = GearVisuals.trinketColor(item.id)
-            drawCircle(tc.copy(alpha = 0.35f), radius = 6.5f * f.u, center = f.p(50f, 51f))
-            drawCircle(tc, radius = 4f * f.u, center = f.p(50f, 51f))
-            drawCircle(Color.White.copy(alpha = 0.7f), radius = 1.5f * f.u, center = f.p(48.8f, 49.8f))
+            if (isShield) {
+                val shieldMain = Color(0xFF8A9BA8)
+                val shieldDark = Color(0xFF5A6B78)
+                val shieldGold = Color(0xFFD4AF37)
+                drawRoundRect(shieldDark, topLeft = f.p(24f, 46f), size = f.s(20f, 26f), cornerRadius = CornerRadius(4f * f.u))
+                drawRoundRect(shieldMain, topLeft = f.p(26f, 48f), size = f.s(16f, 22f), cornerRadius = CornerRadius(3f * f.u))
+                drawCircle(shieldGold, radius = 3f * f.u, center = f.p(34f, 59f))
+            } else if (WearArchetype.resolve(item) == WearArchetype.RING) {
+                val tc = GearVisuals.trinketColor(item.id)
+                drawOval(tc, topLeft = f.p(62f, 70f), size = f.s(10f, 8f), style = Stroke(width = 2f * f.u))
+            } else if (WearArchetype.resolve(item) == WearArchetype.AMULET) {
+                val tc = GearVisuals.trinketColor(item.id)
+                drawCircle(tc, radius = 3.5f * f.u, center = f.p(50f, 47f))
+                drawLine(tc, f.p(50f, 50f), f.p(50f, 54f), 1.5f * f.u)
+            } else {
+                val tc = GearVisuals.trinketColor(item.id)
+                drawCircle(tc.copy(alpha = 0.35f), radius = 6.5f * f.u, center = f.p(50f, 51f))
+                drawCircle(tc, radius = 4f * f.u, center = f.p(50f, 51f))
+                drawCircle(Color.White.copy(alpha = 0.7f), radius = 1.5f * f.u, center = f.p(48.8f, 49.8f))
+            }
         }
     }
 }

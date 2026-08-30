@@ -10,7 +10,8 @@ sealed class Reward {
     data class Gear(
         val item: ItemEntity,
         val rarity: GearRarity = GearRarity.COMMON,
-        val traits: List<GearTrait> = emptyList()
+        val traits: List<GearTrait> = emptyList(),
+        val displayName: String? = null,
     ) : Reward()
     data class Stackable(val item: ItemEntity, val quantity: Int = 1) : Reward()
     data class LevelUp(val newLevel: Int) : Reward()
@@ -23,7 +24,12 @@ sealed class Reward {
 
 /** Converts technical loot grants into player-facing rewards. */
 fun LootGrant.toReward(): Reward = when (this) {
-    is LootGrant.Gear -> Reward.Gear(this.catalog, this.rarity, this.traits)
+    is LootGrant.Gear -> Reward.Gear(
+        item = if (displayName != null) catalog.copy(name = displayName) else catalog,
+        rarity = rarity,
+        traits = traits,
+        displayName = displayName,
+    )
     is LootGrant.Stack -> Reward.Stackable(this.catalog, this.quantity)
     is LootGrant.Gold -> Reward.Gold(this.amount)
     is LootGrant.Energy -> Reward.Energy(this.amount)

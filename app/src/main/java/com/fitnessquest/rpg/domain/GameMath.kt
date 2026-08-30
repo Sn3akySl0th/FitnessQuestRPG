@@ -3,6 +3,7 @@ package com.fitnessquest.rpg.domain
 import com.fitnessquest.rpg.data.db.ArmorSlots
 import com.fitnessquest.rpg.data.db.CharacterEntity
 import com.fitnessquest.rpg.data.db.ExerciseCategory
+import com.fitnessquest.rpg.data.db.GearInstanceEntity
 import com.fitnessquest.rpg.data.db.ItemEntity
 import com.fitnessquest.rpg.data.db.SetLogEntity
 import java.time.LocalDate
@@ -422,11 +423,12 @@ object GameMath {
     }
 
 
-    /** Number of equipped armor pieces that match the hero's class (max 5). */
-    fun setPieceCount(character: CharacterEntity, equipped: List<ItemEntity>): Int {
-        val cls = character.characterClass ?: return 0
-        return equipped.count { it.slot in ArmorSlots && it.classAffinity == cls }
-    }
+    /** Number of equipped armor pieces that count toward set bonuses (max 5). */
+    fun setPieceCount(
+        character: CharacterEntity,
+        equipped: List<ItemEntity>,
+        instanceById: Map<Long, GearInstanceEntity> = emptyMap(),
+    ): Int = GearSetRegistry.resolveAppliedBonus(character, equipped, instanceById).pieceCount
 
     fun hasFullSetBonus(character: CharacterEntity, equipped: List<ItemEntity>): Boolean =
         setPieceCount(character, equipped) >= ArmorSlots.size
@@ -434,17 +436,26 @@ object GameMath {
     fun activeSetBonusTier(character: CharacterEntity, equipped: List<ItemEntity>): SetBonusTier =
         SetBonusTier.forPieceCount(setPieceCount(character, equipped))
 
-    fun setBonusInfo(character: CharacterEntity, equipped: List<ItemEntity>): SetBonusInfo {
-        val count = setPieceCount(character, equipped)
-        val active = SetBonusTier.forPieceCount(count)
-        val next = when (active) {
-            SetBonusTier.NONE -> SetBonusTier.TIER_1
-            SetBonusTier.TIER_1 -> SetBonusTier.TIER_2
-            SetBonusTier.TIER_2 -> SetBonusTier.TIER_3
-            SetBonusTier.TIER_3 -> null
+    fun setBonusInfo(
+        character: CharacterEntity,
+        equipped: List<ItemEntity>,
+        instanceById: Map<Long, GearInstanceEntity> = emptyMap(),
+    ): SetBonusInfo {
+        val applied = GearSetRegistry.resolveAppliedBonus(character, equipped, instanceById)
+        val activeTier = applied.activeLevel?.let { level ->
+            SetBonusTier.entries.firstOrNull { it.piecesRequired == level.piecesRequired && it != SetBonusTier.NONE }
+        } ?: SetBonusTier.NONE
+        val nextTier = applied.nextLevel?.let { level ->
+            SetBonusTier.entries.firstOrNull { it.piecesRequired == level.piecesRequired }
         }
-        return SetBonusInfo(pieceCount = count, activeTier = active, nextTier = next)
+        return SetBonusInfo(pieceCount = applied.pieceCount, activeTier = activeTier, nextTier = nextTier)
     }
+
+    fun appliedSetBonus(
+        character: CharacterEntity,
+        equipped: List<ItemEntity>,
+        instanceById: Map<Long, GearInstanceEntity> = emptyMap(),
+    ): AppliedSetBonus = GearSetRegistry.resolveAppliedBonus(character, equipped, instanceById)
 
     fun combatStats(
         character: CharacterEntity,
@@ -452,7 +463,8 @@ object GameMath {
         runeSpd: Int = 0,
         runeCrit: Int = 0,
         siphonHeal: Int = 0,
-        masteryBonus: MasteryStatBonus = MasteryStatBonus.NONE
+        masteryBonus: MasteryStatBonus = MasteryStatBonus.NONE,
+        instanceById: Map<Long, GearInstanceEntity> = emptyMap(),
     ): CombatStats {
         val cls = character.characterClass ?: CharacterClass.WARRIOR
         val baseHp = 40 + character.endurance * 8 + character.level * 5 + equipped.sumOf { it.hp }
@@ -525,13 +537,20 @@ object GameMath {
         if (cls == CharacterClass.DRAGOON && character.druidForm == "WYVERN") def += 15
         if (cls == CharacterClass.RANGER && character.druidForm == "BEAR") def += 15
 
-        // Tiered class armor set bonuses (2-piece, 4-piece, 5-piece)
-        val setTier = activeSetBonusTier(character, equipped)
-        if (setTier != SetBonusTier.NONE) {
-            atk = (atk * setTier.atkMultiplier).roundToInt()
-            maxHp = (maxHp * setTier.hpMultiplier).roundToInt()
-            def += setTier.flatDef
+        // Named or legacy armor set bonuses
+        val setBonus = GearSetRegistry.resolveAppliedBonus(character, equipped, instanceById)
+        setBonus.activeLevel?.let { level ->
+            atk = (atk * level.atkMultiplier).roundToInt() + level.flatAtk
+            maxHp = (maxHp * level.hpMultiplier).roundToInt()
+            def += level.flatDef
+            if (setBonus.classRiderActive) {
+                def += 3
+                atk += 2
+            }
         }
+        val setCritBonus = setBonus.activeLevel?.critBonus ?: 0
+        val setSpdBonus = setBonus.activeLevel?.spdBonus ?: 0
+        val setMitigation = setBonus.activeLevel?.mitigationPercent ?: 0f
 
         // Mastery stat bonuses
         atk += masteryBonus.flatAtk
@@ -576,10 +595,10 @@ object GameMath {
             maxHp = maxHp,
             atk = atk,
             def = def,
-            spd = (character.agility * 2 + character.level + runeSpd + setTier.spdBonus + masteryBonus.flatSpd + rangerSpdBonus + druidSpdBonus + (if (cls == CharacterClass.SUMMONER && character.druidForm == "SHIVA") 40 else 0)),
-            critPercent = min(baseCrit + runeCrit + setTier.critBonus + masteryBonus.flatCritPercent, 70),
+            spd = (character.agility * 2 + character.level + runeSpd + setSpdBonus + masteryBonus.flatSpd + rangerSpdBonus + druidSpdBonus + (if (cls == CharacterClass.SUMMONER && character.druidForm == "SHIVA") 40 else 0)),
+            critPercent = min(baseCrit + runeCrit + setCritBonus + masteryBonus.flatCritPercent, 70),
             siphonHeal = if (masteryBonus.siphonBonusPercent > 0f) (siphonHeal * (1f + masteryBonus.siphonBonusPercent)).roundToInt() else siphonHeal,
-            mitigationPercent = masteryBonus.mitigationPercent
+            mitigationPercent = masteryBonus.mitigationPercent + setMitigation
         )
 
     }

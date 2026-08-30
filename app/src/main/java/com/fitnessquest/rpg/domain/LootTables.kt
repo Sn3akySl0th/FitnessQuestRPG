@@ -14,8 +14,20 @@ sealed class LootGrant {
     data class Gear(
         val catalog: ItemEntity,
         val rarity: GearRarity = GearRarity.COMMON,
-        val traits: List<GearTrait> = emptyList()
-    ) : LootGrant()
+        val traits: List<GearTrait> = emptyList(),
+        val displayName: String? = null,
+        val baseTypeId: String? = null,
+        val itemLevel: Int = 0,
+        val affixIds: List<String> = emptyList(),
+        val setId: String? = null,
+        val rolledAtk: Int? = null,
+        val rolledDef: Int? = null,
+        val rolledHp: Int? = null,
+    ) : LootGrant() {
+        val labelName: String
+            get() = displayName?.takeIf { it.isNotBlank() }
+                ?: if (rarity != GearRarity.COMMON) "${catalog.name} (${rarity.displayName})" else catalog.name
+    }
     data class Stack(val catalog: ItemEntity, val quantity: Int = 1) : LootGrant()
     data class Gold(val amount: Int) : LootGrant()
     data class Energy(val amount: Int) : LootGrant()
@@ -48,12 +60,7 @@ data class LootResult(
                     stackTotals[g.catalog.name] = cur + g.quantity
                 }
                 is LootGrant.Gear -> {
-                    val label = if (g.rarity != GearRarity.COMMON) {
-                        "${g.catalog.name} (${g.rarity.displayName})"
-                    } else {
-                        g.catalog.name
-                    }
-                    gearLabels.add(label)
+                    gearLabels.add(g.labelName)
                 }
                 is LootGrant.ChestOpened -> {
                     gearLabels.add("${g.chest.name} opened!")
@@ -130,6 +137,27 @@ object LootChests {
 
 object LootTables {
 
+    fun rollProceduralGear(
+        character: CharacterEntity,
+        itemLevel: Int,
+        maxTier: Int,
+        source: LootSource,
+        gearPool: List<ItemEntity>,
+        prCount: Int = 0,
+        rng: Random = Random.Default,
+    ): LootGrant.Gear? {
+        val generated = ProceduralGearGenerator.generate(
+            character = character,
+            itemLevel = itemLevel,
+            maxTier = maxTier,
+            source = source,
+            templatePool = gearPool,
+            prCount = prCount,
+            rng = rng,
+        ) ?: return null
+        return ProceduralGearGenerator.toLootGrant(generated)
+    }
+
     fun rollRarity(
         source: LootSource,
         characterLevel: Int,
@@ -173,6 +201,7 @@ object LootTables {
 
     fun rollBattleLoot(
         monster: Monster,
+        character: CharacterEntity,
         gearPool: List<ItemEntity>,
         stackPool: List<ItemEntity>,
         rng: Random = Random.Default
@@ -182,14 +211,17 @@ object LootTables {
         var gold = (monster.goldReward * 0.15 * variantMult).toInt().coerceAtLeast(2)
 
         // Chest chance scales with tier and variant (Epic guarantees chest)
-        val chestChance = (8 + monster.tier * 4 + if (monster.variant == MonsterVariant.ELITE) 20 else 0).coerceAtMost(80)
+        val chestChance = LootRates.battleChestChance(monster)
         val shouldGrantChest = monster.variant == MonsterVariant.EPIC || (rng.nextInt(100) < chestChance)
 
         if (shouldGrantChest) {
             val chest = stackPool.find { it.id == LootChests.BIOME }
                 ?: stackPool.find { it.id == LootChests.WOODEN }
             if (chest != null) {
-                grants += LootGrant.ChestOpened(chest, openChest(chest.tier, gearPool, stackPool, rng, monster.level))
+                grants += LootGrant.ChestOpened(
+                    chest,
+                    openChest(chest.tier, character, gearPool, stackPool, rng, monster.level),
+                )
             }
         }
 
@@ -202,14 +234,19 @@ object LootTables {
         }
 
         // Direct gear / rune roll
-        val gearRollChance = if (monster.variant == MonsterVariant.EPIC) 60 else if (monster.variant == MonsterVariant.ELITE) 35 else 18
+        val gearRollChance = LootRates.battleGearChance(monster.variant)
         when (rng.nextInt(100)) {
-            in 0 until gearRollChance -> pickGear(gearPool, monster.tier, rng)?.let {
-                val rarity = rollRarity(LootSource.BATTLE, monster.level + (if (monster.variant == MonsterVariant.EPIC) 3 else 0), rng = rng)
-                val traits = GearTrait.rollTraitsForRarity(rarity, rng)
-                grants += LootGrant.Gear(it, rarity, traits)
+            in 0 until gearRollChance -> {
+                rollProceduralGear(
+                    character = character,
+                    itemLevel = monster.level.coerceAtLeast(1),
+                    maxTier = monster.tier,
+                    source = LootSource.BATTLE,
+                    gearPool = gearPool,
+                    rng = rng,
+                )?.let { grants += it }
             }
-            in gearRollChance until (gearRollChance + 25) -> pickStack(stackPool, ItemSlot.RUNE, monster.tier, rng)?.let {
+            in gearRollChance until (gearRollChance + LootRates.BATTLE_RUNE_CHANCE) -> pickStack(stackPool, ItemSlot.RUNE, monster.tier, rng)?.let {
                 grants += LootGrant.Stack(it)
             }
             else -> {
@@ -227,6 +264,7 @@ object LootTables {
         level: Int,
         setCount: Int,
         prCount: Int,
+        character: CharacterEntity,
         gearPool: List<ItemEntity>,
         stackPool: List<ItemEntity>,
         maxTier: Int = (level / 5 + 1).coerceAtMost(4),
@@ -251,24 +289,28 @@ object LootTables {
             }
         }
 
-        if (prCount > 0 && rng.nextInt(100) < 50) {
+        if (prCount > 0 && rng.nextInt(100) < LootRates.WORKOUT_RUNE_ON_PR_CHANCE) {
             pickStack(stackPool, ItemSlot.RUNE, stackTier, rng)?.let {
                 grants += LootGrant.Stack(it)
             }
         }
 
         // Direct gear drop with tactical traits for strong workouts
-        if ((setCount >= 6 || prCount > 0) && rng.nextInt(100) < 35) {
-            pickGear(gearPool, stackTier, rng)?.let { gearTemplate ->
-                val rarity = rollRarity(LootSource.WORKOUT, level, prCount, rng = rng)
-                val traits = GearTrait.rollTraitsForRarity(rarity, rng)
-                grants += LootGrant.Gear(gearTemplate, rarity, traits)
-            }
+        if ((setCount >= 6 || prCount > 0) && rng.nextInt(100) < LootRates.WORKOUT_GEAR_CHANCE) {
+            rollProceduralGear(
+                character = character,
+                itemLevel = level.coerceAtLeast(1),
+                maxTier = stackTier,
+                source = LootSource.WORKOUT,
+                gearPool = gearPool,
+                prCount = prCount,
+                rng = rng,
+            )?.let { grants += it }
         }
 
-        if (setCount >= 8 && rng.nextInt(100) < 25) {
+        if (setCount >= 8 && rng.nextInt(100) < LootRates.WORKOUT_WOODEN_CHEST_CHANCE) {
             stackPool.find { it.id == LootChests.WOODEN }?.let {
-                grants += LootGrant.ChestOpened(it, openChest(1, gearPool, stackPool, rng, level))
+                grants += LootGrant.ChestOpened(it, openChest(1, character, gearPool, stackPool, rng, level))
             }
         }
         if (rng.nextInt(100) < 30) xpBoost = 20 + prCount * 15
@@ -279,6 +321,7 @@ object LootTables {
     fun rollMomentLoot(
         trigger: MomentTrigger,
         level: Int,
+        character: CharacterEntity,
         gearPool: List<ItemEntity>,
         stackPool: List<ItemEntity>,
         maxTier: Int = (level / 4 + 1).coerceIn(1, 4),
@@ -296,11 +339,15 @@ object LootTables {
                     in 0 until 25 -> pickStack(stackPool, ItemSlot.RUNE, tier, rng)?.let {
                         grants += LootGrant.Stack(it)
                     }
-                    in 25 until 45 -> pickGear(gearPool, tier, rng)?.let {
-                        val rarity = rollRarity(LootSource.MOMENT, level, prCount = 1, rng = rng)
-                        val traits = GearTrait.rollTraitsForRarity(rarity, rng)
-                        grants += LootGrant.Gear(it, rarity, traits)
-                    }
+                    in 25 until 45 -> rollProceduralGear(
+                        character = character,
+                        itemLevel = level.coerceAtLeast(1),
+                        maxTier = tier,
+                        source = LootSource.MOMENT,
+                        gearPool = gearPool,
+                        prCount = 1,
+                        rng = rng,
+                    )?.let { grants += it }
                     else -> pickStack(stackPool, ItemSlot.MATERIAL, tier, rng)?.let {
                         grants += LootGrant.Stack(it, 2)
                     }
@@ -341,6 +388,7 @@ object LootTables {
 
     fun rollAmbushLoot(
         level: Int,
+        character: CharacterEntity,
         gearPool: List<ItemEntity>,
         stackPool: List<ItemEntity>,
         maxTier: Int = (level / 3 + 1).coerceIn(1, 4),
@@ -349,7 +397,7 @@ object LootTables {
         val tier = maxTier.coerceIn(1, ProgressionRules.MAX_GEAR_TIER)
         val grants = mutableListOf<LootGrant>()
         stackPool.find { it.id == LootChests.WAR_CACHE }?.let {
-            grants += LootGrant.ChestOpened(it, openChest(tier.coerceAtLeast(2), gearPool, stackPool, rng, level))
+            grants += LootGrant.ChestOpened(it, openChest(tier.coerceAtLeast(2), character, gearPool, stackPool, rng, level))
         }
         return LootResult(
             grants = grants,
@@ -366,38 +414,26 @@ object LootTables {
         stackPool: List<ItemEntity>,
         rng: Random = Random.Default,
     ): LootResult {
-        val targetTier = when (biome) {
-            Biome.MEADOWLANDS -> 2
-            Biome.DARKWOOD, Biome.CRYSTAL_CAVES -> 3
-            Biome.EMBER_PEAKS, Biome.FROZEN_WASTES -> 4
-            Biome.SHADOWFEN -> 5
-        }.coerceIn(1, ProgressionRules.MAX_GEAR_TIER)
+        val targetTier = LootRates.biomeBossGearTier(biome)
 
         val grants = mutableListOf<LootGrant>()
 
         // 1. Guaranteed Unique Boss Signature Relic (Trophy)
-        val bossRelicId = when (biome) {
-            Biome.MEADOWLANDS -> 1201L
-            Biome.DARKWOOD -> 1202L
-            Biome.CRYSTAL_CAVES -> 1203L
-            Biome.EMBER_PEAKS -> 1204L
-            Biome.FROZEN_WASTES -> 1205L
-            Biome.SHADOWFEN -> 1206L
-        }
+        val bossRelicId = BossRelics.idFor(biome)
         val bossRelic = gearPool.find { it.id == bossRelicId }
         if (bossRelic != null) {
             val rarity = if (biome == Biome.SHADOWFEN) GearRarity.LEGENDARY else GearRarity.EPIC
             val traits = GearTrait.rollTraitsForRarity(rarity, rng)
             grants += LootGrant.Gear(bossRelic, rarity, traits)
         } else {
-            val filteredGear = ProgressionRules.filterGearPool(gearPool, targetTier, character)
-                .filter { it.tier == targetTier }
-                .ifEmpty { ProgressionRules.filterGearPool(gearPool, targetTier, character) }
-            filteredGear.randomOrNull(rng)?.let {
-                val rarity = rollRarity(LootSource.BOSS, character.level, rng = rng)
-                val traits = GearTrait.rollTraitsForRarity(rarity, rng)
-                grants += LootGrant.Gear(it, rarity, traits)
-            }
+            rollProceduralGear(
+                character = character,
+                itemLevel = character.level.coerceAtLeast(1),
+                maxTier = targetTier,
+                source = LootSource.BOSS,
+                gearPool = gearPool,
+                rng = rng,
+            )?.let { grants += it }
         }
 
         // 2. Guaranteed Biome Chest with contents
@@ -405,7 +441,7 @@ object LootTables {
             ?: stackPool.find { it.id == LootChests.WAR_CACHE }
             ?: stackPool.find { it.id == LootChests.WOODEN }
         if (biomeChest != null) {
-            grants += LootGrant.ChestOpened(biomeChest, openChest(targetTier, gearPool, stackPool, rng, character.level))
+            grants += LootGrant.ChestOpened(biomeChest, openChest(targetTier, character, gearPool, stackPool, rng, character.level))
         }
 
         // 3. Guaranteed Crafting Materials
@@ -430,37 +466,28 @@ object LootTables {
         stackPool: List<ItemEntity>,
         rng: Random = Random.Default,
     ): LootResult {
-        val targetTier = when (biome) {
-            Biome.MEADOWLANDS -> 2
-            Biome.DARKWOOD, Biome.CRYSTAL_CAVES -> 3
-            Biome.EMBER_PEAKS, Biome.FROZEN_WASTES -> 4
-            Biome.SHADOWFEN -> 5
-        }.coerceIn(1, ProgressionRules.MAX_GEAR_TIER)
+        val targetTier = LootRates.biomeBossGearTier(biome)
 
         val grants = mutableListOf<LootGrant>()
 
-        // 1. Elevated boss gear or relic roll (30% chance for boss relic)
-        val bossRelicId = when (biome) {
-            Biome.MEADOWLANDS -> 1201L
-            Biome.DARKWOOD -> 1202L
-            Biome.CRYSTAL_CAVES -> 1203L
-            Biome.EMBER_PEAKS -> 1204L
-            Biome.FROZEN_WASTES -> 1205L
-            Biome.SHADOWFEN -> 1206L
-        }
-        val rollRelic = rng.nextInt(100) < 30
-        val gearItem = if (rollRelic) gearPool.find { it.id == bossRelicId } else null
-        val chosenGear = gearItem ?: run {
-            val filteredGear = ProgressionRules.filterGearPool(gearPool, targetTier, character)
-                .filter { it.tier == targetTier }
-                .ifEmpty { ProgressionRules.filterGearPool(gearPool, targetTier, character) }
-            filteredGear.randomOrNull(rng)
-        }
-
-        chosenGear?.let { gearTemplate ->
-            val rarity = rollRarity(LootSource.BOSS, character.level, rng = rng)
-            val traits = GearTrait.rollTraitsForRarity(rarity, rng)
-            grants += LootGrant.Gear(gearTemplate, rarity, traits)
+        // 1. Elevated boss gear or relic roll
+        val bossRelicId = BossRelics.idFor(biome)
+        val rollRelic = rng.nextInt(100) < LootRates.BOSS_FARM_RELIC_CHANCE
+        if (rollRelic) {
+            gearPool.find { it.id == bossRelicId }?.let { relic ->
+                val rarity = rollRarity(LootSource.BOSS, character.level, rng = rng)
+                val traits = GearTrait.rollTraitsForRarity(rarity, rng)
+                grants += LootGrant.Gear(relic, rarity, traits)
+            }
+        } else {
+            rollProceduralGear(
+                character = character,
+                itemLevel = character.level.coerceAtLeast(1),
+                maxTier = targetTier,
+                source = LootSource.BOSS,
+                gearPool = gearPool,
+                rng = rng,
+            )?.let { grants += it }
         }
 
         // 2. Guaranteed 2-3 Crafting Materials
@@ -470,10 +497,10 @@ object LootTables {
         }
 
         // 3. 50% chance of Biome Chest
-        if (rng.nextInt(100) < 50) {
+        if (rng.nextInt(100) < LootRates.BOSS_FARM_CHEST_CHANCE) {
             val chest = stackPool.find { it.id == LootChests.BIOME } ?: stackPool.find { it.id == LootChests.WOODEN }
             if (chest != null) {
-                grants += LootGrant.ChestOpened(chest, openChest(targetTier, gearPool, stackPool, rng, character.level))
+                grants += LootGrant.ChestOpened(chest, openChest(targetTier, character, gearPool, stackPool, rng, character.level))
             }
         }
 
@@ -487,6 +514,7 @@ object LootTables {
 
     fun openChest(
         tier: Int,
+        character: CharacterEntity,
         gearPool: List<ItemEntity>,
         stackPool: List<ItemEntity>,
         rng: Random = Random.Default,
@@ -495,12 +523,16 @@ object LootTables {
         val rolls = 2 + rng.nextInt(3) // 2-4
         return List(rolls) {
             when (rng.nextInt(100)) {
-                in 0 until 12 -> pickGear(gearPool, tier, rng)?.let {
-                    val rarity = rollRarity(LootSource.CHEST, characterLevel, rng = rng)
-                    val traits = GearTrait.rollTraitsForRarity(rarity, rng)
-                    LootGrant.Gear(it, rarity, traits)
-                } ?: LootGrant.Gold(8 + tier * 4)
-                in 12 until 30 -> pickStack(stackPool, ItemSlot.RUNE, tier, rng)?.let { LootGrant.Stack(it) }
+                in 0 until LootRates.CHEST_GEAR_CHANCE -> rollProceduralGear(
+                    character = character,
+                    itemLevel = characterLevel.coerceAtLeast(1),
+                    maxTier = tier,
+                    source = LootSource.CHEST,
+                    gearPool = gearPool,
+                    rng = rng,
+                ) ?: LootGrant.Gold(8 + tier * 4)
+                in LootRates.CHEST_GEAR_CHANCE until (LootRates.CHEST_GEAR_CHANCE + LootRates.CHEST_RUNE_CHANCE) ->
+                    pickStack(stackPool, ItemSlot.RUNE, tier, rng)?.let { LootGrant.Stack(it) }
                     ?: LootGrant.Gold(6 + tier * 3)
                 in 30 until 65 -> pickStack(stackPool, ItemSlot.MATERIAL, tier, rng)?.let {
                     LootGrant.Stack(it, 1 + rng.nextInt(3))

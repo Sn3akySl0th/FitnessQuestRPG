@@ -62,11 +62,13 @@ class LootProgressionSimulationTest {
         var level = 1
         val droppedGear = mutableListOf<LootGrant.Gear>()
 
+        val hero = CharacterEntity(level = 2, characterClass = CharacterClass.WARRIOR)
         repeat(3) {
             val loot = LootTables.rollWorkoutLoot(
                 level = level,
                 setCount = 4,
                 prCount = 1,
+                character = hero.copy(level = level),
                 gearPool = gearPool,
                 stackPool = stackPool,
                 maxTier = 1,
@@ -106,6 +108,7 @@ class LootProgressionSimulationTest {
                 level = level,
                 setCount = 5,
                 prCount = if (day % 4 == 0) 1 else 0,
+                character = hero,
                 gearPool = gearPool,
                 stackPool = stackPool,
                 maxTier = maxTier,
@@ -120,6 +123,7 @@ class LootProgressionSimulationTest {
             if (day % 3 == 0) {
                 val chestDrops = LootTables.openChest(
                     tier = maxTier,
+                    character = hero,
                     gearPool = gearPool,
                     stackPool = stackPool,
                     rng = rng,

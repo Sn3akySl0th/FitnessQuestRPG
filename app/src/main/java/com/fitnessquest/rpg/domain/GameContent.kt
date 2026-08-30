@@ -63,6 +63,7 @@ object ItemStyle {
     const val PLATE = "PLATE"
     const val ROBE = "ROBE"
     const val LIGHT = "LIGHT"
+    const val SHIELD = "shield"
 }
 
 /** Well-known consumable item ids (900 range, clear of gear ids). */
@@ -231,10 +232,14 @@ object ItemCatalog {
 
         // ---- Universal trinkets & Back pieces ----
         ItemEntity(9, "Lucky Sweatband", "\uD83C\uDFC5", ItemSlot.TRINKET, 1, 60, atk = 1, def = 1, hp = 5, description = "Absorbs sweat and bad vibes."),
+        ItemEntity(1211, "Training Buckler", "🛡️", ItemSlot.TRINKET, 1, 45, def = 4, hp = 6, description = "A light wooden buckler for learning the guard stance.", classAffinity = W, style = ItemStyle.SHIELD),
         ItemEntity(1195, "Novice Cape", "🧣", ItemSlot.TRINKET, 1, 50, def = 2, hp = 5, description = "A crimson adventurer cape that billows in the wind.", style = "cape"),
         ItemEntity(1196, "Hunter's Quiver", "🏹", ItemSlot.TRINKET, 1, 50, atk = 2, hp = 3, description = "A leather arrow quiver worn strapped across the back.", style = "quiver"),
         ItemEntity(10, "Amulet of Endurance", "\uD83D\uDCFF", ItemSlot.TRINKET, 2, 180, hp = 25, description = "One more rep. Always one more rep."),
-        ItemEntity(1197, "Iron Back Shield", "🛡️", ItemSlot.TRINKET, 2, 150, def = 8, hp = 15, description = "A sturdy strapped heater shield carried on the back between battles.", style = "shield"),
+        ItemEntity(1197, "Iron Back Shield", "🛡️", ItemSlot.TRINKET, 2, 150, def = 8, hp = 15, description = "A sturdy strapped heater shield carried on the back between battles.", classAffinity = W, style = ItemStyle.SHIELD),
+        ItemEntity(1212, "Knight's Kite Shield", "🛡️", ItemSlot.TRINKET, 3, 380, def = 12, hp = 22, description = "Broad steel kite plate built for frontline knights.", classAffinity = W, style = ItemStyle.SHIELD),
+        ItemEntity(1213, "Oathguard Tower", "🛡️", ItemSlot.TRINKET, 3, 400, def = 11, hp = 20, description = "A holy tower shield etched with vows of protection.", classAffinity = P, style = ItemStyle.SHIELD),
+        ItemEntity(1214, "Dawnwall Bulwark", "🛡️", ItemSlot.TRINKET, 4, 820, def = 16, hp = 35, description = "A sun-blessed bulwark that turns workouts into unbreakable resolve.", classAffinity = P, style = ItemStyle.SHIELD),
         ItemEntity(11, "Ring of Fury", "\uD83D\uDC8D", ItemSlot.TRINKET, 3, 400, atk = 8, description = "Channels pre-workout energy into raw power."),
         ItemEntity(12, "Heart of the Colossus", "\u2764\uFE0F\u200D\uD83D\uDD25", ItemSlot.TRINKET, 4, 900, atk = 6, def = 6, hp = 30, description = "Beats once per rep. Never stops."),
         ItemEntity(1198, "Celestial Wings", "🪽", ItemSlot.TRINKET, 4, 850, atk = 8, def = 8, hp = 30, description = "Luminous wings that unfurl behind disciplined heroes.", style = "wings"),
@@ -326,7 +331,7 @@ object ItemCatalog {
             description = "Trophy of the Burnout Dragon. Converts intensity to fire: Critical strikes ignite enemies for 3 turns."),
 
         // ---- Extra diverse weapons & gear progression ----
-        ItemEntity(1131, "Swiftwind Scythe", "🌾", ItemSlot.WEAPON, 2, 115, atk = 7, def = 1, description = "Sweeps through training volume with effortless cadence.", style = ItemStyle.SWORD),
+        ItemEntity(1131, "Swiftwind Scythe", "⚔️", ItemSlot.WEAPON, 2, 115, atk = 7, def = 1, description = "Sweeps through training volume with effortless cadence.", style = ItemStyle.SWORD),
         ItemEntity(1132, "Thunderstrike Greatclub", "🪵", ItemSlot.WEAPON, 3, 310, atk = 14, hp = 10, description = "When subtlety fails, heavy sets succeed.", style = ItemStyle.MACE),
         ItemEntity(1133, "Aegis-Breaker Pike", "🔱", ItemSlot.WEAPON, 3, 290, atk = 12, def = 3, description = "Finds weak points in enemy form and posture.", style = ItemStyle.GREATSWORD),
         ItemEntity(1134, "Solar Flare Warblade", "⚔️", ItemSlot.WEAPON, 4, 720, atk = 23, def = 4, hp = 15, description = "Shines with the radiant energy of an unbroken streak.", style = ItemStyle.GREATSWORD),
